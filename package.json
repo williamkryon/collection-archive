@@ -1,0 +1,26 @@
+{
+  "name": "collection-archive",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-first desktop archive for personal collectibles.",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "C:\\Progra~1\\nodejs\\node.exe scripts/dev.mjs",
+    "build": "C:\\Progra~1\\nodejs\\node.exe node_modules/vite/bin/vite.js build",
+    "start": "C:\\Progra~1\\nodejs\\node.exe node_modules/electron/cli.js .",
+    "smoke:album": "C:\\Progra~1\\nodejs\\node.exe scripts/smoke-album-layout.cjs",
+    "seed:perf": "C:\\Progra~1\\nodejs\\node.exe scripts/seed-perf.cjs",
+    "test:perf": "C:\\Progra~1\\nodejs\\node.exe scripts/test-perf.cjs"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "sql.js": "^1.11.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.4.11",
+    "vite": "^6.0.7"
+  },
+  "allowScripts": {}
+}

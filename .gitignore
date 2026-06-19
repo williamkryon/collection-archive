@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+out/
+release/
+build/
+.vite/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local archive data
+collection-archive-data/
+**/collection-archive-data/
+archive.sqlite
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Generated test and performance data
+test-artifacts/
+perf-data/
+.tmp-*/
+.tmp-*
+
+# Electron / OS local state
+*.asar
+*.asar.unpacked/
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo

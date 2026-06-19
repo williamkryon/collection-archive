@@ -1,0 +1,42 @@
+const { contextBridge, ipcRenderer } = require("electron");
+
+const invoke = (channel, payload) => ipcRenderer.invoke(channel, payload);
+
+contextBridge.exposeInMainWorld("archiveAPI", {
+  getLibrary: () => invoke("library:get"),
+  queryItems: (payload) => invoke("items:query", payload),
+  countItems: (payload) => invoke("items:count", payload),
+  queryGalleryItems: (payload) => invoke("gallery:query", payload),
+  queryRecentItems: (payload) => invoke("items:recent", payload),
+  queryFavoriteItems: (payload) => invoke("items:favorites", payload),
+  createCountry: (payload) => invoke("country:create", payload),
+  updateCountry: (payload) => invoke("country:update", payload),
+  reorderCountries: (ids) => invoke("country:reorder", ids),
+  deleteCountry: (payload) => invoke("country:delete", payload),
+  reassignCountry: (payload) => invoke("country:reassign", payload),
+  createType: (payload) => invoke("type:create", payload),
+  updateType: (payload) => invoke("type:update", payload),
+  reorderTypes: (ids) => invoke("type:reorder", ids),
+  deleteType: (payload) => invoke("type:delete", payload),
+  reassignType: (payload) => invoke("type:reassign", payload),
+  createItem: (payload) => invoke("item:create", payload),
+  updateItem: (payload) => invoke("item:update", payload),
+  getItem: (id) => invoke("item:get", id),
+  deleteItem: (id) => invoke("item:delete", id),
+  toggleFavorite: (id) => invoke("item:favorite", id),
+  addImages: (itemId) => invoke("images:add", itemId),
+  removeImage: (imageId) => invoke("images:remove", imageId),
+  replaceImage: (imageId) => invoke("images:replace", imageId),
+  createAlbum: (payload) => invoke("album:create", payload),
+  updateAlbum: (payload) => invoke("album:update", payload),
+  deleteAlbum: (id) => invoke("album:delete", id),
+  createAlbumPage: (payload) => invoke("album-page:create", payload),
+  updateAlbumPage: (payload) => invoke("album-page:update", payload),
+  deleteAlbumPage: (id) => invoke("album-page:delete", id),
+  getAlbum: (id) => invoke("album:get", id),
+  addItemToPage: (payload) => invoke("album-page-item:add", payload),
+  addTextToPage: (payload) => invoke("album-text:add", payload),
+  updateAlbumPageItem: (payload) => invoke("album-page-item:update", payload),
+  removeItemFromPage: (id) => invoke("album-page-item:remove", id),
+  revealDataFolder: () => invoke("app:reveal-data-folder")
+});
