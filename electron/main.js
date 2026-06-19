@@ -182,6 +182,23 @@ function execSchema() {
       created_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS entity_groups (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      kind TEXT DEFAULT '',
+      notes TEXT DEFAULT '',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS entity_group_memberships (
+      entity_id TEXT NOT NULL,
+      group_id INTEGER NOT NULL,
+      PRIMARY KEY (entity_id, group_id),
+      FOREIGN KEY (entity_id) REFERENCES countries(id) ON DELETE CASCADE,
+      FOREIGN KEY (group_id) REFERENCES entity_groups(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS items (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
@@ -312,6 +329,9 @@ function execSchema() {
   if (!countryColumns.includes("sort_order")) {
     db.exec("ALTER TABLE countries ADD COLUMN sort_order INTEGER DEFAULT 0");
   }
+  if (!countryColumns.includes("notes")) {
+    db.exec("ALTER TABLE countries ADD COLUMN notes TEXT DEFAULT ''");
+  }
   const pageColumns = all("PRAGMA table_info(album_pages)").map((column) => column.name);
   if (!pageColumns.includes("column_count")) {
     db.exec("ALTER TABLE album_pages ADD COLUMN column_count INTEGER DEFAULT 3");
@@ -373,6 +393,7 @@ function execSchema() {
   });
   normalizeSortOrder("countries");
   normalizeSortOrder("collection_types");
+  normalizeSortOrder("entity_groups");
   migrateAlbumLayouts();
   createIndexes();
   saveDb();
@@ -397,6 +418,9 @@ function createIndexes() {
     CREATE INDEX IF NOT EXISTS idx_album_pages_background_image_id ON album_pages(background_image_id);
     CREATE INDEX IF NOT EXISTS idx_countries_sort_order ON countries(sort_order);
     CREATE INDEX IF NOT EXISTS idx_collection_types_sort_order ON collection_types(sort_order);
+    CREATE INDEX IF NOT EXISTS idx_entity_groups_sort_order ON entity_groups(sort_order);
+    CREATE INDEX IF NOT EXISTS idx_entity_group_memberships_entity ON entity_group_memberships(entity_id);
+    CREATE INDEX IF NOT EXISTS idx_entity_group_memberships_group ON entity_group_memberships(group_id);
   `);
 }
 
@@ -461,9 +485,24 @@ function itemQueryWhere(options = {}, galleryOnly = false) {
   const clauses = [];
   const params = [];
   const search = String(options.search || "").trim();
+  const searchText = String(options.searchText || "").trim();
   const year = String(options.year || "").trim();
-  const tag = String(options.tag || "").trim();
+  const tagTerms = String(options.tag || "")
+    .split(/[;,]/)
+    .map((tag) => tag.trim())
+    .filter(Boolean);
 
+  if (searchText) {
+    const like = `%${searchText}%`;
+    clauses.push(`(
+      items.title LIKE ? COLLATE NOCASE OR
+      items.description LIKE ? COLLATE NOCASE OR
+      items.source LIKE ? COLLATE NOCASE OR
+      items.condition LIKE ? COLLATE NOCASE OR
+      items.custom_fields_json LIKE ? COLLATE NOCASE
+    )`);
+    params.push(like, like, like, like, like);
+  }
   if (search) {
     clauses.push("items.title LIKE ? COLLATE NOCASE");
     params.push(`%${search}%`);
@@ -471,6 +510,10 @@ function itemQueryWhere(options = {}, galleryOnly = false) {
   if (options.countryId) {
     clauses.push("items.country_id = ?");
     params.push(options.countryId);
+  }
+  if (options.entityGroupId) {
+    clauses.push("EXISTS (SELECT 1 FROM entity_group_memberships WHERE entity_group_memberships.entity_id = items.country_id AND entity_group_memberships.group_id = ?)");
+    params.push(options.entityGroupId);
   }
   if (options.typeId) {
     clauses.push("items.type_id = ?");
@@ -480,7 +523,7 @@ function itemQueryWhere(options = {}, galleryOnly = false) {
     clauses.push("items.year LIKE ?");
     params.push(`%${year}%`);
   }
-  if (tag) {
+  for (const tag of tagTerms) {
     clauses.push("items.tags_json LIKE ? COLLATE NOCASE");
     params.push(`%${tag}%`);
   }
@@ -517,7 +560,9 @@ function itemPage(options = {}, galleryOnly = false) {
     galleryOnly,
     filters: {
       search: options.search || "",
+      searchText: options.searchText || "",
       countryId: options.countryId || "",
+      entityGroupId: options.entityGroupId || "",
       typeId: options.typeId || "",
       year: options.year || "",
       tag: options.tag || "",
@@ -543,6 +588,13 @@ function itemPage(options = {}, galleryOnly = false) {
         items.*,
         countries.name AS country_name,
         collection_types.name AS type_name,
+        (
+          SELECT GROUP_CONCAT(entity_groups.name, ', ')
+          FROM entity_group_memberships
+          JOIN entity_groups ON entity_groups.id = entity_group_memberships.group_id
+          WHERE entity_group_memberships.entity_id = items.country_id
+          ORDER BY entity_groups.sort_order ASC, entity_groups.name ASC
+        ) AS entity_group_names,
         (SELECT COUNT(*) FROM images WHERE images.item_id = items.id) AS image_count,
         cover.id AS cover_id,
         cover.image_path AS cover_image_path,
@@ -627,8 +679,13 @@ function manualRows(table) {
 
 function reorderRows(table, ids) {
   const rows = manualRows(table);
-  const known = new Set(rows.map((row) => row.id));
-  const orderedIds = [...ids.filter((rowId) => known.has(rowId)), ...rows.map((row) => row.id).filter((rowId) => !ids.includes(rowId))];
+  const normalizedIds = ids.map((rowId) => String(rowId));
+  const known = new Set(rows.map((row) => String(row.id)));
+  const rowIdByString = new Map(rows.map((row) => [String(row.id), row.id]));
+  const orderedIds = [
+    ...normalizedIds.filter((rowId) => known.has(rowId)).map((rowId) => rowIdByString.get(rowId)),
+    ...rows.map((row) => row.id).filter((rowId) => !normalizedIds.includes(String(rowId)))
+  ];
   db.exec("BEGIN TRANSACTION");
   try {
     orderedIds.forEach((rowId, index) => {
@@ -695,6 +752,8 @@ function migrateAlbumLayouts() {
 function getLibrary() {
   return {
     countries: manualRows("countries"),
+    entityGroups: manualRows("entity_groups"),
+    entityMemberships: all("SELECT entity_id, group_id FROM entity_group_memberships"),
     types: manualRows("collection_types"),
     albums: albumList(),
     dataFolder: paths.base
@@ -990,7 +1049,7 @@ ipcMain.handle("country:delete", (_event, payload) => {
 
   if (linkedItems.length > 0 && action === "reassign") {
     if (!replacementId || replacementId === countryId) {
-      return { blocked: true, error: "Choose a different country to reassign linked items." };
+      return { blocked: true, error: "Choose a different issuing entity to reassign linked items." };
     }
     run("UPDATE items SET country_id = ?, updated_at = ? WHERE country_id = ?", [replacementId, now(), countryId]);
   }
@@ -1014,6 +1073,61 @@ ipcMain.handle("country:reassign", (_event, payload) => {
     now(),
     payload.fromCountryId
   ]);
+  return getLibrary();
+});
+
+ipcMain.handle("entity-group:create", (_event, payload) => {
+  const name = String(payload.name || "").trim();
+  if (!name) return getLibrary();
+  run("INSERT OR IGNORE INTO entity_groups (name, kind, notes, sort_order, created_at) VALUES (?, ?, ?, ?, ?)", [
+    name,
+    String(payload.kind || ""),
+    String(payload.notes || ""),
+    nextSortOrder("entity_groups"),
+    now()
+  ]);
+  return getLibrary();
+});
+
+ipcMain.handle("entity-group:update", (_event, payload) => {
+  const name = String(payload.name || "").trim();
+  if (!payload.id || !name) return getLibrary();
+  run("UPDATE entity_groups SET name = ?, kind = ?, notes = ? WHERE id = ?", [
+    name,
+    String(payload.kind || ""),
+    String(payload.notes || ""),
+    Number(payload.id)
+  ]);
+  return getLibrary();
+});
+
+ipcMain.handle("entity-group:reorder", (_event, ids) => {
+  reorderRows("entity_groups", Array.isArray(ids) ? ids : []);
+  return getLibrary();
+});
+
+ipcMain.handle("entity-group:delete", (_event, groupId) => {
+  run("DELETE FROM entity_groups WHERE id = ?", [Number(groupId)]);
+  normalizeSortOrder("entity_groups");
+  return getLibrary();
+});
+
+ipcMain.handle("entity-memberships:set", (_event, payload) => {
+  const entityId = payload?.entityId || "";
+  const groupIds = Array.isArray(payload?.groupIds) ? payload.groupIds.map((entry) => Number(entry)).filter(Boolean) : [];
+  if (!entityId) return getLibrary();
+  db.exec("BEGIN TRANSACTION");
+  try {
+    bindAndStep("DELETE FROM entity_group_memberships WHERE entity_id = ?", [entityId]);
+    groupIds.forEach((groupId) => {
+      bindAndStep("INSERT OR IGNORE INTO entity_group_memberships (entity_id, group_id) VALUES (?, ?)", [entityId, groupId]);
+    });
+    db.exec("COMMIT");
+    saveDb();
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
   return getLibrary();
 });
 
@@ -1152,7 +1266,17 @@ ipcMain.handle("item:update", (_event, payload) => {
 ipcMain.handle("item:get", (_event, itemId) => {
   const item = get(
     `
-      SELECT items.*, countries.name AS country_name, collection_types.name AS type_name
+      SELECT
+        items.*,
+        countries.name AS country_name,
+        collection_types.name AS type_name,
+        (
+          SELECT GROUP_CONCAT(entity_groups.name, ', ')
+          FROM entity_group_memberships
+          JOIN entity_groups ON entity_groups.id = entity_group_memberships.group_id
+          WHERE entity_group_memberships.entity_id = items.country_id
+          ORDER BY entity_groups.sort_order ASC, entity_groups.name ASC
+        ) AS entity_group_names
       FROM items
       LEFT JOIN countries ON countries.id = items.country_id
       LEFT JOIN collection_types ON collection_types.id = items.type_id

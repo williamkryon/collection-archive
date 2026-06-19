@@ -214,7 +214,7 @@ async function seedDatabase(dbPath) {
   runStatement(
     db,
     "INSERT INTO items (id, title, country_id, type_id, year, description, condition, purchase_price, source, tags_json, custom_fields_json, favorite, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    ["item-multi", "Multi Image Test", "country-cn", "type-stamp", "1901", "", "", "", "", "[]", "{}", 0, now, now]
+    ["item-multi", "Multi Image Test", "country-cn", "type-stamp", "1901", "Blue catalog entry", "Fine", "", "Estate box", "[\"imperial\",\"ship\"]", "{\"catalog\":\"A1\"}", 0, now, now]
   );
   runStatement(
     db,
@@ -341,6 +341,286 @@ async function main() {
   assert(JSON.stringify(appendDelete.afterDelete.countryOrders) === JSON.stringify([0, 1, 2]), `Country sort_order normalization failed: ${appendDelete.afterDelete.countryOrders.join(", ")}`);
   assert(JSON.stringify(appendDelete.afterDelete.types) === JSON.stringify(["Coin", "Postcard", "Stamp"]), `Type delete/normalize failed: ${appendDelete.afterDelete.types.join(", ")}`);
   assert(JSON.stringify(appendDelete.afterDelete.typeOrders) === JSON.stringify([0, 1, 2]), `Type sort_order normalization failed: ${appendDelete.afterDelete.typeOrders.join(", ")}`);
+
+  const entityGroupSmoke = await evaluate(
+    client,
+    `(async () => {
+      let library = await window.archiveAPI.createEntityGroup({ name: "British Empire", kind: "historical", notes: "Smoke group" });
+      library = await window.archiveAPI.createEntityGroup({ name: "North America" });
+      const empire = library.entityGroups.find((entry) => entry.name === "British Empire");
+      const northAmerica = library.entityGroups.find((entry) => entry.name === "North America");
+      await window.archiveAPI.reorderEntityGroups([northAmerica.id, empire.id]);
+      await window.archiveAPI.setEntityMemberships({ entityId: "country-cn", groupIds: [empire.id, northAmerica.id] });
+      library = await window.archiveAPI.getLibrary();
+      const groupQuery = await window.archiveAPI.queryItems({ entityGroupId: empire.id, limit: 10, offset: 0 });
+      const entityQuery = await window.archiveAPI.queryItems({ countryId: "country-cn", limit: 10, offset: 0 });
+      const combinedQuery = await window.archiveAPI.queryItems({ countryId: "country-cn", entityGroupId: empire.id, limit: 10, offset: 0 });
+      const titleSearch = await window.archiveAPI.queryItems({ searchText: "Multi", limit: 10, offset: 0 });
+      const sourceSearch = await window.archiveAPI.queryItems({ searchText: "Estate", limit: 10, offset: 0 });
+      const conditionSearch = await window.archiveAPI.queryItems({ searchText: "Fine", limit: 10, offset: 0 });
+      const yearSearch = await window.archiveAPI.queryItems({ searchText: "1901", limit: 10, offset: 0 });
+      const tagSearch = await window.archiveAPI.queryItems({ searchText: "imperial", limit: 10, offset: 0 });
+      const entityNameSearch = await window.archiveAPI.queryItems({ searchText: "China", limit: 10, offset: 0 });
+      const singleTagFilter = await window.archiveAPI.queryItems({ tag: "imperial", limit: 10, offset: 0 });
+      const multiTagFilter = await window.archiveAPI.queryItems({ tag: "imperial, ship", limit: 10, offset: 0 });
+      const spacedTagFilter = await window.archiveAPI.queryItems({ tag: " imperial ; ship ", limit: 10, offset: 0 });
+      const missingMultiTagFilter = await window.archiveAPI.queryItems({ tag: "imperial, Aden", limit: 10, offset: 0 });
+      const combinedTagFilter = await window.archiveAPI.queryItems({ entityGroupId: empire.id, tag: "imperial, ship", limit: 10, offset: 0 });
+      return {
+        groups: library.entityGroups.map((entry) => entry.name),
+        memberships: library.entityMemberships.filter((entry) => entry.entity_id === "country-cn").map((entry) => String(entry.group_id)).sort(),
+        expectedMemberships: [empire.id, northAmerica.id].map(String).sort(),
+        groupQueryTotal: groupQuery.total,
+        entityQueryTotal: entityQuery.total,
+        combinedQueryTotal: combinedQuery.total,
+        titleSearchTotal: titleSearch.total,
+        sourceSearchTotal: sourceSearch.total,
+        conditionSearchTotal: conditionSearch.total,
+        yearSearchTotal: yearSearch.total,
+        tagSearchTotal: tagSearch.total,
+        entityNameSearchTotal: entityNameSearch.total,
+        singleTagFilterTotal: singleTagFilter.total,
+        multiTagFilterTotal: multiTagFilter.total,
+        spacedTagFilterTotal: spacedTagFilter.total,
+        missingMultiTagFilterTotal: missingMultiTagFilter.total,
+        combinedTagFilterTotal: combinedTagFilter.total,
+        groupNamesOnItem: groupQuery.items[0]?.entity_group_names || ""
+      };
+    })()`
+  );
+  assert(JSON.stringify(entityGroupSmoke.groups) === JSON.stringify(["North America", "British Empire"]), `Entity group reorder failed: ${entityGroupSmoke.groups.join(", ")}`);
+  assert(JSON.stringify(entityGroupSmoke.memberships) === JSON.stringify(entityGroupSmoke.expectedMemberships), `Entity membership did not persist: ${JSON.stringify(entityGroupSmoke)}`);
+  assert(entityGroupSmoke.groupQueryTotal === 1, `Entity group filter failed: ${JSON.stringify(entityGroupSmoke)}`);
+  assert(entityGroupSmoke.entityQueryTotal === 1 && entityGroupSmoke.combinedQueryTotal === 1, `Entity/entity group combined filters failed: ${JSON.stringify(entityGroupSmoke)}`);
+  assert(entityGroupSmoke.titleSearchTotal === 1 && entityGroupSmoke.sourceSearchTotal === 1 && entityGroupSmoke.conditionSearchTotal === 1, `Text search failed: ${JSON.stringify(entityGroupSmoke)}`);
+  assert(entityGroupSmoke.yearSearchTotal === 0 && entityGroupSmoke.tagSearchTotal === 0 && entityGroupSmoke.entityNameSearchTotal === 0, `Search should not match year/tag/entity names: ${JSON.stringify(entityGroupSmoke)}`);
+  assert(entityGroupSmoke.singleTagFilterTotal === 1, `Single tag filter failed: ${JSON.stringify(entityGroupSmoke)}`);
+  assert(entityGroupSmoke.multiTagFilterTotal === 1 && entityGroupSmoke.spacedTagFilterTotal === 1, `Multi-tag filter failed: ${JSON.stringify(entityGroupSmoke)}`);
+  assert(entityGroupSmoke.missingMultiTagFilterTotal === 0, `Multi-tag filter should use AND semantics: ${JSON.stringify(entityGroupSmoke)}`);
+  assert(entityGroupSmoke.combinedTagFilterTotal === 1, `Combined entity-group and multi-tag filter failed: ${JSON.stringify(entityGroupSmoke)}`);
+  assert(entityGroupSmoke.groupNamesOnItem.includes("British Empire"), `Item did not include inherited group names: ${JSON.stringify(entityGroupSmoke)}`);
+
+  await evaluate(client, `window.archiveAPI.createEntityGroup({ name: "Europe" }).then(() => { window.location.reload(); return true; })`);
+  await waitFor(client, "Boolean(window.archiveAPI && document.querySelector('.app'))", "App did not rerender after entity group setup");
+  await evaluate(
+    client,
+    `(() => {
+      [...document.querySelectorAll("button")].find((button) => button.textContent.trim() === "Manage lists").click();
+      return true;
+    })()`
+  );
+  await waitFor(client, "document.querySelector('.manage-modal')", "Manage Lists did not open");
+  await evaluate(
+    client,
+    `(() => {
+      [...document.querySelectorAll('.manage-tabs button')]
+        .find((button) => button.textContent.trim() === 'Issuing Entities').click();
+      return true;
+    })()`
+  );
+  await waitFor(client, "[...document.querySelectorAll('.manage-tab-panel .manage-row strong')].some((entry) => entry.textContent.trim() === 'China')", "Issuing Entities tab did not show China");
+  await evaluate(
+    client,
+    `(() => {
+      const issuingSection = document.querySelector('.manage-tab-panel section');
+      const row = [...issuingSection.querySelectorAll('.manage-row')]
+        .find((entry) => entry.querySelector('strong')?.textContent.trim() === 'China');
+      [...row.querySelectorAll('button')].find((button) => button.textContent.trim() === 'Edit').click();
+      return true;
+    })()`
+  );
+  await waitFor(client, "document.querySelector('.membership-editor')", "Issuing entity membership editor did not open");
+  const groupAssignmentUi = await evaluate(
+    client,
+    `(async () => {
+      const before = [...document.querySelectorAll('.group-chip')]
+        .map((chip) => (chip.firstChild?.textContent || '').trim());
+      const oldCheckboxList = Boolean(document.querySelector('.membership-fieldset'));
+      [...document.querySelectorAll('.membership-editor button')].find((button) => button.textContent.trim() === 'Add group').click();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      const search = document.querySelector('.group-picker input[aria-label="Search entity groups"]');
+      search.value = 'Euro';
+      search.dispatchEvent(new Event('input', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      const pickerRows = [...document.querySelectorAll('.group-picker-list label')].map((label) => label.textContent.trim());
+      const europeRow = [...document.querySelectorAll('.group-picker-list label')]
+        .find((label) => label.textContent.includes('Europe'));
+      const europeInput = europeRow.querySelector('input');
+      const rowStyle = getComputedStyle(europeRow);
+      const pickerRowDisplay = rowStyle.display;
+      const inputRect = europeInput.getBoundingClientRect();
+      const rowRect = europeRow.getBoundingClientRect();
+      europeRow.querySelector('input').click();
+      [...document.querySelectorAll('.group-picker-actions button')]
+        .find((button) => button.textContent.trim() === 'Add selected groups').click();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      const after = [...document.querySelectorAll('.group-chip')]
+        .map((chip) => (chip.firstChild?.textContent || '').trim());
+      [...document.querySelectorAll('form.modal footer button')]
+        .find((button) => button.textContent.trim() === 'Save').click();
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const library = await window.archiveAPI.getLibrary();
+      const europe = library.entityGroups.find((entry) => entry.name === 'Europe');
+      const persisted = library.entityMemberships.some((entry) => entry.entity_id === 'country-cn' && String(entry.group_id) === String(europe.id));
+      document.querySelector('.manage-modal header button').click();
+      return {
+        before,
+        after,
+        oldCheckboxList,
+        pickerRows,
+        pickerRowDisplay,
+        pickerInputWidth: Math.round(inputRect.width),
+        pickerInputAligned: Math.abs((inputRect.top + inputRect.height / 2) - (rowRect.top + rowRect.height / 2)) < 4,
+        persisted
+      };
+    })()`
+  );
+  assert(groupAssignmentUi.before.includes("British Empire") && groupAssignmentUi.before.includes("North America"), `Existing memberships did not render as chips: ${JSON.stringify(groupAssignmentUi)}`);
+  assert(!groupAssignmentUi.oldCheckboxList, `Old always-visible checkbox list is still present: ${JSON.stringify(groupAssignmentUi)}`);
+  assert(groupAssignmentUi.pickerRows.length === 1 && groupAssignmentUi.pickerRows[0] === "Europe", `Group picker search did not narrow results: ${JSON.stringify(groupAssignmentUi)}`);
+  assert(groupAssignmentUi.pickerRowDisplay === "flex" && groupAssignmentUi.pickerInputWidth <= 20 && groupAssignmentUi.pickerInputAligned, `Group picker checkbox is not compact and inline: ${JSON.stringify(groupAssignmentUi)}`);
+  assert(groupAssignmentUi.after.includes("Europe"), `Adding a group through the picker did not create a chip: ${JSON.stringify(groupAssignmentUi)}`);
+  assert(groupAssignmentUi.persisted, `Group picker assignment did not persist: ${JSON.stringify(groupAssignmentUi)}`);
+
+  await evaluate(
+    client,
+    `(() => {
+      [...document.querySelectorAll("button")].find((button) => button.textContent.trim() === "Manage lists").click();
+      return true;
+    })()`
+  );
+  await waitFor(client, "document.querySelector('.manage-modal')", "Manage Lists did not reopen");
+  const manageInitialUi = await evaluate(
+    client,
+    `(() => {
+      const activeBefore = document.querySelector('.manage-tabs button.active')?.textContent.trim() || '';
+      const collectionTypesFirst = document.querySelector('.manage-tabs button')?.textContent.trim() === 'Collection Types';
+      const typeAddVisible = [...document.querySelectorAll('.manage-tab-panel button')].some((button) => button.textContent.trim() === 'Add type');
+      return { activeBefore, collectionTypesFirst, typeAddVisible };
+    })()`
+  );
+  await evaluate(
+    client,
+    `(() => {
+      [...document.querySelectorAll('.manage-tabs button')].find((button) => button.textContent.trim() === 'Issuing Entities').click();
+      return true;
+    })()`
+  );
+  await waitFor(client, "document.querySelector('.manage-search')?.getAttribute('placeholder') === 'Search issuing entities...'", "Issuing Entities search did not render");
+  const entityTabUi = await evaluate(
+    client,
+    `(async () => {
+      const entitySearch = document.querySelector('.manage-search');
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(entitySearch, 'Chi');
+      entitySearch.dispatchEvent(new Event('input', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      const entityRows = [...document.querySelectorAll('.manage-row strong')].map((entry) => entry.textContent.trim());
+      const entityDragHidden = !document.querySelector('.manage-row .drag-handle');
+      const entityAddVisible = [...document.querySelectorAll('.manage-tab-panel button')].some((button) => button.textContent.trim() === 'Add entity');
+      return { entityRows, entityDragHidden, entityAddVisible };
+    })()`
+  );
+  await evaluate(
+    client,
+    `(() => {
+      [...document.querySelectorAll('.manage-tabs button')].find((button) => button.textContent.trim() === 'Entity Groups').click();
+      return true;
+    })()`
+  );
+  await waitFor(client, "document.querySelector('.manage-search')?.getAttribute('placeholder') === 'Search entity groups...'", "Entity Groups search did not render");
+  const groupTabUi = await evaluate(
+    client,
+    `(async () => {
+      const groupSearch = document.querySelector('.manage-search');
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(groupSearch, 'Euro');
+      groupSearch.dispatchEvent(new Event('input', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      const groupRows = [...document.querySelectorAll('.manage-row strong')].map((entry) => entry.textContent.trim());
+      const groupDragHidden = !document.querySelector('.manage-row .drag-handle');
+      const groupAddVisible = [...document.querySelectorAll('.manage-tab-panel button')].some((button) => button.textContent.trim() === 'Add group');
+      document.querySelector('.manage-modal header button').click();
+      return { groupRows, groupDragHidden, groupAddVisible };
+    })()`
+  );
+  assert(manageInitialUi.activeBefore === "Collection Types" && manageInitialUi.collectionTypesFirst && manageInitialUi.typeAddVisible, `Collection Types tab should be first and prominent: ${JSON.stringify(manageInitialUi)}`);
+  assert(JSON.stringify(entityTabUi.entityRows) === JSON.stringify(["China"]) && entityTabUi.entityDragHidden && entityTabUi.entityAddVisible, `Issuing Entities searchable tab failed: ${JSON.stringify(entityTabUi)}`);
+  assert(JSON.stringify(groupTabUi.groupRows) === JSON.stringify(["Europe"]) && groupTabUi.groupDragHidden && groupTabUi.groupAddVisible, `Entity Groups searchable tab failed: ${JSON.stringify(groupTabUi)}`);
+
+  await evaluate(
+    client,
+    `(() => {
+      [...document.querySelectorAll("button")].find((button) => button.textContent.trim() === "New item").click();
+      return true;
+    })()`
+  );
+  await waitFor(client, "document.querySelector('.entity-combobox')", "New item form did not show issuing entity combobox");
+  const itemComboboxUi = await evaluate(
+    client,
+    `(async () => {
+      const titleInput = document.querySelector('.form-grid input[required]');
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(titleInput, 'Combobox Smoke');
+      titleInput.dispatchEvent(new Event('input', { bubbles: true }));
+      document.querySelector('.entity-combobox-trigger').click();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      const search = document.querySelector('.entity-combobox-panel input');
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(search, 'Aust');
+      search.dispatchEvent(new Event('input', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      const resultNames = [...document.querySelectorAll('.entity-combobox-results button')].map((button) => button.textContent.trim()).filter(Boolean);
+      [...document.querySelectorAll('.entity-combobox-results button')]
+        .find((button) => button.textContent.trim() === 'Austria').click();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      const selectedBeforeSave = document.querySelector('.entity-combobox-trigger')?.textContent.trim();
+      document.querySelector('.entity-combobox-clear').click();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      const selectedClearBeforeSave = document.querySelector('.entity-combobox-trigger')?.textContent.trim();
+      document.querySelector('.entity-combobox-trigger').click();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      const searchAgain = document.querySelector('.entity-combobox-panel input');
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(searchAgain, 'Aust');
+      searchAgain.dispatchEvent(new Event('input', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      [...document.querySelectorAll('.entity-combobox-results button')]
+        .find((button) => button.textContent.trim() === 'Austria').click();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      [...document.querySelectorAll('.modal footer button')]
+        .find((button) => button.textContent.trim() === 'Save').click();
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      let created = await window.archiveAPI.queryItems({ searchText: 'Combobox Smoke', limit: 1, offset: 0 });
+      const item = created.items[0];
+      if (!item) return { error: 'created item not found', resultNames, selectedBeforeSave, createdTotal: created.total };
+      const detailBeforeClear = await window.archiveAPI.getItem(item.id);
+      await window.archiveAPI.updateItem({
+        id: item.id,
+        title: detailBeforeClear.title,
+        country_id: '',
+        type_id: detailBeforeClear.type_id || '',
+        year: detailBeforeClear.year || '',
+        description: detailBeforeClear.description || '',
+        condition: detailBeforeClear.condition || '',
+        purchase_price: detailBeforeClear.purchase_price || '',
+        source: detailBeforeClear.source || '',
+        tags: detailBeforeClear.tags || [],
+        customFields: detailBeforeClear.customFields || {},
+        favorite: detailBeforeClear.favorite
+      });
+      const detail = await window.archiveAPI.getItem(item.id);
+      await window.archiveAPI.deleteItem(item.id);
+      return {
+        resultNames,
+        selectedBeforeSave,
+        selectedClearBeforeSave,
+        createdCountry: item.country_name,
+        clearedCountryId: detail.country_id || ''
+      };
+    })()`
+  );
+  assert(itemComboboxUi.resultNames.includes("Austria"), `Issuing entity combobox search did not find Austria: ${JSON.stringify(itemComboboxUi)}`);
+  assert(itemComboboxUi.selectedBeforeSave === "Austria" && itemComboboxUi.createdCountry === "Austria", `Selected issuing entity did not persist on create: ${JSON.stringify(itemComboboxUi)}`);
+  assert(itemComboboxUi.selectedClearBeforeSave === "None" && itemComboboxUi.clearedCountryId === "", `Clearing issuing entity did not work: ${JSON.stringify(itemComboboxUi)}`);
+
+  await evaluate(client, `(() => { window.location.reload(); return true; })()`);
+  await waitFor(client, "Boolean(window.archiveAPI && document.querySelector('.item-card .favorite'))", "Library cards did not return after reload");
 
   const favoriteUi = await evaluate(
     client,
@@ -872,7 +1152,7 @@ async function main() {
       handles: document.querySelectorAll('.resize-handle').length,
       inspectorButtons: [...document.querySelectorAll('.placement-inspector button')].map((button) => button.textContent.trim()),
       layerTitles: [...document.querySelectorAll('.placement-inspector .placement-actions button')].map((button) => button.getAttribute('title')),
-      itemInfoLabel: [...document.querySelectorAll('.placement-inspector label')].some((label) => label.textContent.includes('Show item info') && label.getAttribute('title') === 'Show or hide country, type, and year for this placement.'),
+      itemInfoLabel: [...document.querySelectorAll('.placement-inspector label')].some((label) => label.textContent.includes('Show item info') && label.getAttribute('title') === 'Show or hide issuing entity, type, and year for this placement.'),
       pageSettingsHidden: !document.querySelector('.page-settings-panel')
     }))()`
   );
@@ -1080,6 +1360,14 @@ async function main() {
     })()`
   );
   await waitFor(client, "document.querySelector('.manage-modal')", "Manage Lists modal did not open");
+  await evaluate(
+    client,
+    `(() => {
+      [...document.querySelectorAll('.manage-tabs button')].find((button) => button.textContent.trim() === 'Issuing Entities').click();
+      return true;
+    })()`
+  );
+  await waitFor(client, "[...document.querySelectorAll('.manage-tab-panel .manage-row-main strong')].some((node) => node.textContent.includes('British South Africa Company'))", "Issuing Entities tab did not render long-name rows");
   const manageLayout = await evaluate(
     client,
     `(() => {
@@ -1105,12 +1393,12 @@ async function main() {
   const moveFallback = await evaluate(
     client,
     `(async () => {
-      let rows = [...document.querySelector('.manage-grid section:first-child .manage-list').querySelectorAll('.reorder-row')];
+      let rows = [...document.querySelector('.manage-tab-panel .manage-list').querySelectorAll('.reorder-row')];
       rows[0].querySelectorAll('.order-actions button')[1].click();
       await new Promise((resolve) => setTimeout(resolve, 500));
       let library = await window.archiveAPI.getLibrary();
       const afterDown = library.countries.slice(0, 3).map((entry) => entry.name);
-      rows = [...document.querySelector('.manage-grid section:first-child .manage-list').querySelectorAll('.reorder-row')];
+      rows = [...document.querySelector('.manage-tab-panel .manage-list').querySelectorAll('.reorder-row')];
       rows[1].querySelectorAll('.order-actions button')[0].click();
       await new Promise((resolve) => setTimeout(resolve, 500));
       library = await window.archiveAPI.getLibrary();
@@ -1125,7 +1413,7 @@ async function main() {
   const dragResult = await evaluate(
     client,
     `(async () => {
-      const countryRows = [...document.querySelector('.manage-grid section:first-child .manage-list').querySelectorAll('.reorder-row')];
+      const countryRows = [...document.querySelector('.manage-tab-panel .manage-list').querySelectorAll('.reorder-row')];
       const dragged = countryRows[0];
       const target = countryRows[2];
       const draggedName = dragged.querySelector('.manage-row-main strong').textContent;
@@ -1139,7 +1427,9 @@ async function main() {
       await new Promise((resolve) => setTimeout(resolve, 500));
       let library = await window.archiveAPI.getLibrary();
       const countryOrder = library.countries.map((entry) => entry.name);
-      const typeRows = [...document.querySelector('.manage-grid section:nth-child(2) .manage-list').querySelectorAll('.reorder-row')];
+      [...document.querySelectorAll('.manage-tabs button')].find((button) => button.textContent.trim() === 'Collection Types').click();
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      const typeRows = [...document.querySelector('.manage-tab-panel .manage-list').querySelectorAll('.reorder-row')];
       const typeDragged = typeRows[0];
       const typeTarget = typeRows[2];
       const typeDraggedName = typeDragged.querySelector('.manage-row-main strong').textContent;

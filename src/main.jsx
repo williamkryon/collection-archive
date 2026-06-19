@@ -609,12 +609,15 @@ function App() {
   const [libraryItems, setLibraryItems] = useState({ items: [], total: 0, limit: libraryPageSize, offset: 0, loading: false });
   const [galleryItems, setGalleryItems] = useState({ items: [], total: 0, limit: galleryPageSize, offset: 0, loading: false });
   const [filters, setFilters] = useState({
+    search: "",
     country: "",
+    entityGroup: "",
     type: "",
     year: "",
     tag: "",
     favorites: false
   });
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const libraryRequestRef = useRef(0);
   const galleryRequestRef = useRef(0);
 
@@ -627,16 +630,25 @@ function App() {
     refresh();
   }, []);
 
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setDebouncedSearch(filters.search);
+    }, 220);
+    return () => window.clearTimeout(timeout);
+  }, [filters.search]);
+
   const itemQuery = useMemo(
     () => ({
+      searchText: debouncedSearch,
       countryId: filters.country,
+      entityGroupId: filters.entityGroup,
       typeId: filters.type,
       year: filters.year,
       tag: filters.tag,
       favorite: filters.favorites,
       sort: "updated_desc"
     }),
-    [filters.country, filters.favorites, filters.tag, filters.type, filters.year]
+    [debouncedSearch, filters.country, filters.entityGroup, filters.favorites, filters.tag, filters.type, filters.year]
   );
 
   const reloadLibraryItems = useCallback(
@@ -696,12 +708,12 @@ function App() {
   useEffect(() => {
     if (!library || activeView !== "library") return;
     reloadLibraryItems(0, false);
-  }, [activeView, filters.country, filters.favorites, filters.tag, filters.type, filters.year, itemsVersion, library, reloadLibraryItems]);
+  }, [activeView, debouncedSearch, filters.country, filters.entityGroup, filters.favorites, filters.tag, filters.type, filters.year, itemsVersion, library, reloadLibraryItems]);
 
   useEffect(() => {
     if (!library || activeView !== "gallery") return;
     reloadGalleryItems(0, false);
-  }, [activeView, filters.country, filters.favorites, filters.tag, filters.type, filters.year, itemsVersion, library, reloadGalleryItems]);
+  }, [activeView, debouncedSearch, filters.country, filters.entityGroup, filters.favorites, filters.tag, filters.type, filters.year, itemsVersion, library, reloadGalleryItems]);
 
   useEffect(() => {
     if (!perfTraceEnabled()) return undefined;
@@ -810,7 +822,7 @@ function App() {
     await api.createCountry(payload);
     await refresh();
     setCountryFormOpen(false);
-    setMessage("Country created.");
+    setMessage("Issuing entity created.");
   }
 
   async function createType(payload) {
@@ -850,7 +862,7 @@ function App() {
         </div>
         <div className="sidebar-actions">
           <button onClick={() => setItemFormOpen(true)}>New item</button>
-          <button onClick={() => setCountryFormOpen(true)}>New country</button>
+          <button onClick={() => setCountryFormOpen(true)}>New entity</button>
           <button onClick={() => setTypeFormOpen(true)}>New type</button>
           <button onClick={() => setAlbumFormOpen(true)}>New album</button>
           <button onClick={() => setManageOpen(true)}>Manage lists</button>
@@ -1009,7 +1021,7 @@ function App() {
           onSubmit={(payload) => updateItem({ ...payload, id: editingItem.id })}
         />
       )}
-      {countryFormOpen && <NameForm title="New country or region" label="Name" onClose={() => setCountryFormOpen(false)} onSubmit={createCountry} />}
+      {countryFormOpen && <NameForm title="New issuing entity" label="Name" onClose={() => setCountryFormOpen(false)} onSubmit={createCountry} />}
       {typeFormOpen && <NameForm title="New collection type" label="Name" onClose={() => setTypeFormOpen(false)} onSubmit={createType} />}
       {albumFormOpen && <NameForm title="New album" label="Title" extraLabel="Description" onClose={() => setAlbumFormOpen(false)} onSubmit={createAlbum} />}
       {manageOpen && (
@@ -1027,10 +1039,10 @@ function App() {
 function LibraryView({ library, items, total, loading, filters, setFilters, onLoadMore, onOpenItem, onToggleFavorite, onEditItem, onDeleteItem }) {
   return (
     <section className="workspace">
-      <header className="topbar">
-        <div>
+      <header className="topbar library-header">
+        <div className="library-title-row">
           <h1>Library</h1>
-          <p>{items.length} shown from {total} matching items</p>
+          <p>Showing {items.length} of {total} matching items</p>
         </div>
         <FilterBar library={library} filters={filters} setFilters={setFilters} />
       </header>
@@ -1053,7 +1065,7 @@ function LibraryView({ library, items, total, loading, filters, setFilters, onLo
                 {item.title}
               </button>
               <div className="muted-row">
-                <span>{item.country_name || "No country"}</span>
+                <span>{item.country_name || "No issuing entity"}</span>
                 <span>{item.type_name || "No type"}</span>
                 <span>{item.year || "No year"}</span>
               </div>
@@ -1084,34 +1096,77 @@ function LibraryView({ library, items, total, loading, filters, setFilters, onLo
 }
 
 function FilterBar({ library, filters, setFilters }) {
+  function update(next) {
+    setFilters({ ...filters, ...next });
+  }
+
+  const hasFilters = Boolean(filters.search || filters.country || filters.entityGroup || filters.type || filters.year || filters.tag || filters.favorites);
+
+  function clearFilters() {
+    setFilters({
+      search: "",
+      country: "",
+      entityGroup: "",
+      type: "",
+      year: "",
+      tag: "",
+      favorites: false
+    });
+  }
+
   return (
     <div className="filters">
-      <select value={filters.country} onChange={(event) => setFilters({ ...filters, country: event.target.value })}>
-        <option value="">All countries</option>
-        {orderedRows(library.countries).map((country) => (
-          <option value={country.id} key={country.id}>
-            {country.name}
-          </option>
-        ))}
-      </select>
-      <select value={filters.type} onChange={(event) => setFilters({ ...filters, type: event.target.value })}>
-        <option value="">All types</option>
-        {orderedRows(library.types).map((type) => (
-          <option value={type.id} key={type.id}>
-            {type.name}
-          </option>
-        ))}
-      </select>
-      <input value={filters.year} onChange={(event) => setFilters({ ...filters, year: event.target.value })} placeholder="Year" />
-      <input value={filters.tag} onChange={(event) => setFilters({ ...filters, tag: event.target.value })} placeholder="Tag" />
-      <label className="check">
-        <input
-          type="checkbox"
-          checked={filters.favorites}
-          onChange={(event) => setFilters({ ...filters, favorites: event.target.checked })}
-        />
-        Favorites
-      </label>
+      <div className="filter-search-row">
+        <div className="search-filter">
+          <input
+            value={filters.search}
+            onChange={(event) => update({ search: event.target.value })}
+            placeholder="Search title, description, source, condition..."
+            aria-label="Search title, description, source, condition"
+          />
+          {filters.search && <button type="button" aria-label="Clear search" onClick={() => update({ search: "" })}>X</button>}
+        </div>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={filters.favorites}
+            onChange={(event) => update({ favorites: event.target.checked })}
+          />
+          Favorites
+        </label>
+      </div>
+      <div className="filter-control-row">
+        <select value={filters.country} onChange={(event) => update({ country: event.target.value })} aria-label="Issuing Entity">
+          <option value="">All issuing entities</option>
+          {orderedRows(library.countries).map((country) => (
+            <option value={country.id} key={country.id}>
+              {country.name}
+            </option>
+          ))}
+        </select>
+        <select value={filters.entityGroup} onChange={(event) => update({ entityGroup: event.target.value })} aria-label="Entity Group">
+          <option value="">All entity groups</option>
+          {orderedRows(library.entityGroups || []).map((group) => (
+            <option value={group.id} key={group.id}>
+              {group.name}
+            </option>
+          ))}
+        </select>
+        <select value={filters.type} onChange={(event) => update({ type: event.target.value })}>
+          <option value="">All types</option>
+          {orderedRows(library.types).map((type) => (
+            <option value={type.id} key={type.id}>
+              {type.name}
+            </option>
+          ))}
+        </select>
+        <input value={filters.year} onChange={(event) => update({ year: event.target.value })} placeholder="Year" />
+        <label className="filter-tag-field">
+          <input value={filters.tag} onChange={(event) => update({ tag: event.target.value })} placeholder="Tags, comma-separated" aria-label="Tags, comma-separated" />
+          <span>Use commas for multiple tags</span>
+        </label>
+        <button type="button" className="secondary clear-filters" disabled={!hasFilters} onClick={clearFilters}>Clear filters</button>
+      </div>
     </div>
   );
 }
@@ -1234,6 +1289,8 @@ function DetailView({ detail, countries, types, onBack, onAddImages, onRemoveIma
         <aside className="metadata-panel">
           <h2>Metadata</h2>
           <dl>
+            <div><dt>Issuing Entity</dt><dd>{detail.country_name || "-"}</dd></div>
+            <div><dt>Entity Groups</dt><dd>{detail.entity_group_names || "-"}</dd></div>
             <div><dt>Condition</dt><dd>{detail.condition || "-"}</dd></div>
             <div><dt>Purchase price</dt><dd>{detail.purchase_price || "-"}</dd></div>
             <div><dt>Source</dt><dd>{detail.source || "-"}</dd></div>
@@ -1461,6 +1518,7 @@ function AlbumsView({
       {pickerOpen && (
         <AlbumItemPicker
           countries={library.countries}
+          entityGroups={library.entityGroups || []}
           types={library.types}
           pageId={activePageId}
           title={pickerOpen === "background" ? "Choose background image" : "Add item"}
@@ -1672,9 +1730,10 @@ function templateLayout(templateName, items, page) {
   return rows;
 }
 
-function AlbumItemPicker({ countries, types, pageId, title = "Add item", onAdd, onClose }) {
+function AlbumItemPicker({ countries, entityGroups = [], types, pageId, title = "Add item", onAdd, onClose }) {
   const [query, setQuery] = useState("");
   const [countryId, setCountryId] = useState("");
+  const [entityGroupId, setEntityGroupId] = useState("");
   const [typeId, setTypeId] = useState("");
   const [year, setYear] = useState("");
   const [tag, setTag] = useState("");
@@ -1695,7 +1754,7 @@ function AlbumItemPicker({ countries, types, pageId, title = "Add item", onAdd, 
   useEffect(() => {
     setPage(0);
     setHighlighted(0);
-  }, [countryId, favoritesOnly, query, tag, typeId, year]);
+  }, [countryId, entityGroupId, favoritesOnly, query, tag, typeId, year]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1703,6 +1762,7 @@ function AlbumItemPicker({ countries, types, pageId, title = "Add item", onAdd, 
     api.queryItems({
       search: query,
       countryId,
+      entityGroupId,
       typeId,
       year,
       tag,
@@ -1718,7 +1778,7 @@ function AlbumItemPicker({ countries, types, pageId, title = "Add item", onAdd, 
     return () => {
       cancelled = true;
     };
-  }, [countryId, favoritesOnly, page, query, tag, typeId, year]);
+  }, [countryId, entityGroupId, favoritesOnly, page, query, tag, typeId, year]);
 
   useEffect(() => {
     if (!selectedItem) {
@@ -1792,8 +1852,12 @@ function AlbumItemPicker({ countries, types, pageId, title = "Add item", onAdd, 
         <div className="picker-filters">
           <input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search title" />
           <select value={countryId} onChange={(event) => setCountryId(event.target.value)}>
-            <option value="">All countries</option>
+            <option value="">All issuing entities</option>
             {orderedRows(countries).map((country) => <option value={country.id} key={country.id}>{country.name}</option>)}
+          </select>
+          <select value={entityGroupId} onChange={(event) => setEntityGroupId(event.target.value)}>
+            <option value="">All entity groups</option>
+            {orderedRows(entityGroups).map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}
           </select>
           <select value={typeId} onChange={(event) => setTypeId(event.target.value)}>
             <option value="">All types</option>
@@ -2756,7 +2820,7 @@ function PlacementInspector({ entry, saveStatus, onUpdate, onLayer, onDuplicate,
             <label>Caption<input value={caption} onChange={(event) => setCaption(event.target.value)} onBlur={() => onUpdate({ ...entry, caption })} /></label>
             <CheckRow checked={Boolean(entry.show_title)} label="Show title" onChange={(checked) => onUpdate({ ...entry, show_title: checked })} />
             <CheckRow checked={Boolean(entry.show_caption)} label="Show caption" onChange={(checked) => onUpdate({ ...entry, show_caption: checked })} />
-            <CheckRow checked={Boolean(entry.show_metadata)} label="Show item info" title="Show or hide country, type, and year for this placement." onChange={(checked) => onUpdate({ ...entry, show_metadata: checked })} />
+            <CheckRow checked={Boolean(entry.show_metadata)} label="Show item info" title="Show or hide issuing entity, type, and year for this placement." onChange={(checked) => onUpdate({ ...entry, show_metadata: checked })} />
             <FrameStyleControls entry={entry} onChange={(changes) => onUpdate({ ...entry, ...changes })} />
           </>
         )}
@@ -2857,7 +2921,7 @@ function MultiPlacementInspector({ entries, saveStatus, onUpdateMany, onLayer, o
           <>
             <CheckRow checked={allShowTitle} label="Show title" onChange={(checked) => toggle("show_title", checked)} />
             <CheckRow checked={allShowCaption} label="Show caption" onChange={(checked) => toggle("show_caption", checked)} />
-            <CheckRow checked={allShowInfo} label="Show item info" title="Show or hide country, type, and year for selected placements." onChange={(checked) => toggle("show_metadata", checked)} />
+            <CheckRow checked={allShowInfo} label="Show item info" title="Show or hide issuing entity, type, and year for selected placements." onChange={(checked) => toggle("show_metadata", checked)} />
             <FrameStyleControls entry={imageEntries[0]} compact onChange={updateImageFrames} />
           </>
         )}
@@ -3048,6 +3112,110 @@ function PageSettingsPanel({ page, onRegisterSave, onApplyTemplate, onUpdatePage
   );
 }
 
+function IssuingEntityCombobox({ countries, value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [highlighted, setHighlighted] = useState(0);
+  const inputRef = useRef(null);
+  const orderedEntities = useMemo(() => orderedRows(countries), [countries]);
+  const selected = orderedEntities.find((country) => country.id === value);
+  const normalizedQuery = query.trim().toLowerCase();
+  const matches = orderedEntities.filter((country) => !normalizedQuery || String(country.name || "").toLowerCase().includes(normalizedQuery));
+  const visibleMatches = matches.slice(0, 80);
+
+  useEffect(() => {
+    if (!open) return;
+    setHighlighted(0);
+    window.setTimeout(() => inputRef.current?.focus(), 0);
+  }, [open]);
+
+  function selectEntity(entity) {
+    onChange(entity.id);
+    setQuery("");
+    setOpen(false);
+  }
+
+  function clearEntity() {
+    onChange("");
+    setQuery("");
+    setOpen(false);
+  }
+
+  function handleKeyDown(event) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setOpen(false);
+      return;
+    }
+    if (!open && (event.key === "ArrowDown" || event.key === "Enter")) {
+      event.preventDefault();
+      setOpen(true);
+      return;
+    }
+    if (!open) return;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setHighlighted((index) => Math.min(index + 1, visibleMatches.length - 1));
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setHighlighted((index) => Math.max(index - 1, 0));
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      if (visibleMatches[highlighted]) selectEntity(visibleMatches[highlighted]);
+    }
+  }
+
+  return (
+    <div className="entity-combobox" onBlur={(event) => {
+      if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
+    }}>
+      <div className="entity-combobox-value">
+        <button type="button" className="entity-combobox-trigger" onClick={() => setOpen((current) => !current)} onKeyDown={handleKeyDown}>
+          {selected ? selected.name : "None"}
+        </button>
+        {selected && <button type="button" className="entity-combobox-clear" aria-label="Clear issuing entity" onClick={clearEntity}>X</button>}
+      </div>
+      {open && (
+        <div className="entity-combobox-panel">
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setHighlighted(0);
+            }}
+            onKeyDown={handleKeyDown}
+            placeholder="Search issuing entities..."
+            aria-label="Search issuing entities"
+          />
+          <div className="entity-combobox-results" role="listbox">
+            <button type="button" className={!value ? "active" : ""} onMouseDown={(event) => event.preventDefault()} onClick={clearEntity}>
+              None
+            </button>
+            {visibleMatches.map((country, index) => (
+              <button
+                type="button"
+                key={country.id}
+                className={`${country.id === value ? "selected" : ""} ${index === highlighted ? "active" : ""}`}
+                role="option"
+                aria-selected={country.id === value}
+                title={country.name}
+                onMouseDown={(event) => event.preventDefault()}
+                onMouseEnter={() => setHighlighted(index)}
+                onClick={() => selectEntity(country)}
+              >
+                {country.name}
+              </button>
+            ))}
+            {matches.length > visibleMatches.length && <p className="quiet">Showing first {visibleMatches.length} matches. Type to narrow results.</p>}
+            {visibleMatches.length === 0 && <p className="quiet">No matching issuing entities</p>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ItemForm({ title, item, countries, types, onClose, onSubmit }) {
   const [form, setForm] = useState(() => ({
     ...emptyItem,
@@ -3087,7 +3255,7 @@ function ItemForm({ title, item, countries, types, onClose, onSubmit }) {
         </header>
         <div className="form-grid">
           <label>Title<input required value={form.title} onChange={(event) => update("title", event.target.value)} /></label>
-          <label>Country<select value={form.country_id || ""} onChange={(event) => update("country_id", event.target.value)}><option value="">None</option>{orderedRows(countries).map((country) => <option value={country.id} key={country.id}>{country.name}</option>)}</select></label>
+          <label>Issuing Entity<IssuingEntityCombobox countries={countries} value={form.country_id || ""} onChange={(value) => update("country_id", value)} /></label>
           <label>Type<select value={form.type_id || ""} onChange={(event) => update("type_id", event.target.value)}><option value="">None</option>{orderedRows(types).map((type) => <option value={type.id} key={type.id}>{type.name}</option>)}</select></label>
           <label>Year<input value={form.year || ""} onChange={(event) => update("year", event.target.value)} /></label>
           <label>Condition<input value={form.condition || ""} onChange={(event) => update("condition", event.target.value)} /></label>
@@ -3104,6 +3272,13 @@ function ItemForm({ title, item, countries, types, onClose, onSubmit }) {
       </form>
     </div>
   );
+}
+
+function groupsForEntity(entityId, library) {
+  const groupIds = new Set((library.entityMemberships || [])
+    .filter((entry) => entry.entity_id === entityId)
+    .map((entry) => String(entry.group_id)));
+  return orderedRows(library.entityGroups || []).filter((group) => groupIds.has(String(group.id)));
 }
 
 function NameForm({ title, label, extraLabel, onClose, onSubmit }) {
@@ -3136,9 +3311,24 @@ function NameForm({ title, label, extraLabel, onClose, onSubmit }) {
 }
 
 function ManageLists({ library, onClose, onRefresh, onMessage }) {
+  const [activeTab, setActiveTab] = useState("types");
+  const [entitySearch, setEntitySearch] = useState("");
+  const [groupSearch, setGroupSearch] = useState("");
+  const [countryFormOpen, setCountryFormOpen] = useState(false);
+  const [typeFormOpen, setTypeFormOpen] = useState(false);
   const [editingCountry, setEditingCountry] = useState(null);
   const [editingType, setEditingType] = useState(null);
+  const [editingGroup, setEditingGroup] = useState(null);
+  const [groupFormOpen, setGroupFormOpen] = useState(false);
   const [blocked, setBlocked] = useState(null);
+  const normalizedEntitySearch = entitySearch.trim().toLowerCase();
+  const normalizedGroupSearch = groupSearch.trim().toLowerCase();
+  const typeRows = orderedRows(library.types);
+  const entityRows = orderedRows(library.countries).filter((country) => !normalizedEntitySearch || String(country.name || "").toLowerCase().includes(normalizedEntitySearch));
+  const groupRows = orderedRows(library.entityGroups || []).filter((group) => {
+    if (!normalizedGroupSearch) return true;
+    return [group.name, group.kind, group.notes].some((value) => String(value || "").toLowerCase().includes(normalizedGroupSearch));
+  });
 
   async function refreshWithMessage(text) {
     await onRefresh();
@@ -3146,13 +3336,13 @@ function ManageLists({ library, onClose, onRefresh, onMessage }) {
   }
 
   async function deleteCountry(country) {
-    if (!window.confirm(`Delete country/region "${country.name}"?`)) return;
+    if (!window.confirm(`Delete issuing entity "${country.name}"?`)) return;
     const result = await api.deleteCountry({ id: country.id, action: "check" });
     if (result.blocked) {
       setBlocked({ kind: "country", entity: country, ...result });
       return;
     }
-    await refreshWithMessage("Country deleted.");
+    await refreshWithMessage("Issuing entity deleted.");
   }
 
   async function deleteType(type) {
@@ -3167,12 +3357,23 @@ function ManageLists({ library, onClose, onRefresh, onMessage }) {
 
   async function reorderCountries(ids) {
     await api.reorderCountries(ids);
-    await refreshWithMessage("Country order saved.");
+    await refreshWithMessage("Issuing entity order saved.");
   }
 
   async function reorderTypes(ids) {
     await api.reorderTypes(ids);
     await refreshWithMessage("Collection type order saved.");
+  }
+
+  async function reorderGroups(ids) {
+    await api.reorderEntityGroups(ids);
+    await refreshWithMessage("Entity group order saved.");
+  }
+
+  async function deleteGroup(group) {
+    if (!window.confirm(`Delete entity group "${group.name}"? Entity memberships will be removed, but items will not be deleted.`)) return;
+    await api.deleteEntityGroup(group.id);
+    await refreshWithMessage("Entity group deleted.");
   }
 
   return (
@@ -3182,27 +3383,87 @@ function ManageLists({ library, onClose, onRefresh, onMessage }) {
           <h2>Manage lists</h2>
           <button type="button" onClick={onClose}>Close</button>
         </header>
-        <div className="manage-grid">
-          <section>
-            <h3>Countries / Regions</h3>
-            <ReorderableManageList
-              rows={orderedRows(library.countries)}
-              detail={(country) => country.notes}
-              onReorder={reorderCountries}
-              onEdit={setEditingCountry}
-              onDelete={deleteCountry}
-            />
-          </section>
-          <section>
-            <h3>Collection Types</h3>
-            <ReorderableManageList
-              rows={orderedRows(library.types)}
-              detail={(type) => type.description}
-              onReorder={reorderTypes}
-              onEdit={setEditingType}
-              onDelete={deleteType}
-            />
-          </section>
+        <div className="manage-tabs" role="tablist" aria-label="Manage list categories">
+          <button type="button" className={activeTab === "types" ? "active" : ""} onClick={() => setActiveTab("types")}>Collection Types</button>
+          <button type="button" className={activeTab === "entities" ? "active" : ""} onClick={() => setActiveTab("entities")}>Issuing Entities</button>
+          <button type="button" className={activeTab === "groups" ? "active" : ""} onClick={() => setActiveTab("groups")}>Entity Groups</button>
+        </div>
+        <div className="manage-tab-panel">
+          {activeTab === "types" && (
+            <section>
+              <div className="manage-section-header">
+                <div>
+                  <h3>Collection Types</h3>
+                  <p className="quiet">Small manually ordered list.</p>
+                </div>
+                <button type="button" onClick={() => setTypeFormOpen(true)}>Add type</button>
+              </div>
+              <ReorderableManageList
+                rows={typeRows}
+                detail={(type) => type.description}
+                onReorder={reorderTypes}
+                onEdit={setEditingType}
+                onDelete={deleteType}
+              />
+            </section>
+          )}
+          {activeTab === "entities" && (
+            <section>
+              <div className="manage-section-header">
+                <div>
+                  <h3>Issuing Entities</h3>
+                  <p className="quiet">{entityRows.length} shown from {library.countries.length} entities</p>
+                </div>
+                <button type="button" onClick={() => setCountryFormOpen(true)}>Add entity</button>
+              </div>
+              <input
+                className="manage-search"
+                value={entitySearch}
+                onChange={(event) => setEntitySearch(event.target.value)}
+                placeholder="Search issuing entities..."
+                aria-label="Search issuing entities"
+              />
+              <ReorderableManageList
+                rows={entityRows}
+                detail={(country) => {
+                  const groupNames = groupsForEntity(country.id, library).map((group) => group.name).join(", ");
+                  return [country.notes, groupNames ? `Groups: ${groupNames}` : ""].filter(Boolean).join(" / ");
+                }}
+                onReorder={reorderCountries}
+                onEdit={setEditingCountry}
+                onDelete={deleteCountry}
+                reorderEnabled={!normalizedEntitySearch}
+                emptyMessage="No matching issuing entities."
+              />
+            </section>
+          )}
+          {activeTab === "groups" && (
+            <section>
+              <div className="manage-section-header">
+                <div>
+                  <h3>Entity Groups</h3>
+                  <p className="quiet">{groupRows.length} shown from {(library.entityGroups || []).length} groups</p>
+                </div>
+                <button type="button" onClick={() => setGroupFormOpen(true)}>Add group</button>
+              </div>
+              <input
+                className="manage-search"
+                value={groupSearch}
+                onChange={(event) => setGroupSearch(event.target.value)}
+                placeholder="Search entity groups..."
+                aria-label="Search entity groups"
+              />
+              <ReorderableManageList
+                rows={groupRows}
+                detail={(group) => [group.kind, group.notes].filter(Boolean).join(" / ")}
+                onReorder={reorderGroups}
+                onEdit={setEditingGroup}
+                onDelete={deleteGroup}
+                reorderEnabled={!normalizedGroupSearch}
+                emptyMessage="No matching entity groups."
+              />
+            </section>
+          )}
         </div>
         {blocked && (
           <BlockedDeletePanel
@@ -3219,11 +3480,61 @@ function ManageLists({ library, onClose, onRefresh, onMessage }) {
       {editingCountry && (
         <CountryEditForm
           country={editingCountry}
+          groups={library.entityGroups || []}
+          selectedGroupIds={groupsForEntity(editingCountry.id, library).map((group) => group.id)}
           onClose={() => setEditingCountry(null)}
-          onSubmit={async (payload) => {
+          onSubmit={async ({ groupIds, ...payload }) => {
             await api.updateCountry(payload);
+            await api.setEntityMemberships({ entityId: payload.id, groupIds });
             setEditingCountry(null);
-            await refreshWithMessage("Country updated.");
+            await refreshWithMessage("Issuing entity updated.");
+          }}
+        />
+      )}
+      {countryFormOpen && (
+        <NameForm
+          title="New issuing entity"
+          label="Name"
+          onClose={() => setCountryFormOpen(false)}
+          onSubmit={async (payload) => {
+            await api.createCountry(payload);
+            setCountryFormOpen(false);
+            await refreshWithMessage("Issuing entity created.");
+          }}
+        />
+      )}
+      {typeFormOpen && (
+        <NameForm
+          title="New collection type"
+          label="Name"
+          onClose={() => setTypeFormOpen(false)}
+          onSubmit={async (payload) => {
+            await api.createType(payload);
+            setTypeFormOpen(false);
+            await refreshWithMessage("Collection type created.");
+          }}
+        />
+      )}
+      {groupFormOpen && (
+        <NameForm
+          title="New entity group"
+          label="Name"
+          onClose={() => setGroupFormOpen(false)}
+          onSubmit={async (payload) => {
+            await api.createEntityGroup(payload);
+            setGroupFormOpen(false);
+            await refreshWithMessage("Entity group created.");
+          }}
+        />
+      )}
+      {editingGroup && (
+        <EntityGroupEditForm
+          group={editingGroup}
+          onClose={() => setEditingGroup(null)}
+          onSubmit={async (payload) => {
+            await api.updateEntityGroup(payload);
+            setEditingGroup(null);
+            await refreshWithMessage("Entity group updated.");
           }}
         />
       )}
@@ -3242,7 +3553,7 @@ function ManageLists({ library, onClose, onRefresh, onMessage }) {
   );
 }
 
-function ReorderableManageList({ rows, detail, onReorder, onEdit, onDelete }) {
+function ReorderableManageList({ rows, detail, onReorder, onEdit, onDelete, reorderEnabled = true, emptyMessage = "No entries." }) {
   const [localRows, setLocalRows] = useState(rows);
   const [draggingId, setDraggingId] = useState(null);
   const [dropTarget, setDropTarget] = useState(null);
@@ -3256,12 +3567,14 @@ function ReorderableManageList({ rows, detail, onReorder, onEdit, onDelete }) {
   }
 
   async function saveRows(nextRows) {
+    if (!reorderEnabled) return;
     setLocalRows(nextRows);
     await onReorder(idsFrom(nextRows));
   }
 
   async function move(rowId, direction) {
-    const index = localRows.findIndex((row) => row.id === rowId);
+    if (!reorderEnabled) return;
+    const index = localRows.findIndex((row) => String(row.id) === String(rowId));
     const target = index + direction;
     if (index < 0 || target < 0 || target >= localRows.length) return;
     const nextRows = [...localRows];
@@ -3277,17 +3590,18 @@ function ReorderableManageList({ rows, detail, onReorder, onEdit, onDelete }) {
   }
 
   function startDrag(event, rowId) {
+    if (!reorderEnabled) return;
     setDraggingId(rowId);
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", rowId);
   }
 
   async function drop(rowId = null, position = "after", draggedId = draggingId) {
-    if (!draggedId) return;
-    const dragged = localRows.find((row) => row.id === draggedId);
+    if (!reorderEnabled || !draggedId) return;
+    const dragged = localRows.find((row) => String(row.id) === String(draggedId));
     if (!dragged) return;
-    const withoutDragged = localRows.filter((row) => row.id !== draggedId);
-    const targetIndex = rowId ? withoutDragged.findIndex((row) => row.id === rowId) : withoutDragged.length - 1;
+    const withoutDragged = localRows.filter((row) => String(row.id) !== String(draggedId));
+    const targetIndex = rowId ? withoutDragged.findIndex((row) => String(row.id) === String(rowId)) : withoutDragged.length - 1;
     const insertAt = rowId ? targetIndex + (position === "after" ? 1 : 0) : withoutDragged.length;
     const nextRows = [...withoutDragged];
     nextRows.splice(Math.max(0, insertAt), 0, dragged);
@@ -3299,7 +3613,9 @@ function ReorderableManageList({ rows, detail, onReorder, onEdit, onDelete }) {
   return (
     <div
       className="manage-list reorder-list"
-      onDragOver={(event) => event.preventDefault()}
+      onDragOver={(event) => {
+        if (reorderEnabled) event.preventDefault();
+      }}
       onDrop={(event) => {
         event.preventDefault();
         drop(null, "after", event.dataTransfer.getData("text/plain") || draggingId);
@@ -3310,40 +3626,44 @@ function ReorderableManageList({ rows, detail, onReorder, onEdit, onDelete }) {
         const indicator = dropTarget?.rowId === row.id ? `drop-${dropTarget.position}` : "";
         return (
           <div
-            className={`manage-row reorder-row ${draggingId === row.id ? "dragging" : ""} ${indicator}`}
+            className={`manage-row reorder-row ${reorderEnabled ? "" : "no-reorder"} ${draggingId === row.id ? "dragging" : ""} ${indicator}`}
             key={row.id}
             onDragEnd={() => {
               setDraggingId(null);
               setDropTarget(null);
             }}
             onDragOver={(event) => {
+              if (!reorderEnabled) return;
               event.preventDefault();
               calculateDrop(event, row.id);
             }}
             onDrop={(event) => {
               event.preventDefault();
               event.stopPropagation();
+              if (!reorderEnabled) return;
               const rect = event.currentTarget.getBoundingClientRect();
               const position = event.clientY > rect.top + rect.height / 2 ? "after" : "before";
               drop(row.id, position, event.dataTransfer.getData("text/plain") || draggingId);
             }}
           >
-            <button
-              type="button"
-              className="drag-handle"
-              draggable
-              aria-label={`Drag ${row.name}`}
-              title={`Drag ${row.name}`}
-              onDragStart={(event) => startDrag(event, row.id)}
-              onDragEnd={() => {
-                setDraggingId(null);
-                setDropTarget(null);
-              }}
-            >
-              ::
-            </button>
+            {reorderEnabled && (
+              <button
+                type="button"
+                className="drag-handle"
+                draggable
+                aria-label={`Drag ${row.name}`}
+                title={`Drag ${row.name}`}
+                onDragStart={(event) => startDrag(event, row.id)}
+                onDragEnd={() => {
+                  setDraggingId(null);
+                  setDropTarget(null);
+                }}
+              >
+                ::
+              </button>
+            )}
             <div className="manage-row-main">
-              <strong>{row.name}</strong>
+              <strong title={row.name}>{row.name}</strong>
               {detailText && <span>{detailText}</span>}
             </div>
             <div className="order-actions">
@@ -3355,6 +3675,7 @@ function ReorderableManageList({ rows, detail, onReorder, onEdit, onDelete }) {
           </div>
         );
       })}
+      {localRows.length === 0 && <p className="quiet">{emptyMessage}</p>}
     </div>
   );
 }
@@ -3367,7 +3688,7 @@ function BlockedDeletePanel({ blocked, library, onCancel, onDone }) {
   async function apply(action) {
     if (isCountry) {
       await api.deleteCountry({ id: blocked.entity.id, action, replacementId });
-      await onDone(action === "clear" ? "Country cleared from linked items." : "Country reassigned and deleted.");
+      await onDone(action === "clear" ? "Issuing entity cleared from linked items." : "Issuing entity reassigned and deleted.");
     } else {
       await api.deleteType({ id: blocked.entity.id, action, replacementId });
       await onDone(action === "clear" ? "Collection type cleared from linked items." : "Collection type reassigned and deleted.");
@@ -3377,7 +3698,7 @@ function BlockedDeletePanel({ blocked, library, onCancel, onDone }) {
   return (
     <div className="blocked-panel">
       <h3>{blocked.entity.name} is still linked</h3>
-      <p>{blocked.count} item{blocked.count === 1 ? "" : "s"} use this {isCountry ? "country/region" : "collection type"}.</p>
+      <p>{blocked.count} item{blocked.count === 1 ? "" : "s"} use this {isCountry ? "issuing entity" : "collection type"}.</p>
       <div className="linked-list">
         {blocked.linkedItems.slice(0, 6).map((item) => <span key={item.id}>{item.title}</span>)}
       </div>
@@ -3394,17 +3715,126 @@ function BlockedDeletePanel({ blocked, library, onCancel, onDone }) {
   );
 }
 
-function CountryEditForm({ country, onClose, onSubmit }) {
+function CountryEditForm({ country, groups, selectedGroupIds, onClose, onSubmit }) {
   const [name, setName] = useState(country.name || "");
   const [notes, setNotes] = useState(country.notes || "");
+  const [groupIds, setGroupIds] = useState(() => new Set((selectedGroupIds || []).map((entry) => String(entry))));
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [groupSearch, setGroupSearch] = useState("");
+  const [pendingGroupIds, setPendingGroupIds] = useState(() => new Set());
+
+  const orderedGroups = useMemo(() => orderedRows(groups), [groups]);
+  const selectedGroups = orderedGroups.filter((group) => groupIds.has(String(group.id)));
+  const unassignedGroups = orderedGroups.filter((group) => !groupIds.has(String(group.id)));
+  const normalizedGroupSearch = groupSearch.trim().toLowerCase();
+  const pickerGroups = unassignedGroups.filter((group) => !normalizedGroupSearch || String(group.name || "").toLowerCase().includes(normalizedGroupSearch));
+
+  function removeGroup(groupId) {
+    setGroupIds((current) => {
+      const next = new Set(current);
+      next.delete(String(groupId));
+      return next;
+    });
+  }
+
+  function togglePendingGroup(groupId, checked) {
+    setPendingGroupIds((current) => {
+      const next = new Set(current);
+      if (checked) next.add(String(groupId));
+      else next.delete(String(groupId));
+      return next;
+    });
+  }
+
+  function openPicker() {
+    setPendingGroupIds(new Set());
+    setGroupSearch("");
+    setPickerOpen(true);
+  }
+
+  function closePicker() {
+    setPickerOpen(false);
+    setPendingGroupIds(new Set());
+    setGroupSearch("");
+  }
+
+  function addPendingGroups() {
+    setGroupIds((current) => new Set([...current, ...pendingGroupIds]));
+    closePicker();
+  }
 
   return (
-    <form className="modal nested-modal" onSubmit={(event) => { event.preventDefault(); onSubmit({ id: country.id, name, notes }); }}>
+    <form className="modal nested-modal" onSubmit={(event) => { event.preventDefault(); onSubmit({ id: country.id, name, notes, groupIds: [...groupIds] }); }}>
       <header>
-        <h2>Edit country/region</h2>
+        <h2>Edit issuing entity</h2>
         <button type="button" onClick={onClose}>Close</button>
       </header>
       <label>Name<input required value={name} onChange={(event) => setName(event.target.value)} /></label>
+      <label>Notes<textarea value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
+      <section className="membership-editor" aria-label="Entity Groups">
+        <div className="membership-header">
+          <strong>Entity Groups</strong>
+          <button type="button" onClick={openPicker} disabled={unassignedGroups.length === 0}>Add group</button>
+        </div>
+        <div className="group-chip-list">
+          {selectedGroups.map((group) => (
+            <span className="group-chip" key={group.id}>
+              {group.name}
+              <button type="button" aria-label={`Remove group ${group.name}`} title="Remove group" onClick={() => removeGroup(group.id)}>&times;</button>
+            </span>
+          ))}
+          {selectedGroups.length === 0 && <p className="quiet">No groups assigned.</p>}
+        </div>
+        {groups.length === 0 && <p className="quiet">Create entity groups first, then assign this entity to them.</p>}
+        {pickerOpen && (
+          <div className="group-picker" role="dialog" aria-label="Add entity groups">
+            <div className="group-picker-header">
+              <strong>Add group</strong>
+              <button type="button" onClick={closePicker}>Close</button>
+            </div>
+            <input
+              value={groupSearch}
+              onChange={(event) => setGroupSearch(event.target.value)}
+              placeholder="Search groups..."
+              aria-label="Search entity groups"
+              autoFocus
+            />
+            <div className="group-picker-list">
+              {pickerGroups.map((group) => (
+                <CheckRow
+                  key={group.id}
+                  checked={pendingGroupIds.has(String(group.id))}
+                  label={group.name}
+                  onChange={(checked) => togglePendingGroup(group.id, checked)}
+                />
+              ))}
+              {pickerGroups.length === 0 && <p className="quiet">No matching groups</p>}
+            </div>
+            <div className="group-picker-actions">
+              <button type="button" onClick={closePicker}>Cancel</button>
+              <button type="button" disabled={pendingGroupIds.size === 0} onClick={addPendingGroups}>Add selected groups</button>
+            </div>
+          </div>
+        )}
+      </section>
+      <footer><button type="submit">Save</button></footer>
+    </form>
+  );
+}
+
+function EntityGroupEditForm({ group, onClose, onSubmit }) {
+  const [name, setName] = useState(group.name || "");
+  const [kind, setKind] = useState(group.kind || "");
+  const [notes, setNotes] = useState(group.notes || "");
+
+  return (
+    <form className="modal nested-modal" onSubmit={(event) => { event.preventDefault(); onSubmit({ id: group.id, name, kind, notes }); }}>
+      <header>
+        <h2>Edit entity group</h2>
+        <button type="button" onClick={onClose}>Close</button>
+      </header>
+      <label>Name<input required value={name} onChange={(event) => setName(event.target.value)} /></label>
+      <label>Kind<input value={kind} onChange={(event) => setKind(event.target.value)} placeholder="Optional" /></label>
       <label>Notes<textarea value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
       <footer><button type="submit">Save</button></footer>
     </form>
