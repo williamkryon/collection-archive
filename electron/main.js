@@ -1263,7 +1263,7 @@ ipcMain.handle("item:update", (_event, payload) => {
   return getLibrary();
 });
 
-ipcMain.handle("item:get", (_event, itemId) => {
+function getItemForRenderer(itemId) {
   const item = get(
     `
       SELECT
@@ -1291,6 +1291,10 @@ ipcMain.handle("item:get", (_event, itemId) => {
     ...mapItem(item),
     images: all("SELECT * FROM images WHERE item_id = ? ORDER BY sort_order ASC, created_at ASC", [itemId]).map(mapImage)
   };
+}
+
+ipcMain.handle("item:get", (_event, itemId) => {
+  return getItemForRenderer(itemId);
 });
 
 ipcMain.handle("item:delete", (_event, itemId) => {
@@ -1402,6 +1406,30 @@ ipcMain.handle("images:replace", async (_event, imageId) => {
   });
 
   return replacedImage;
+});
+
+ipcMain.handle("images:reorder", (_event, payload = {}) => {
+  const ids = Array.isArray(payload.ids) ? payload.ids.filter(Boolean) : [];
+  if (!payload.itemId || ids.length === 0) return null;
+  const rows = all("SELECT id FROM images WHERE item_id = ? ORDER BY sort_order ASC, created_at ASC", [payload.itemId]);
+  const existingIds = new Set(rows.map((row) => row.id));
+  const orderedIds = ids.filter((imageId) => existingIds.has(imageId));
+  rows.forEach((row) => {
+    if (!orderedIds.includes(row.id)) orderedIds.push(row.id);
+  });
+  db.exec("BEGIN TRANSACTION");
+  try {
+    orderedIds.forEach((imageId, index) => {
+      bindAndStep("UPDATE images SET sort_order = ? WHERE id = ? AND item_id = ?", [index, imageId, payload.itemId]);
+    });
+    bindAndStep("UPDATE items SET updated_at = ? WHERE id = ?", [now(), payload.itemId]);
+    db.exec("COMMIT");
+    saveDb();
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  return getItemForRenderer(payload.itemId);
 });
 
 ipcMain.handle("album:create", (_event, payload) => {
@@ -1537,6 +1565,182 @@ ipcMain.handle("album-page:update", (_event, payload) => {
   );
   run("UPDATE albums SET updated_at = ? WHERE id = ?", [now(), page.album_id]);
   return getAlbum(page.album_id);
+});
+
+ipcMain.handle("album-page:reorder", (_event, payload = {}) => {
+  const ids = Array.isArray(payload.ids) ? payload.ids.filter(Boolean) : [];
+  if (!payload.albumId || ids.length === 0) return null;
+  const pages = all("SELECT id FROM album_pages WHERE album_id = ? ORDER BY page_number ASC", [payload.albumId]);
+  const existingIds = new Set(pages.map((page) => page.id));
+  const orderedIds = ids.filter((pageId) => existingIds.has(pageId));
+  pages.forEach((page) => {
+    if (!orderedIds.includes(page.id)) orderedIds.push(page.id);
+  });
+  db.exec("BEGIN TRANSACTION");
+  try {
+    orderedIds.forEach((pageId, index) => {
+      bindAndStep("UPDATE album_pages SET page_number = ?, updated_at = ? WHERE id = ? AND album_id = ?", [index + 1, now(), pageId, payload.albumId]);
+    });
+    bindAndStep("UPDATE albums SET updated_at = ? WHERE id = ?", [now(), payload.albumId]);
+    db.exec("COMMIT");
+    saveDb();
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  return getAlbum(payload.albumId);
+});
+
+function copyAlbumPage(sourcePageId, targetAlbumId, options = {}) {
+  const source = get("SELECT * FROM album_pages WHERE id = ?", [sourcePageId]);
+  if (!source) throw new Error("Source album page was not found.");
+  const target = get("SELECT id FROM albums WHERE id = ?", [targetAlbumId]);
+  if (!target) throw new Error("Target album was not found.");
+
+  const timestamp = now();
+  const newPageId = id();
+  const targetPages = all("SELECT id FROM album_pages WHERE album_id = ? ORDER BY page_number ASC, created_at ASC", [targetAlbumId]);
+  const requestedIndex = options.insertAfterPageId
+    ? targetPages.findIndex((page) => page.id === options.insertAfterPageId) + 1
+    : targetPages.length;
+  const insertIndex = requestedIndex > 0 ? requestedIndex : targetPages.length;
+  const sourceTitle = String(source.title || "Page");
+  const nextTitle = options.title || sourceTitle;
+
+  db.exec("BEGIN TRANSACTION");
+  try {
+    bindAndStep(
+      `
+        INSERT INTO album_pages (
+          id, album_id, title, page_number, notes, column_count, page_width, page_height,
+          orientation, background, custom_background, paper_preset, background_image_id, background_image_enabled,
+          background_opacity, background_fit, show_guides, snap_to_grid, grid_size,
+          template_name, layout_version, created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        newPageId,
+        targetAlbumId,
+        nextTitle,
+        insertIndex + 1,
+        source.notes || "",
+        Number(source.column_count || 3),
+        Number(source.page_width || 1000),
+        Number(source.page_height || 1400),
+        source.orientation || "portrait",
+        source.background || "white",
+        source.custom_background || "#ffffff",
+        source.paper_preset || "custom",
+        source.background_image_id || null,
+        source.background_image_enabled ? 1 : 0,
+        Number(source.background_opacity ?? 1),
+        source.background_fit || "contain",
+        source.show_guides === 0 ? 0 : 1,
+        source.snap_to_grid === 0 ? 0 : 1,
+        Number(source.grid_size || 25),
+        source.template_name || "blank",
+        Number(source.layout_version || 2),
+        timestamp,
+        timestamp
+      ]
+    );
+
+    const pageItems = all("SELECT * FROM album_page_items WHERE page_id = ? ORDER BY sort_order ASC, created_at ASC", [sourcePageId]);
+    pageItems.forEach((entry) => {
+      bindAndStep(
+        `
+          INSERT INTO album_page_items (
+            id, page_id, item_id, image_id, x, y, width, height, rotation, z_index, caption,
+            show_caption, show_title, show_metadata, locked, frame_style, border_color, background_color,
+            background_opacity, padding, border_radius, sort_order, created_at
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          id(),
+          newPageId,
+          entry.item_id,
+          entry.image_id || null,
+          Number(entry.x || 0),
+          Number(entry.y || 0),
+          Number(entry.width || 1),
+          Number(entry.height || 1),
+          Number(entry.rotation || 0),
+          Number(entry.z_index || 0),
+          entry.caption || "",
+          entry.show_caption ? 1 : 0,
+          entry.show_title ? 1 : 0,
+          entry.show_metadata ? 1 : 0,
+          entry.locked ? 1 : 0,
+          entry.frame_style || "none",
+          entry.border_color || "#b8c8c4",
+          entry.background_color || "#ffffff",
+          Number(entry.background_opacity ?? 0),
+          Number(entry.padding ?? 4),
+          Number(entry.border_radius ?? 2),
+          Number(entry.sort_order || 0),
+          timestamp
+        ]
+      );
+    });
+
+    const textItems = all("SELECT * FROM album_text_items WHERE page_id = ? ORDER BY sort_order ASC, created_at ASC", [sourcePageId]);
+    textItems.forEach((entry) => {
+      bindAndStep(
+        `
+          INSERT INTO album_text_items (
+            id, page_id, x, y, width, height, rotation, z_index, text_content,
+            font_size, bold, italic, text_align, text_color, background, locked,
+            sort_order, created_at
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          id(),
+          newPageId,
+          Number(entry.x || 0),
+          Number(entry.y || 0),
+          Number(entry.width || 1),
+          Number(entry.height || 1),
+          Number(entry.rotation || 0),
+          Number(entry.z_index || 0),
+          entry.text_content || "",
+          Number(entry.font_size || 24),
+          entry.bold ? 1 : 0,
+          entry.italic ? 1 : 0,
+          entry.text_align || "center",
+          entry.text_color || "#202629",
+          entry.background || "transparent",
+          entry.locked ? 1 : 0,
+          Number(entry.sort_order || 0),
+          timestamp
+        ]
+      );
+    });
+
+    const orderedIds = targetPages.map((page) => page.id);
+    orderedIds.splice(insertIndex, 0, newPageId);
+    orderedIds.forEach((pageId, index) => {
+      bindAndStep("UPDATE album_pages SET page_number = ?, updated_at = ? WHERE id = ? AND album_id = ?", [index + 1, timestamp, pageId, targetAlbumId]);
+    });
+    bindAndStep("UPDATE albums SET updated_at = ? WHERE id = ?", [timestamp, targetAlbumId]);
+    db.exec("COMMIT");
+    saveDb();
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+
+  return { album: getAlbum(targetAlbumId), copiedPageId: newPageId };
+}
+
+ipcMain.handle("album-page:copy", (_event, payload = {}) => {
+  if (!payload.pageId || !payload.targetAlbumId) throw new Error("Page and target album are required.");
+  return copyAlbumPage(payload.pageId, payload.targetAlbumId, {
+    insertAfterPageId: payload.insertAfterPageId || null,
+    title: payload.title || ""
+  });
 });
 
 ipcMain.handle("album-page:delete", (_event, pageId) => {

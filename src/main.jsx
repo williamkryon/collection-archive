@@ -17,6 +17,310 @@ function perfTrace(event, data = {}) {
   })}`);
 }
 
+const LANGUAGE_STORAGE_KEY = "collectionArchive.language";
+const I18nContext = React.createContext({
+  language: "en",
+  setLanguage: () => {},
+  t: (key, fallback) => fallback || key
+});
+
+const translations = {
+  en: {
+    appTitle: "Collection Archive",
+    language: "Language",
+    navLibrary: "Library",
+    navGallery: "Gallery",
+    navAlbums: "Albums",
+    newItem: "New item",
+    manageLists: "Manage lists",
+    dataFolder: "Data folder",
+    openingArchive: "Opening archive...",
+    save: "Save",
+    cancel: "Cancel",
+    close: "Close",
+    add: "Add",
+    edit: "Edit",
+    delete: "Delete",
+    search: "Search",
+    preview: "Preview",
+    export: "Export",
+    duplicate: "Duplicate",
+    copy: "Copy",
+    moveUp: "Up",
+    moveDown: "Down",
+    libraryTitle: "Library",
+    libraryCount: "Showing {shown} of {total} matching items",
+    searchPlaceholder: "Search title, description, source, condition...",
+    clearSearch: "Clear search",
+    favorites: "Favorites",
+    allIssuingEntities: "All issuing entities",
+    allEntityGroups: "All entity groups",
+    allTypes: "All types",
+    year: "Year",
+    tagsComma: "Tags, comma-separated",
+    multiTagsHint: "Use commas for multiple tags",
+    clearFilters: "Clear filters",
+    noIssuingEntity: "No issuing entity",
+    noType: "No type",
+    noYear: "No year",
+    loading: "Loading...",
+    loadMoreItems: "Load more items",
+    noItemsMatch: "No items match these filters",
+    galleryTitle: "Gallery",
+    gallerySubtitle: "Visual browse mode",
+    details: "Details",
+    loadMoreGallery: "Load more gallery items",
+    noItemImages: "No item images yet",
+    back: "Back",
+    selectItem: "Select an item from the library",
+    openViewer: "Open viewer",
+    previous: "Previous",
+    next: "Next",
+    closeViewer: "Close viewer",
+    addImages: "Add images",
+    metadata: "Metadata",
+    replaceImage: "Replace image",
+    removeImage: "Remove image",
+    saveChanges: "Save changes",
+    albumsTitle: "Albums",
+    newAlbum: "New album",
+    newShort: "New",
+    pagesCount: "{count} pages",
+    createAlbumPrompt: "Create an album to get started.",
+    chooseAlbum: "Choose an album",
+    albumName: "Album name",
+    description: "Description",
+    saveAlbum: "Save album",
+    deleteAlbum: "Delete album",
+    pageSelector: "Page selector",
+    movePageUp: "Move page up",
+    movePageDown: "Move page down",
+    addPage: "Add page",
+    duplicatePage: "Duplicate page",
+    copyPageToAlbum: "Copy page to album...",
+    copyToAlbum: "Copy to album",
+    noOtherAlbums: "No other albums",
+    pageDuplicated: "Page duplicated.",
+    pageCopied: "Page copied to album.",
+    digitalAlbum: "Digital album",
+    designedPage: "Designed page",
+    cleanPreview: "Clean preview",
+    exportPage: "Export page",
+    exportPdf: "Export PDF",
+    pdfQuality: "PDF quality",
+    originalQuality: "Original quality",
+    highQuality: "High",
+    mediumQuality: "Medium",
+    lowQuality: "Low",
+    noPagesYet: "No pages yet",
+    addItem: "Add item",
+    addText: "Add text",
+    zoomOut: "Zoom -",
+    zoomIn: "Zoom +",
+    fitPage: "Fit page",
+    actualSize: "100%",
+    savePage: "Save page",
+    deletePage: "Delete page",
+    undo: "Undo",
+    redo: "Redo",
+    pageSettings: "Page settings",
+    page: "Page",
+    pageTitle: "Page title",
+    paperSize: "Paper size",
+    backgroundColor: "Background color",
+    setBackgroundImage: "Set background image",
+    clearBackground: "Clear background",
+    showBackgroundImage: "Show background image",
+    opacity: "Opacity",
+    backgroundFit: "Background fit",
+    showGuides: "Show guides",
+    snapToGrid: "Snap to grid",
+    gridSize: "Grid size",
+    template: "Template",
+    applyTemplate: "Apply template",
+    newItemTitle: "New item",
+    editItemTitle: "Edit item",
+    title: "Title",
+    issuingEntity: "Issuing Entity",
+    type: "Type",
+    none: "None",
+    condition: "Condition",
+    purchasePrice: "Purchase price",
+    source: "Source",
+    customFields: "Custom fields",
+    jsonStyleLines: "JSON-style lines",
+    addToFavorites: "Add to favorites",
+    removeFromFavorites: "Remove from favorites",
+    searchIssuingEntities: "Search issuing entities...",
+    clearIssuingEntity: "Clear issuing entity",
+    newIssuingEntity: "New issuing entity",
+    newCollectionType: "New collection type",
+    name: "Name",
+    albumPageImageExported: "Album page image exported.",
+    albumPdfExported: "Album PDF exported ({quality}).",
+    exportFailed: "Export failed: {message}"
+  },
+  zh: {
+    appTitle: "收藏档案",
+    language: "语言",
+    navLibrary: "馆藏",
+    navGallery: "图库",
+    navAlbums: "册页",
+    newItem: "新建藏品",
+    manageLists: "管理列表",
+    dataFolder: "数据文件夹",
+    openingArchive: "正在打开档案...",
+    save: "保存",
+    cancel: "取消",
+    close: "关闭",
+    add: "添加",
+    edit: "编辑",
+    delete: "删除",
+    search: "搜索",
+    preview: "预览",
+    export: "导出",
+    duplicate: "复制",
+    copy: "拷贝",
+    moveUp: "上移",
+    moveDown: "下移",
+    libraryTitle: "馆藏",
+    libraryCount: "显示 {shown} / {total} 件匹配藏品",
+    searchPlaceholder: "搜索标题、描述、来源、品相...",
+    clearSearch: "清除搜索",
+    favorites: "收藏",
+    allIssuingEntities: "全部发行实体",
+    allEntityGroups: "全部实体组",
+    allTypes: "全部类型",
+    year: "年份",
+    tagsComma: "标签，用逗号分隔",
+    multiTagsHint: "多个标签请用逗号分隔",
+    clearFilters: "清除筛选",
+    noIssuingEntity: "无发行实体",
+    noType: "无类型",
+    noYear: "无年份",
+    loading: "加载中...",
+    loadMoreItems: "加载更多藏品",
+    noItemsMatch: "没有符合筛选的藏品",
+    galleryTitle: "图库",
+    gallerySubtitle: "视觉浏览模式",
+    details: "详情",
+    loadMoreGallery: "加载更多图库项目",
+    noItemImages: "还没有藏品图片",
+    back: "返回",
+    selectItem: "从馆藏中选择藏品",
+    openViewer: "打开查看器",
+    previous: "上一张",
+    next: "下一张",
+    closeViewer: "关闭查看器",
+    addImages: "添加图片",
+    metadata: "元数据",
+    replaceImage: "替换图片",
+    removeImage: "删除图片",
+    saveChanges: "保存更改",
+    albumsTitle: "册页",
+    newAlbum: "新建册页",
+    newShort: "新建",
+    pagesCount: "{count} 页",
+    createAlbumPrompt: "创建册页以开始使用。",
+    chooseAlbum: "选择册页",
+    albumName: "册页名称",
+    description: "描述",
+    saveAlbum: "保存册页",
+    deleteAlbum: "删除册页",
+    pageSelector: "页面选择",
+    movePageUp: "上移页面",
+    movePageDown: "下移页面",
+    addPage: "添加页面",
+    duplicatePage: "复制页面",
+    copyPageToAlbum: "拷贝页面到册页...",
+    copyToAlbum: "拷贝到册页",
+    noOtherAlbums: "没有其他册页",
+    pageDuplicated: "页面已复制。",
+    pageCopied: "页面已拷贝到册页。",
+    digitalAlbum: "数字册页",
+    designedPage: "设计页面",
+    cleanPreview: "简洁预览",
+    exportPage: "导出页面",
+    exportPdf: "导出 PDF",
+    pdfQuality: "PDF 质量",
+    originalQuality: "原始质量",
+    highQuality: "高",
+    mediumQuality: "中",
+    lowQuality: "低",
+    noPagesYet: "还没有页面",
+    addItem: "添加藏品",
+    addText: "添加文字",
+    zoomOut: "缩小",
+    zoomIn: "放大",
+    fitPage: "适合页面",
+    actualSize: "100%",
+    savePage: "保存页面",
+    deletePage: "删除页面",
+    undo: "撤销",
+    redo: "重做",
+    pageSettings: "页面设置",
+    page: "页面",
+    pageTitle: "页面标题",
+    paperSize: "纸张尺寸",
+    backgroundColor: "背景颜色",
+    setBackgroundImage: "设置背景图片",
+    clearBackground: "清除背景",
+    showBackgroundImage: "显示背景图片",
+    opacity: "不透明度",
+    backgroundFit: "背景适配",
+    showGuides: "显示参考线",
+    snapToGrid: "吸附到网格",
+    gridSize: "网格大小",
+    template: "模板",
+    applyTemplate: "应用模板",
+    newItemTitle: "新建藏品",
+    editItemTitle: "编辑藏品",
+    title: "标题",
+    issuingEntity: "发行实体",
+    type: "类型",
+    none: "无",
+    condition: "品相",
+    purchasePrice: "购买价格",
+    source: "来源",
+    customFields: "自定义字段",
+    jsonStyleLines: "JSON 风格行",
+    addToFavorites: "加入收藏",
+    removeFromFavorites: "移出收藏",
+    searchIssuingEntities: "搜索发行实体...",
+    clearIssuingEntity: "清除发行实体",
+    newIssuingEntity: "新建发行实体",
+    newCollectionType: "新建收藏类型",
+    name: "名称",
+    albumPageImageExported: "册页页面图片已导出。",
+    albumPdfExported: "册页 PDF 已导出（{quality}）。",
+    exportFailed: "导出失败：{message}"
+  }
+};
+
+function interpolate(text, values = {}) {
+  return String(text).replace(/\{(\w+)\}/g, (match, key) => values[key] ?? match);
+}
+
+function I18nProvider({ children }) {
+  const [language, setLanguage] = useState(() => {
+    const saved = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+    return saved === "zh" ? "zh" : "en";
+  });
+  useEffect(() => {
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
+  }, [language]);
+  const value = useMemo(() => ({
+    language,
+    setLanguage,
+    t: (key, fallback, values) => interpolate(translations[language]?.[key] || translations.en[key] || fallback || key, values)
+  }), [language]);
+  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
+}
+
+function useI18n() {
+  return React.useContext(I18nContext);
+}
+
 const emptyItem = {
   title: "",
   country_id: "",
@@ -536,6 +840,7 @@ function ZoomableImageViewer({ image, src, alt, width, height, initialMode = "fi
 }
 
 function ImageViewer({ images, initialIndex, title, onClose }) {
+  const { t } = useI18n();
   const [index, setIndex] = useState(initialIndex || 0);
   const image = images[index];
 
@@ -578,9 +883,9 @@ function ImageViewer({ images, initialIndex, title, onClose }) {
             <p>{index + 1} of {images.length}</p>
           </div>
           <div className="viewer-actions">
-            <button type="button" disabled={index === 0} onClick={() => setIndex((current) => current - 1)}>Previous</button>
-            <button type="button" disabled={index === images.length - 1} onClick={() => setIndex((current) => current + 1)}>Next</button>
-            <button className="viewer-close" type="button" aria-label="Close viewer" onClick={onClose}>Close</button>
+            <button type="button" disabled={index === 0} onClick={() => setIndex((current) => current - 1)}>{t("previous")}</button>
+            <button type="button" disabled={index === images.length - 1} onClick={() => setIndex((current) => current + 1)}>{t("next")}</button>
+            <button className="viewer-close" type="button" aria-label={t("closeViewer")} onClick={onClose}>{t("close")}</button>
           </div>
         </header>
         <ZoomableImageViewer image={image} alt={title} context={`Viewer: ${title}`} className="viewer-zoom" />
@@ -589,7 +894,8 @@ function ImageViewer({ images, initialIndex, title, onClose }) {
   );
 }
 
-function App() {
+function ArchiveApp() {
+  const { language, setLanguage, t } = useI18n();
   const libraryPageSize = 100;
   const galleryPageSize = 100;
   const [library, setLibrary] = useState(null);
@@ -824,6 +1130,14 @@ function App() {
     setDetail(await api.getItem(itemId));
   }
 
+  async function reorderImages(itemId, ids) {
+    const updated = await api.reorderImages({ itemId, ids });
+    await refresh();
+    setItemsVersion((version) => version + 1);
+    setDetail(updated || await api.getItem(itemId));
+    return updated;
+  }
+
   async function createCountry(payload) {
     await api.createCountry(payload);
     await refresh();
@@ -846,31 +1160,38 @@ function App() {
   }
 
   if (!library) {
-    return <div className="boot">Opening archive...</div>;
+    return <div className="boot">{t("openingArchive")}</div>;
   }
 
   return (
     <div className="app">
       <aside className="sidebar">
         <div>
-          <div className="brand">Collection Archive</div>
+          <div className="brand">{t("appTitle")}</div>
           <nav>
             <button className={activeView === "library" ? "active" : ""} onClick={() => setActiveView("library")}>
-              Library
+              {t("navLibrary")}
             </button>
             <button className={activeView === "gallery" ? "active" : ""} onClick={() => setActiveView("gallery")}>
-              Gallery
+              {t("navGallery")}
             </button>
             <button className={activeView === "albums" ? "active" : ""} onClick={() => setActiveView("albums")}>
-              Albums
+              {t("navAlbums")}
             </button>
           </nav>
         </div>
         <div className="sidebar-actions">
-          <button onClick={() => setItemFormOpen(true)}>New item</button>
-          <button onClick={() => setManageOpen(true)}>Manage lists</button>
+          <label className="language-select">
+            <span>{t("language")}</span>
+            <select value={language} onChange={(event) => setLanguage(event.target.value)}>
+              <option value="en">English</option>
+              <option value="zh">中文</option>
+            </select>
+          </label>
+          <button onClick={() => setItemFormOpen(true)}>{t("newItem")}</button>
+          <button onClick={() => setManageOpen(true)}>{t("manageLists")}</button>
           <button className="ghost" onClick={() => api.revealDataFolder()}>
-            Data folder
+            {t("dataFolder")}
           </button>
         </div>
       </aside>
@@ -924,6 +1245,7 @@ function App() {
             onAddImages={addImages}
             onRemoveImage={removeImage}
             onReplaceImage={replaceImage}
+            onReorderImages={reorderImages}
             onUpdate={async (payload) => {
               await updateItem(payload);
             }}
@@ -985,12 +1307,27 @@ function App() {
               setMessage("Page updated.");
               return updated;
             }}
+            onReorderPages={async (payload) => {
+              const updated = await api.reorderAlbumPages(payload);
+              setAlbum(updated);
+              await refresh();
+              setMessage("Page order saved.");
+              return updated;
+            }}
             onDeletePage={async (id) => {
               if (!window.confirm("Delete this album page and its placements?")) return;
               const updated = await api.deleteAlbumPage(id);
               setAlbum(updated);
               setMessage("Page deleted.");
               return updated;
+            }}
+            onCopyPage={async (payload) => {
+              const result = await api.copyAlbumPage(payload);
+              if (result?.album && result.album.id === selectedAlbumId) {
+                setAlbum(result.album);
+              }
+              await refresh();
+              return result;
             }}
             onUpdatePageItem={async (payload) => {
               const updated = await api.updateAlbumPageItem(payload);
@@ -1009,7 +1346,7 @@ function App() {
 
       {itemFormOpen && (
         <ItemForm
-          title="New item"
+          title={t("newItemTitle")}
           countries={library.countries}
           types={library.types}
           onClose={() => setItemFormOpen(false)}
@@ -1018,7 +1355,7 @@ function App() {
       )}
       {editingItem && (
         <ItemForm
-          title="Edit item"
+          title={t("editItemTitle")}
           item={editingItem}
           countries={library.countries}
           types={library.types}
@@ -1026,9 +1363,9 @@ function App() {
           onSubmit={(payload) => updateItem({ ...payload, id: editingItem.id })}
         />
       )}
-      {countryFormOpen && <NameForm title="New issuing entity" label="Name" onClose={() => setCountryFormOpen(false)} onSubmit={createCountry} />}
-      {typeFormOpen && <NameForm title="New collection type" label="Name" onClose={() => setTypeFormOpen(false)} onSubmit={createType} />}
-      {albumFormOpen && <NameForm title="New album" label="Title" extraLabel="Description" onClose={() => setAlbumFormOpen(false)} onSubmit={createAlbum} />}
+      {countryFormOpen && <NameForm title={t("newIssuingEntity")} label={t("name")} onClose={() => setCountryFormOpen(false)} onSubmit={createCountry} />}
+      {typeFormOpen && <NameForm title={t("newCollectionType")} label={t("name")} onClose={() => setTypeFormOpen(false)} onSubmit={createType} />}
+      {albumFormOpen && <NameForm title={t("newAlbum")} label={t("title")} extraLabel={t("description")} onClose={() => setAlbumFormOpen(false)} onSubmit={createAlbum} />}
       {manageOpen && (
         <ManageLists
           library={library}
@@ -1041,13 +1378,22 @@ function App() {
   );
 }
 
+function App() {
+  return (
+    <I18nProvider>
+      <ArchiveApp />
+    </I18nProvider>
+  );
+}
+
 function LibraryView({ library, items, total, loading, filters, setFilters, onLoadMore, onOpenItem, onToggleFavorite, onEditItem, onDeleteItem }) {
+  const { t } = useI18n();
   return (
     <section className="workspace">
       <header className="topbar library-header">
         <div className="library-title-row">
-          <h1>Library</h1>
-          <p>Showing {items.length} of {total} matching items</p>
+          <h1>{t("libraryTitle")}</h1>
+          <p>{t("libraryCount", "", { shown: items.length, total })}</p>
         </div>
         <FilterBar library={library} filters={filters} setFilters={setFilters} />
       </header>
@@ -1057,8 +1403,8 @@ function LibraryView({ library, items, total, loading, filters, setFilters, onLo
             <button
               className={`favorite ${item.favorite ? "active" : ""}`}
               onClick={() => onToggleFavorite(item.id)}
-              aria-label={item.favorite ? "Remove from favorites" : "Add to favorites"}
-              title={item.favorite ? "Remove from favorites" : "Add to favorites"}
+              aria-label={item.favorite ? t("removeFromFavorites") : t("addToFavorites")}
+              title={item.favorite ? t("removeFromFavorites") : t("addToFavorites")}
             >
               {item.favorite ? "\u2605" : "\u2606"}
             </button>
@@ -1070,9 +1416,9 @@ function LibraryView({ library, items, total, loading, filters, setFilters, onLo
                 {item.title}
               </button>
               <div className="muted-row">
-                <span>{item.country_name || "No issuing entity"}</span>
-                <span>{item.type_name || "No type"}</span>
-                <span>{item.year || "No year"}</span>
+                <span>{item.country_name || t("noIssuingEntity")}</span>
+                <span>{item.type_name || t("noType")}</span>
+                <span>{item.year || t("noYear")}</span>
               </div>
               <div className="tag-row">
                 {item.tags.slice(0, 4).map((tag) => (
@@ -1080,8 +1426,8 @@ function LibraryView({ library, items, total, loading, filters, setFilters, onLo
                 ))}
               </div>
               <div className="card-actions">
-                <button type="button" onClick={() => onEditItem(item.id)}>Edit</button>
-                <button type="button" className="danger" onClick={() => onDeleteItem(item.id)}>Delete</button>
+                <button type="button" onClick={() => onEditItem(item.id)}>{t("edit")}</button>
+                <button type="button" className="danger" onClick={() => onDeleteItem(item.id)}>{t("delete")}</button>
               </div>
             </div>
           </article>
@@ -1090,17 +1436,18 @@ function LibraryView({ library, items, total, loading, filters, setFilters, onLo
       {items.length < total && (
         <div className="load-more">
           <button type="button" disabled={loading} onClick={onLoadMore}>
-            {loading ? "Loading..." : "Load more items"}
+            {loading ? t("loading") : t("loadMoreItems")}
           </button>
           <span>{items.length} of {total}</span>
         </div>
       )}
-      {items.length === 0 && !loading && <EmptyState title="No items match these filters" />}
+      {items.length === 0 && !loading && <EmptyState title={t("noItemsMatch")} />}
     </section>
   );
 }
 
 function FilterBar({ library, filters, setFilters }) {
+  const { t } = useI18n();
   function update(next) {
     setFilters({ ...filters, ...next });
   }
@@ -1126,10 +1473,10 @@ function FilterBar({ library, filters, setFilters }) {
           <input
             value={filters.search}
             onChange={(event) => update({ search: event.target.value })}
-            placeholder="Search title, description, source, condition..."
-            aria-label="Search title, description, source, condition"
+            placeholder={t("searchPlaceholder")}
+            aria-label={t("searchPlaceholder")}
           />
-          {filters.search && <button type="button" aria-label="Clear search" onClick={() => update({ search: "" })}>X</button>}
+          {filters.search && <button type="button" aria-label={t("clearSearch")} onClick={() => update({ search: "" })}>X</button>}
         </div>
         <label className="check">
           <input
@@ -1137,7 +1484,7 @@ function FilterBar({ library, filters, setFilters }) {
             checked={filters.favorites}
             onChange={(event) => update({ favorites: event.target.checked })}
           />
-          Favorites
+          {t("favorites")}
         </label>
       </div>
       <div className="filter-control-row">
@@ -1145,42 +1492,43 @@ function FilterBar({ library, filters, setFilters }) {
           rows={library.countries}
           value={filters.country}
           onChange={(value) => update({ country: value })}
-          allLabel="All issuing entities"
-          searchPlaceholder="Search issuing entities..."
-          searchLabel="Search issuing entities"
-          clearLabel="Clear issuing entity filter"
+          allLabel={t("allIssuingEntities")}
+          searchPlaceholder={t("searchIssuingEntities")}
+          searchLabel={t("searchIssuingEntities")}
+          clearLabel={t("clearIssuingEntity")}
           className="filter-combobox"
         />
         <SearchableCombobox
           rows={library.entityGroups || []}
           value={filters.entityGroup}
           onChange={(value) => update({ entityGroup: value })}
-          allLabel="All entity groups"
+          allLabel={t("allEntityGroups")}
           searchPlaceholder="Search entity groups..."
           searchLabel="Search entity groups"
           clearLabel="Clear entity group filter"
           className="filter-combobox"
         />
         <select value={filters.type} onChange={(event) => update({ type: event.target.value })}>
-          <option value="">All types</option>
+          <option value="">{t("allTypes")}</option>
           {orderedRows(library.types).map((type) => (
             <option value={type.id} key={type.id}>
               {type.name}
             </option>
           ))}
         </select>
-        <input value={filters.year} onChange={(event) => update({ year: event.target.value })} placeholder="Year" />
+        <input value={filters.year} onChange={(event) => update({ year: event.target.value })} placeholder={t("year")} />
         <label className="filter-tag-field">
-          <input value={filters.tag} onChange={(event) => update({ tag: event.target.value })} placeholder="Tags, comma-separated" aria-label="Tags, comma-separated" />
-          <span>Use commas for multiple tags</span>
+          <input value={filters.tag} onChange={(event) => update({ tag: event.target.value })} placeholder={t("tagsComma")} aria-label={t("tagsComma")} />
+          <span>{t("multiTagsHint")}</span>
         </label>
-        <button type="button" className="secondary clear-filters" disabled={!hasFilters} onClick={clearFilters}>Clear filters</button>
+        <button type="button" className="secondary clear-filters" disabled={!hasFilters} onClick={clearFilters}>{t("clearFilters")}</button>
       </div>
     </div>
   );
 }
 
 function GalleryView({ items, total, loading, onLoadMore, onOpenItem, onToggleFavorite }) {
+  const { t } = useI18n();
   const [viewerIndex, setViewerIndex] = useState(null);
   const viewerImages = items.map((item) => ({
     ...item.cover,
@@ -1196,8 +1544,8 @@ function GalleryView({ items, total, loading, onLoadMore, onOpenItem, onToggleFa
     <section className="workspace">
       <header className="topbar compact">
         <div>
-          <h1>Gallery</h1>
-          <p>Visual browse mode</p>
+          <h1>{t("galleryTitle")}</h1>
+          <p>{t("gallerySubtitle")}</p>
         </div>
       </header>
       <div className="gallery-grid">
@@ -1207,8 +1555,8 @@ function GalleryView({ items, total, loading, onLoadMore, onOpenItem, onToggleFa
               className={`favorite gallery-favorite ${item.favorite ? "active" : ""}`}
               type="button"
               onClick={() => onToggleFavorite(item.id)}
-              aria-label={item.favorite ? "Remove from favorites" : "Add to favorites"}
-              title={item.favorite ? "Remove from favorites" : "Add to favorites"}
+              aria-label={item.favorite ? t("removeFromFavorites") : t("addToFavorites")}
+              title={item.favorite ? t("removeFromFavorites") : t("addToFavorites")}
             >
               {item.favorite ? "\u2605" : "\u2606"}
             </button>
@@ -1217,7 +1565,7 @@ function GalleryView({ items, total, loading, onLoadMore, onOpenItem, onToggleFa
             </button>
             <div className="gallery-caption">
               <span>{item.title}</span>
-              <button type="button" onClick={() => onOpenItem(item.id)}>Details</button>
+              <button type="button" onClick={() => onOpenItem(item.id)}>{t("details")}</button>
             </div>
           </article>
         ))}
@@ -1225,12 +1573,12 @@ function GalleryView({ items, total, loading, onLoadMore, onOpenItem, onToggleFa
       {items.length < total && (
         <div className="load-more">
           <button type="button" disabled={loading} onClick={onLoadMore}>
-            {loading ? "Loading..." : "Load more gallery items"}
+            {loading ? t("loading") : t("loadMoreGallery")}
           </button>
           <span>{items.length} of {total}</span>
         </div>
       )}
-      {items.length === 0 && !loading && <EmptyState title="No item images yet" />}
+      {items.length === 0 && !loading && <EmptyState title={t("noItemImages")} />}
       {viewerIndex !== null && (
         <ImageViewer
           images={viewerImages}
@@ -1243,9 +1591,11 @@ function GalleryView({ items, total, loading, onLoadMore, onOpenItem, onToggleFa
   );
 }
 
-function DetailView({ detail, countries, types, onBack, onAddImages, onRemoveImage, onReplaceImage, onUpdate, onToggleFavorite, onDeleteItem }) {
+function DetailView({ detail, countries, types, onBack, onAddImages, onRemoveImage, onReplaceImage, onReorderImages, onUpdate, onToggleFavorite, onDeleteItem }) {
+  const { t } = useI18n();
   const [activeImage, setActiveImage] = useState(0);
   const [editing, setEditing] = useState(false);
+  const [dragImageId, setDragImageId] = useState("");
 
   useEffect(() => {
     setActiveImage(0);
@@ -1261,8 +1611,8 @@ function DetailView({ detail, countries, types, onBack, onAddImages, onRemoveIma
   if (!detail) {
     return (
       <section className="workspace">
-        <button className="back" onClick={onBack}>Back</button>
-        <EmptyState title="Select an item from the library" />
+        <button className="back" onClick={onBack}>{t("back")}</button>
+        <EmptyState title={t("selectItem")} />
       </section>
     );
   }
@@ -1270,10 +1620,33 @@ function DetailView({ detail, countries, types, onBack, onAddImages, onRemoveIma
   const image = detail.images[activeImage];
   const viewerImages = detail.images.map((entry) => ({ ...entry, title: entry.original_filename }));
 
+  async function reorderImageDrop(targetImageId) {
+    if (!dragImageId || dragImageId === targetImageId) {
+      setDragImageId("");
+      return;
+    }
+    const ids = detail.images.map((entry) => entry.id);
+    const from = ids.indexOf(dragImageId);
+    const to = ids.indexOf(targetImageId);
+    if (from < 0 || to < 0) {
+      setDragImageId("");
+      return;
+    }
+    const nextIds = [...ids];
+    const [moved] = nextIds.splice(from, 1);
+    nextIds.splice(to, 0, moved);
+    const activeImageId = image?.id;
+    const updated = await onReorderImages(detail.id, nextIds);
+    const nextImages = updated?.images || detail.images;
+    const nextActiveIndex = nextImages.findIndex((entry) => entry.id === activeImageId);
+    setActiveImage(Math.max(0, nextActiveIndex));
+    setDragImageId("");
+  }
+
   return (
     <section className="detail-view">
       <header className="detail-header">
-        <button className="back" onClick={onBack}>Back</button>
+        <button className="back" onClick={onBack}>{t("back")}</button>
         <div>
           <h1>{detail.title}</h1>
           <p>{[detail.country_name, detail.type_name, detail.year].filter(Boolean).join(" / ") || "Unclassified"}</p>
@@ -1283,26 +1656,26 @@ function DetailView({ detail, countries, types, onBack, onAddImages, onRemoveIma
             className={`favorite detail-favorite ${detail.favorite ? "active" : ""}`}
             type="button"
             onClick={() => onToggleFavorite(detail.id)}
-            aria-label={detail.favorite ? "Remove from favorites" : "Add to favorites"}
-            title={detail.favorite ? "Remove from favorites" : "Add to favorites"}
+            aria-label={detail.favorite ? t("removeFromFavorites") : t("addToFavorites")}
+            title={detail.favorite ? t("removeFromFavorites") : t("addToFavorites")}
           >
             {detail.favorite ? "\u2605" : "\u2606"}
           </button>
-          <button onClick={() => setEditing(true)}>Edit</button>
-          <button className="danger" onClick={() => onDeleteItem(detail.id)}>Delete</button>
-          <button onClick={() => onAddImages(detail.id)}>Add images</button>
+          <button onClick={() => setEditing(true)}>{t("edit")}</button>
+          <button className="danger" onClick={() => onDeleteItem(detail.id)}>{t("delete")}</button>
+          <button onClick={() => onAddImages(detail.id)}>{t("addImages")}</button>
         </div>
       </header>
       <div className="detail-layout">
         <ZoomableImageViewer image={image} alt={detail.title} context={`Detail preview: ${detail.title}`} className="preview-panel" />
         <aside className="metadata-panel">
-          <h2>Metadata</h2>
+          <h2>{t("metadata")}</h2>
           <dl>
-            <div><dt>Issuing Entity</dt><dd>{detail.country_name || "-"}</dd></div>
+            <div><dt>{t("issuingEntity")}</dt><dd>{detail.country_name || "-"}</dd></div>
             <div><dt>Entity Groups</dt><dd>{detail.entity_group_names || "-"}</dd></div>
-            <div><dt>Condition</dt><dd>{detail.condition || "-"}</dd></div>
-            <div><dt>Purchase price</dt><dd>{detail.purchase_price || "-"}</dd></div>
-            <div><dt>Source</dt><dd>{detail.source || "-"}</dd></div>
+            <div><dt>{t("condition")}</dt><dd>{detail.condition || "-"}</dd></div>
+            <div><dt>{t("purchasePrice")}</dt><dd>{detail.purchase_price || "-"}</dd></div>
+            <div><dt>{t("source")}</dt><dd>{detail.source || "-"}</dd></div>
             <div><dt>Images</dt><dd>{detail.images.length}</dd></div>
           </dl>
           <p className="description">{detail.description || "No description."}</p>
@@ -1323,7 +1696,7 @@ function DetailView({ detail, countries, types, onBack, onAddImages, onRemoveIma
           )}
           {image && (
             <div className="image-actions">
-              <button type="button" onClick={() => onReplaceImage(image.id, detail.id)}>Replace image</button>
+              <button type="button" onClick={() => onReplaceImage(image.id, detail.id)}>{t("replaceImage")}</button>
               <button
                 type="button"
                 className="danger"
@@ -1333,13 +1706,33 @@ function DetailView({ detail, countries, types, onBack, onAddImages, onRemoveIma
                   setActiveImage((current) => Math.max(0, current - 1));
                 }}
               >
-                Remove image
+                {t("removeImage")}
               </button>
             </div>
           )}
           <div className="thumb-strip">
             {detail.images.map((thumb, index) => (
-              <button className={index === activeImage ? "active" : ""} key={thumb.id} onClick={() => setActiveImage(index)}>
+              <button
+                className={`${index === activeImage ? "active" : ""} ${dragImageId === thumb.id ? "dragging" : ""}`}
+                key={thumb.id}
+                draggable
+                title="Drag to reorder item images"
+                onClick={() => setActiveImage(index)}
+                onDragStart={(event) => {
+                  setDragImageId(thumb.id);
+                  event.dataTransfer.effectAllowed = "move";
+                  event.dataTransfer.setData("text/plain", thumb.id);
+                }}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "move";
+                }}
+                onDragEnd={() => setDragImageId("")}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  reorderImageDrop(thumb.id);
+                }}
+              >
                 <MediaImage src={thumb.thumbnailUrl} alt={thumb.original_filename} context={`Detail thumbnail: ${thumb.original_filename}`} />
               </button>
             ))}
@@ -1351,7 +1744,7 @@ function DetailView({ detail, countries, types, onBack, onAddImages, onRemoveIma
       </div>
       {editing && (
         <ItemForm
-          title="Edit item"
+          title={t("editItemTitle")}
           item={detail}
           countries={countries}
           types={types}
@@ -1367,11 +1760,12 @@ function DetailView({ detail, countries, types, onBack, onAddImages, onRemoveIma
 }
 
 function ImageViewerButton({ images, activeImage, title }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)}>Open viewer</button>
+      <button type="button" onClick={() => setOpen(true)}>{t("openViewer")}</button>
       {open && <ImageViewer images={images} initialIndex={activeImage} title={title} onClose={() => setOpen(false)} />}
     </>
   );
@@ -1389,13 +1783,17 @@ function AlbumsView({
   onUpdateAlbum,
   onDeleteAlbum,
   onUpdatePage,
+  onReorderPages,
   onDeletePage,
+  onCopyPage,
   onUpdatePageItem,
   onAddTextToPage,
   onMessage
 }) {
+  const { t } = useI18n();
   const [selectedPage, setSelectedPage] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [copyTargetAlbumId, setCopyTargetAlbumId] = useState("");
   const [mode, setMode] = useState("preview");
   const [previewStyle, setPreviewStyle] = useState(() => {
     const saved = sessionStorage.getItem("albumPreviewStyle");
@@ -1437,10 +1835,10 @@ function AlbumsView({
         height,
         defaultFilename: `${safeExportFilename(album.title || "album")}_page-${page.page_number || 1}.png`
       });
-      if (!result?.canceled) onMessage?.("Album page image exported.");
+      if (!result?.canceled) onMessage?.(t("albumPageImageExported"));
     } catch (error) {
       console.error("[album-export] page PNG failed", error);
-      onMessage?.(`Export failed: ${error.message}`);
+      onMessage?.(t("exportFailed", "", { message: error.message }));
     }
   }
 
@@ -1459,48 +1857,107 @@ function AlbumsView({
       });
       if (!result?.canceled) {
         const label = PDF_QUALITY_OPTIONS.find((entry) => entry.value === pdfQuality)?.label || "Medium";
-        onMessage?.(`Album PDF exported (${label}).`);
+        onMessage?.(t("albumPdfExported", "", { quality: label }));
       }
     } catch (error) {
       console.error("[album-export] PDF failed", error);
-      onMessage?.(`Export failed: ${error.message}`);
+      onMessage?.(t("exportFailed", "", { message: error.message }));
     }
   }
+
+  async function moveActivePage(delta) {
+    if (!activePageId || albumPages.length < 2) return;
+    const currentIndex = albumPages.findIndex((page) => page.id === activePageId);
+    const nextIndex = currentIndex + delta;
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= albumPages.length) return;
+    const nextPages = [...albumPages];
+    const [moved] = nextPages.splice(currentIndex, 1);
+    nextPages.splice(nextIndex, 0, moved);
+    const updated = await onReorderPages({ albumId: album.id, ids: nextPages.map((page) => page.id) });
+    if (updated?.pages?.some((page) => page.id === activePageId)) {
+      setSelectedPage(activePageId);
+    }
+  }
+
+  async function duplicateActivePage() {
+    if (!album || !activePageId) return;
+    const result = await onCopyPage({
+      pageId: activePageId,
+      targetAlbumId: album.id,
+      insertAfterPageId: activePageId
+    });
+    if (result?.album) {
+      setSelectedPage(result.copiedPageId || "");
+    }
+    onMessage?.(t("pageDuplicated"));
+  }
+
+  async function copyActivePageToAlbum() {
+    if (!activePageId || !copyTargetAlbumId) return;
+    const result = await onCopyPage({
+      pageId: activePageId,
+      targetAlbumId: copyTargetAlbumId
+    });
+    setCopyTargetAlbumId("");
+    if (copyTargetAlbumId === album.id && result?.copiedPageId) {
+      setSelectedPage(result.copiedPageId);
+    }
+    onMessage?.(t("pageCopied"));
+  }
+
+  const copyTargetAlbums = library.albums.filter((entry) => entry.id !== album?.id);
+  const pageCopyControls = activePage ? (
+    <div className="page-copy-controls">
+      <button type="button" onClick={duplicateActivePage}>{t("duplicatePage")}</button>
+      <select
+        value={copyTargetAlbumId}
+        onChange={(event) => setCopyTargetAlbumId(event.target.value)}
+        aria-label={t("copyToAlbum")}
+        disabled={copyTargetAlbums.length === 0}
+      >
+        <option value="">{copyTargetAlbums.length ? t("copyPageToAlbum") : t("noOtherAlbums")}</option>
+        {copyTargetAlbums.map((entry) => (
+          <option value={entry.id} key={entry.id}>{entry.title}</option>
+        ))}
+      </select>
+      <button type="button" disabled={!copyTargetAlbumId} onClick={copyActivePageToAlbum}>{t("copy")}</button>
+    </div>
+  ) : null;
 
   return (
     <section className={`albums-view ${mode === "edit" ? "edit-layout" : "preview-layout"}`}>
       <aside className="album-list">
         <div className="album-list-header">
-          <h1>Albums</h1>
+          <h1>{t("albumsTitle")}</h1>
           <button type="button" onClick={onNewAlbum}>
-            <span className="album-new-full">New album</span>
-            <span className="album-new-short">New</span>
+            <span className="album-new-full">{t("newAlbum")}</span>
+            <span className="album-new-short">{t("newShort")}</span>
           </button>
         </div>
         {library.albums.map((entry) => (
           <button className={entry.id === selectedAlbumId ? "active" : ""} key={entry.id} onClick={() => setSelectedAlbumId(entry.id)}>
             <strong>{entry.title}</strong>
-            <span>{entry.page_count} pages</span>
+            <span>{t("pagesCount", "", { count: entry.page_count })}</span>
           </button>
         ))}
-        {library.albums.length === 0 && <p className="quiet">Create an album to get started.</p>}
+        {library.albums.length === 0 && <p className="quiet">{t("createAlbumPrompt")}</p>}
       </aside>
 
       <div className="album-stage">
-        {!album && <EmptyState title="Choose an album" />}
+        {!album && <EmptyState title={t("chooseAlbum")} />}
         {album && (
           <>
             <header className="album-toolbar">
               {mode === "edit" ? (
                 <>
                   <div className="album-header-row album-header-main">
-                    <input value={albumTitle} onChange={(event) => setAlbumTitle(event.target.value)} placeholder="Album name" />
-                    <input value={albumDescription} onChange={(event) => setAlbumDescription(event.target.value)} placeholder="Description" />
-                    <button type="button" onClick={() => onUpdateAlbum({ id: album.id, title: albumTitle, description: albumDescription })}>Save album</button>
-                    <button type="button" className="danger" onClick={() => onDeleteAlbum(album.id)}>Delete album</button>
+                    <input value={albumTitle} onChange={(event) => setAlbumTitle(event.target.value)} placeholder={t("albumName")} />
+                    <input value={albumDescription} onChange={(event) => setAlbumDescription(event.target.value)} placeholder={t("description")} />
+                    <button type="button" onClick={() => onUpdateAlbum({ id: album.id, title: albumTitle, description: albumDescription })}>{t("saveAlbum")}</button>
+                    <button type="button" className="danger" onClick={() => onDeleteAlbum(album.id)}>{t("deleteAlbum")}</button>
                     <div className="segmented">
-                      <button className={mode === "preview" ? "active" : ""} type="button" onClick={() => setMode("preview")}>Preview</button>
-                      <button className={mode === "edit" ? "active" : ""} type="button" onClick={() => setMode("edit")}>Edit</button>
+                      <button className={mode === "preview" ? "active" : ""} type="button" onClick={() => setMode("preview")}>{t("preview")}</button>
+                      <button className={mode === "edit" ? "active" : ""} type="button" onClick={() => setMode("edit")}>{t("edit")}</button>
                     </div>
                   </div>
                   <form
@@ -1511,34 +1968,38 @@ function AlbumsView({
                     }}
                   >
                     {album.pages.length > 0 && (
-                      <select className="album-page-select" value={activePageId} onChange={(event) => setSelectedPage(event.target.value)}>
+                      <select className="album-page-select" value={activePageId} aria-label={t("pageSelector")} onChange={(event) => setSelectedPage(event.target.value)}>
                         {album.pages.map((page) => (
                           <option value={page.id} key={page.id}>{page.title}</option>
                         ))}
                       </select>
                     )}
-                    <button>Add page</button>
+                    <div className="page-order-controls">
+                      <button type="button" aria-label={t("movePageUp")} title={t("movePageUp")} disabled={!activePage || albumPages.findIndex((page) => page.id === activePageId) <= 0} onClick={() => moveActivePage(-1)}>{t("moveUp")}</button>
+                      <button type="button" aria-label={t("movePageDown")} title={t("movePageDown")} disabled={!activePage || albumPages.findIndex((page) => page.id === activePageId) >= albumPages.length - 1} onClick={() => moveActivePage(1)}>{t("moveDown")}</button>
+                    </div>
+                    {pageCopyControls}
+                    <button>{t("addPage")}</button>
                   </form>
                 </>
               ) : (
                 <>
                   <div>
                     <h1>{album.title}</h1>
-                    <p>{album.description || "Digital album"}</p>
+                    <p>{album.description || t("digitalAlbum")}</p>
                   </div>
                   <div className="album-toolbar-actions">
-                    <div className="album-export-actions">
-                      <button type="button" onClick={() => exportPageImage()}>Export page</button>
+                    <div className="album-pdf-export-actions">
                       <PdfQualitySelect value={pdfQuality} onChange={setPdfQuality} />
-                      <button type="button" onClick={exportAlbumPdf}>Export PDF</button>
+                      <button type="button" onClick={exportAlbumPdf}>{t("exportPdf")}</button>
                     </div>
                     <div className="segmented">
-                      <button className={mode === "preview" ? "active" : ""} type="button" onClick={() => setMode("preview")}>Preview</button>
-                      <button className={mode === "edit" ? "active" : ""} type="button" onClick={() => setMode("edit")}>Edit</button>
+                      <button className={mode === "preview" ? "active" : ""} type="button" onClick={() => setMode("preview")}>{t("preview")}</button>
+                      <button className={mode === "edit" ? "active" : ""} type="button" onClick={() => setMode("edit")}>{t("edit")}</button>
                     </div>
                     <div className="segmented preview-style-toggle">
-                      <button className={previewStyle === "standard" ? "active" : ""} type="button" onClick={() => setPreviewStyle("standard")}>Designed page</button>
-                      <button className={previewStyle === "clean" ? "active" : ""} type="button" onClick={() => setPreviewStyle("clean")}>Clean preview</button>
+                      <button className={previewStyle === "standard" ? "active" : ""} type="button" onClick={() => setPreviewStyle("standard")}>{t("designedPage")}</button>
+                      <button className={previewStyle === "clean" ? "active" : ""} type="button" onClick={() => setPreviewStyle("clean")}>{t("cleanPreview")}</button>
                     </div>
                   </div>
                 </>
@@ -1547,11 +2008,17 @@ function AlbumsView({
 
             {mode === "preview" && album.pages.length > 0 && (
               <div className="album-controls album-page-selector">
-                <select className="album-page-select" value={activePageId} onChange={(event) => setSelectedPage(event.target.value)}>
+                <select className="album-page-select" value={activePageId} aria-label={t("pageSelector")} onChange={(event) => setSelectedPage(event.target.value)}>
                   {album.pages.map((page) => (
                     <option value={page.id} key={page.id}>{page.title}</option>
                   ))}
                 </select>
+                <div className="page-order-controls">
+                  <button type="button" aria-label={t("movePageUp")} title={t("movePageUp")} disabled={!activePage || albumPages.findIndex((page) => page.id === activePageId) <= 0} onClick={() => moveActivePage(-1)}>{t("moveUp")}</button>
+                  <button type="button" aria-label={t("movePageDown")} title={t("movePageDown")} disabled={!activePage || albumPages.findIndex((page) => page.id === activePageId) >= albumPages.length - 1} onClick={() => moveActivePage(1)}>{t("moveDown")}</button>
+                </div>
+                {pageCopyControls}
+                <button type="button" onClick={() => exportPageImage()}>{t("exportPage")}</button>
               </div>
             )}
 
@@ -1576,14 +2043,10 @@ function AlbumsView({
                     setSelectedPage(pageId);
                     setPickerOpen("background");
                   }}
-                  onExportPage={exportPageImage}
-                  onExportAlbum={exportAlbumPdf}
-                  pdfQuality={pdfQuality}
-                  onPdfQualityChange={setPdfQuality}
                 />
               ))}
             </div>
-            {album.pages.length === 0 && <EmptyState title="No pages yet" />}
+            {album.pages.length === 0 && <EmptyState title={t("noPagesYet")} />}
           </>
         )}
       </div>
@@ -1593,7 +2056,7 @@ function AlbumsView({
           entityGroups={library.entityGroups || []}
           types={library.types}
           pageId={activePageId}
-          title={pickerOpen === "background" ? "Choose background image" : "Add item"}
+          title={pickerOpen === "background" ? "Choose background image" : t("addItem")}
           onAdd={async (payload) => {
             if (pickerOpen === "background") {
               const page = album.pages.find((entry) => entry.id === activePageId);
@@ -2191,7 +2654,7 @@ function AlbumItemPicker({ countries, entityGroups = [], types, pageId, title = 
   );
 }
 
-function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePage, onDeletePage, onUpdatePageItem, onAddItemToPage, onAddTextToPage, onOpenItemPicker, onPickBackground, onExportPage, onExportAlbum, pdfQuality, onPdfQualityChange }) {
+function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePage, onDeletePage, onUpdatePageItem, onAddItemToPage, onAddTextToPage, onOpenItemPicker, onPickBackground }) {
   const [viewerIndex, setViewerIndex] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
   const [draftItems, setDraftItems] = useState(page.items || []);
@@ -2200,11 +2663,16 @@ function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePag
   const [editorZoom, setEditorZoom] = useState(1);
   const [saveStatus, setSaveStatus] = useState("Saved");
   const [selectionRect, setSelectionRect] = useState(null);
+  const [editingTextId, setEditingTextId] = useState("");
   const canvasViewportRef = useRef(null);
   const clipboardRef = useRef([]);
   const draftItemsRef = useRef([]);
   const selectedIdsRef = useRef([]);
   const pageSettingsSaveRef = useRef(null);
+  const interactionCleanupRef = useRef(null);
+  const textEditRefs = useRef(new Map());
+  const textCommitTimersRef = useRef(new Map());
+  const { language, t } = useI18n();
   const [previewScale, setPreviewScale] = useState(1);
   const { width: pageWidth, height: pageHeight } = logicalPageSize(page);
   const scale = mode === "edit" ? editorZoom : previewScale;
@@ -2250,7 +2718,81 @@ function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePag
   useEffect(() => {
     setDraftItems(page.items || []);
     setSelectedIds([]);
+    setSelectionRect(null);
+    setEditingTextId("");
+    cleanupInteraction();
   }, [page.id]);
+
+  useEffect(() => {
+    setSelectionRect(null);
+    setEditingTextId("");
+    cleanupInteraction();
+  }, [mode, language]);
+
+  useEffect(() => () => {
+    cleanupInteraction();
+    textCommitTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    textCommitTimersRef.current.clear();
+  }, []);
+
+  function focusTextEditor(entryId) {
+    window.requestAnimationFrame(() => {
+      const node = textEditRefs.current.get(entryId);
+      if (!node) return;
+      node.focus({ preventScroll: true });
+      if (typeof node.setSelectionRange === "function") {
+        const length = String(node.value || "").length;
+        node.setSelectionRange(length, length);
+        return;
+      }
+      const selection = window.getSelection();
+      if (!selection) return;
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      range.collapse(false);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    });
+  }
+
+  useLayoutEffect(() => {
+    if (!editingTextId) return;
+    focusTextEditor(editingTextId);
+  }, [editingTextId]);
+
+  function cleanupInteraction() {
+    if (interactionCleanupRef.current) {
+      interactionCleanupRef.current();
+      interactionCleanupRef.current = null;
+    }
+    setSelectionRect(null);
+  }
+
+  function setInteractionCleanup(cleanup) {
+    cleanupInteraction();
+    interactionCleanupRef.current = cleanup;
+  }
+
+  function scheduleTextCommit(entry, textContent, delay = 450) {
+    const existing = textCommitTimersRef.current.get(entry.id);
+    if (existing) window.clearTimeout(existing);
+    const timer = window.setTimeout(() => {
+      textCommitTimersRef.current.delete(entry.id);
+      commitEntry({ ...entry, text_content: textContent }, false);
+    }, delay);
+    textCommitTimersRef.current.set(entry.id, timer);
+  }
+
+  function flushTextCommit(entry, textContent) {
+    const existing = textCommitTimersRef.current.get(entry.id);
+    if (existing) {
+      window.clearTimeout(existing);
+      textCommitTimersRef.current.delete(entry.id);
+    }
+    if (textContent !== (entry.text_content || "")) {
+      commitEntry({ ...entry, text_content: textContent }, true);
+    }
+  }
 
   useEffect(() => {
     const nextItems = page.items || [];
@@ -2480,7 +3022,14 @@ function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePag
       const typing = isTypingTarget(target);
       if (event.key === "Escape") {
         event.preventDefault();
+        if (typing) {
+          target.blur?.();
+          setEditingTextId("");
+          return;
+        }
         setSelectedIds([]);
+        setEditingTextId("");
+        cleanupInteraction();
         return;
       }
       if (typing) return;
@@ -2566,8 +3115,24 @@ function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePag
 
   function beginPointer(event, entry, action) {
     if (mode !== "edit") return;
+    if (entry.element_type === "text" && event.detail >= 2 && event.target.closest?.(".album-text-content")) {
+      event.preventDefault();
+      event.stopPropagation();
+      cleanupInteraction();
+      selectEntry(entry.id, event);
+      setEditingTextId(entry.id);
+      focusTextEditor(entry.id);
+      return;
+    }
+    if (entry.element_type === "text" && editingTextId === entry.id && event.target.closest?.(".album-text-content")) {
+      event.stopPropagation();
+      selectEntry(entry.id, event);
+      return;
+    }
     event.preventDefault();
     event.stopPropagation();
+    cleanupInteraction();
+    setEditingTextId("");
     if (!selectedIds.includes(entry.id) && !(event.ctrlKey || event.metaKey || event.shiftKey)) {
       selectEntry(entry.id, event);
     }
@@ -2597,17 +3162,33 @@ function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePag
       setDraftItems((current) => current.map((item) => byId.get(item.id) || item));
     }
 
-    async function up(pointerEvent) {
+    async function finish(pointerEvent) {
       if (typeof pointerEvent.clientX === "number" && typeof pointerEvent.clientY === "number") {
         move(pointerEvent);
       }
       window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", finish);
+      window.removeEventListener("blur", cancel);
+      interactionCleanupRef.current = null;
       await commitEntries(currentEntries);
     }
 
+    function cancel() {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", finish);
+      window.removeEventListener("blur", cancel);
+      interactionCleanupRef.current = null;
+      const byId = new Map(starts.map((item) => [item.id, item]));
+      setDraftItems((current) => current.map((item) => byId.get(item.id) || item));
+    }
+
     window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
+    window.addEventListener("pointerup", finish);
+    window.addEventListener("pointercancel", finish);
+    window.addEventListener("blur", cancel);
+    setInteractionCleanup(cancel);
   }
 
   function canvasPoint(event) {
@@ -2622,6 +3203,8 @@ function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePag
   function beginSelectionRect(event) {
     if (mode !== "edit" || event.target !== event.currentTarget) return;
     event.preventDefault();
+    cleanupInteraction();
+    setEditingTextId("");
     const canvas = event.currentTarget;
     const start = canvasPoint(event);
     let moved = false;
@@ -2661,17 +3244,32 @@ function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePag
       setSelectedIds(selected);
     }
 
-    function up() {
+    function finish() {
       window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", finish);
+      window.removeEventListener("blur", cancel);
+      interactionCleanupRef.current = null;
       setSelectionRect(null);
       if (!moved) {
         setSelectedIds([]);
       }
     }
 
+    function cancel() {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", finish);
+      window.removeEventListener("blur", cancel);
+      interactionCleanupRef.current = null;
+      setSelectionRect(null);
+    }
+
     window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
+    window.addEventListener("pointerup", finish);
+    window.addEventListener("pointercancel", finish);
+    window.addEventListener("blur", cancel);
+    setInteractionCleanup(cancel);
   }
 
   function openViewer(entry) {
@@ -2823,10 +3421,6 @@ function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePag
             onZoomIn={() => setEditorZoom((current) => clamp(current * 1.18, MIN_EDITOR_ZOOM, MAX_EDITOR_ZOOM))}
             onFitPage={() => fitPage("button")}
             onActualSize={() => setEditorZoom(1)}
-            onExportPage={() => onExportPage?.(page)}
-            onExportAlbum={onExportAlbum}
-            pdfQuality={pdfQuality}
-            onPdfQualityChange={onPdfQualityChange}
             onSavePage={() => (pageSettingsSaveRef.current ? pageSettingsSaveRef.current() : onUpdatePage(page))}
             onDeletePage={() => onDeletePage(page.id)}
             onUndo={undo}
@@ -2883,19 +3477,86 @@ function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePag
                   }}
                 >
                   {entry.element_type === "text" ? (
-                    <div
-                      className="album-text-content"
-                      style={{
-                        fontSize: Number(entry.font_size || 24),
-                        fontWeight: entry.bold ? 800 : 500,
-                        fontStyle: entry.italic ? "italic" : "normal",
-                        textAlign: entry.text_align || "center",
-                        color: entry.text_color || "#202629",
-                        background: entry.background === "white" ? "#fff" : "transparent"
-                      }}
-                    >
-                      {entry.text_content || "Album text"}
-                    </div>
+                    editingTextId === entry.id && mode === "edit" ? (
+                      <textarea
+                        className="album-text-content album-text-editor"
+                        ref={(node) => {
+                          if (node) {
+                            textEditRefs.current.set(entry.id, node);
+                            if (editingTextId === entry.id) {
+                              window.setTimeout(() => node.focus({ preventScroll: true }), 0);
+                            }
+                          } else {
+                            textEditRefs.current.delete(entry.id);
+                          }
+                        }}
+                        autoFocus
+                        defaultValue={entry.text_content || "Album text"}
+                        aria-label="Album text box"
+                        style={{
+                          fontSize: Number(entry.font_size || 24),
+                          fontWeight: entry.bold ? 800 : 500,
+                          fontStyle: entry.italic ? "italic" : "normal",
+                          textAlign: entry.text_align || "center",
+                          color: entry.text_color || "#202629",
+                          background: entry.background === "white" ? "#fff" : "transparent"
+                        }}
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => event.stopPropagation()}
+                        onInput={(event) => {
+                          const textContent = event.currentTarget.value || "";
+                          updateDraft({ ...entry, text_content: textContent });
+                          scheduleTextCommit(entry, textContent);
+                        }}
+                        onKeyDown={(event) => {
+                          event.stopPropagation();
+                          if (event.key === "Escape") {
+                            event.preventDefault();
+                            event.currentTarget.blur();
+                          }
+                        }}
+                        onBlur={(event) => {
+                          const textContent = event.currentTarget.value || "";
+                          setEditingTextId("");
+                          flushTextCommit(entry, textContent);
+                        }}
+                      />
+                    ) : (
+                      <div
+                        className="album-text-content"
+                        ref={(node) => {
+                          if (node) textEditRefs.current.set(entry.id, node);
+                          else textEditRefs.current.delete(entry.id);
+                        }}
+                        role={mode === "edit" ? "textbox" : undefined}
+                        aria-label="Album text box"
+                        tabIndex={mode === "edit" ? 0 : undefined}
+                        style={{
+                          fontSize: Number(entry.font_size || 24),
+                          fontWeight: entry.bold ? 800 : 500,
+                          fontStyle: entry.italic ? "italic" : "normal",
+                          textAlign: entry.text_align || "center",
+                          color: entry.text_color || "#202629",
+                          background: entry.background === "white" ? "#fff" : "transparent"
+                        }}
+                        onClick={(event) => {
+                          if (mode !== "edit") return;
+                          event.stopPropagation();
+                          selectEntry(entry.id, event);
+                        }}
+                        onDoubleClick={(event) => {
+                          if (mode !== "edit") return;
+                          event.preventDefault();
+                          event.stopPropagation();
+                          cleanupInteraction();
+                          selectEntry(entry.id, event);
+                          setEditingTextId(entry.id);
+                          focusTextEditor(entry.id);
+                        }}
+                      >
+                        {entry.text_content || "Album text"}
+                      </div>
+                    )
                   ) : (
                     <>
                       <button className="placement-image-button" type="button" onClick={() => openViewer(entry)}>
@@ -3199,39 +3860,45 @@ function MultiPlacementInspector({ entries, saveStatus, onUpdateMany, onLayer, o
 }
 
 function PdfQualitySelect({ value, onChange }) {
+  const { t } = useI18n();
+  const labels = {
+    original: t("originalQuality"),
+    high: t("highQuality"),
+    medium: t("mediumQuality"),
+    low: t("lowQuality")
+  };
   return (
     <label className="pdf-quality-select">
-      <span>PDF quality</span>
+      <span>{t("pdfQuality")}</span>
       <select value={value} onChange={(event) => onChange(event.target.value)}>
         {PDF_QUALITY_OPTIONS.map((option) => (
-          <option value={option.value} key={option.value}>{option.label}</option>
+          <option value={option.value} key={option.value}>{labels[option.value] || option.label}</option>
         ))}
       </select>
     </label>
   );
 }
 
-function PageActionBar({ onAddItem, onAddText, onZoomOut, onZoomIn, onFitPage, onActualSize, onExportPage, onExportAlbum, pdfQuality, onPdfQualityChange, onSavePage, onDeletePage, onUndo, onRedo, canUndo, canRedo }) {
+function PageActionBar({ onAddItem, onAddText, onZoomOut, onZoomIn, onFitPage, onActualSize, onSavePage, onDeletePage, onUndo, onRedo, canUndo, canRedo }) {
+  const { t } = useI18n();
   return (
     <div className="page-action-bar">
-      <button type="button" onClick={onAddItem}>Add item</button>
-      <button type="button" onClick={onAddText}>Add text</button>
-      <button type="button" onClick={onZoomOut}>Zoom -</button>
-      <button type="button" onClick={onZoomIn}>Zoom +</button>
-      <button type="button" onClick={onFitPage}>Fit page</button>
-      <button type="button" onClick={onActualSize}>100%</button>
-      <button type="button" onClick={onExportPage}>Export page</button>
-      <PdfQualitySelect value={pdfQuality} onChange={onPdfQualityChange} />
-      <button type="button" onClick={onExportAlbum}>Export PDF</button>
-      <button type="button" onClick={onSavePage}>Save page</button>
-      <button type="button" className="danger" onClick={onDeletePage}>Delete page</button>
-      <button type="button" disabled={!canUndo} onClick={onUndo}>Undo</button>
-      <button type="button" disabled={!canRedo} onClick={onRedo}>Redo</button>
+      <button type="button" onClick={onAddItem}>{t("addItem")}</button>
+      <button type="button" onClick={onAddText}>{t("addText")}</button>
+      <button type="button" onClick={onZoomOut}>{t("zoomOut")}</button>
+      <button type="button" onClick={onZoomIn}>{t("zoomIn")}</button>
+      <button type="button" onClick={onFitPage}>{t("fitPage")}</button>
+      <button type="button" onClick={onActualSize}>{t("actualSize")}</button>
+      <button type="button" onClick={onSavePage}>{t("savePage")}</button>
+      <button type="button" className="danger" onClick={onDeletePage}>{t("deletePage")}</button>
+      <button type="button" disabled={!canUndo} onClick={onUndo}>{t("undo")}</button>
+      <button type="button" disabled={!canRedo} onClick={onRedo}>{t("redo")}</button>
     </div>
   );
 }
 
 function PageSettingsPanel({ page, onRegisterSave, onApplyTemplate, onUpdatePage, onPickBackground, onApplyPaperPreset }) {
+  const { t } = useI18n();
   const [title, setTitle] = useState(page.title || "");
   const [paperPreset, setPaperPreset] = useState(() => pagePaperPreset(page));
   const [customWidth, setCustomWidth] = useState(logicalPageSize(page).width);
@@ -3297,13 +3964,13 @@ function PageSettingsPanel({ page, onRegisterSave, onApplyTemplate, onUpdatePage
     <div className="page-settings-panel placement-inspector">
       <header className="settings-header">
         <div>
-          <strong>Page settings</strong>
-          <span>Page {page.page_number}</span>
+          <strong>{t("pageSettings")}</strong>
+          <span>{t("page")} {page.page_number}</span>
         </div>
       </header>
       <div className="inspector-fields">
-        <label>Page title<input value={title} onChange={(event) => setTitle(event.target.value)} /></label>
-        <label>Paper size
+        <label>{t("pageTitle")}<input value={title} onChange={(event) => setTitle(event.target.value)} /></label>
+        <label>{t("paperSize")}
           <select
             value={paperPreset}
             onChange={(event) => {
@@ -3329,7 +3996,7 @@ function PageSettingsPanel({ page, onRegisterSave, onApplyTemplate, onUpdatePage
             <label>Custom height<input type="number" min="100" max="5000" value={customHeight} onChange={(event) => setCustomHeight(Number(event.target.value))} /></label>
           </div>
         )}
-        <label>Background color
+        <label>{t("backgroundColor")}
           <select value={background} onChange={(event) => setBackground(event.target.value)}>
             <option value="white">White</option>
             <option value="cream">Cream</option>
@@ -3340,7 +4007,7 @@ function PageSettingsPanel({ page, onRegisterSave, onApplyTemplate, onUpdatePage
         </label>
         {background === "custom" && <label>Custom color<input type="color" value={customBackground} onChange={(event) => setCustomBackground(event.target.value)} /></label>}
         <div className="background-controls">
-          <button type="button" onClick={onPickBackground}>Set background image</button>
+          <button type="button" onClick={onPickBackground}>{t("setBackgroundImage")}</button>
           <button
             type="button"
             disabled={!hasBackgroundImage}
@@ -3349,18 +4016,18 @@ function PageSettingsPanel({ page, onRegisterSave, onApplyTemplate, onUpdatePage
               onUpdatePage({ ...page, background_image_id: null, background_image_enabled: false });
             }}
           >
-            Clear background
+            {t("clearBackground")}
           </button>
         </div>
         {hasBackgroundImage && (
           <CheckRow
             checked={backgroundImageEnabled}
-            label="Show background image"
+            label={t("showBackgroundImage")}
             onChange={(checked) => setBackgroundImageEnabled(checked)}
           />
         )}
-        <label className="editor-number">Opacity <span>{backgroundOpacity}%</span><input type="range" min="0" max="100" value={backgroundOpacity} onChange={(event) => setBackgroundOpacity(Number(event.target.value))} /></label>
-        <label>Background fit
+        <label className="editor-number">{t("opacity")} <span>{backgroundOpacity}%</span><input type="range" min="0" max="100" value={backgroundOpacity} onChange={(event) => setBackgroundOpacity(Number(event.target.value))} /></label>
+        <label>{t("backgroundFit")}
           <select value={backgroundFit} onChange={(event) => setBackgroundFit(event.target.value)}>
             <option value="contain" title="Show the whole background image without cropping.">Contain</option>
             <option value="cover" title="Fill the page, cropping edges if needed.">Cover</option>
@@ -3374,10 +4041,10 @@ function PageSettingsPanel({ page, onRegisterSave, onApplyTemplate, onUpdatePage
           stretch: "Stretch fills the page but may distort the image.",
           tile: "Tile repeats the image as a pattern."
         }[backgroundFit] || ""}</small>
-        <CheckRow checked={showGuides} label="Show guides" title="Display alignment guides while editing the page." onChange={setShowGuides} />
-        <CheckRow checked={snapToGrid} label="Snap to grid" title="When moving or resizing items, align them to the grid." onChange={setSnapToGrid} />
-        <label className="editor-number" title="Controls spacing of the snap grid; smaller values allow finer positioning.">Grid size<input type="number" min="5" max="100" value={gridSize} onChange={(event) => setGridSize(Number(event.target.value))} /></label>
-        <label>Template
+        <CheckRow checked={showGuides} label={t("showGuides")} title="Display alignment guides while editing the page." onChange={setShowGuides} />
+        <CheckRow checked={snapToGrid} label={t("snapToGrid")} title="When moving or resizing items, align them to the grid." onChange={setSnapToGrid} />
+        <label className="editor-number" title="Controls spacing of the snap grid; smaller values allow finer positioning.">{t("gridSize")}<input type="number" min="5" max="100" value={gridSize} onChange={(event) => setGridSize(Number(event.target.value))} /></label>
+        <label>{t("template")}
           <select value={templateName} onChange={(event) => setTemplateName(event.target.value)}>
             <option value="blank">Blank page</option>
             <option value="2-column">2-column</option>
@@ -3389,7 +4056,7 @@ function PageSettingsPanel({ page, onRegisterSave, onApplyTemplate, onUpdatePage
         </label>
       </div>
       <div className="placement-actions">
-        <button type="button" onClick={() => onApplyTemplate(templateName)}>Apply template</button>
+        <button type="button" onClick={() => onApplyTemplate(templateName)}>{t("applyTemplate")}</button>
       </div>
     </div>
   );
@@ -3509,20 +4176,22 @@ function SearchableCombobox({
 }
 
 function IssuingEntityCombobox({ countries, value, onChange }) {
+  const { t } = useI18n();
   return (
     <SearchableCombobox
       rows={countries}
       value={value}
       onChange={onChange}
-      allLabel="None"
-      searchPlaceholder="Search issuing entities..."
-      searchLabel="Search issuing entities"
-      clearLabel="Clear issuing entity"
+      allLabel={t("none")}
+      searchPlaceholder={t("searchIssuingEntities")}
+      searchLabel={t("searchIssuingEntities")}
+      clearLabel={t("clearIssuingEntity")}
     />
   );
 }
 
 function ItemForm({ title, item, countries, types, onClose, onSubmit }) {
+  const { t } = useI18n();
   const initialCustomFieldsText = customFieldsToText(item?.customFields);
   const [form, setForm] = useState(() => ({
     ...emptyItem,
@@ -3564,28 +4233,28 @@ function ItemForm({ title, item, countries, types, onClose, onSubmit }) {
               type="button"
               className={`favorite form-favorite ${form.favorite ? "active" : ""}`}
               onClick={() => update("favorite", !form.favorite)}
-              aria-label={form.favorite ? "Remove from favorites" : "Add to favorites"}
-              title={form.favorite ? "Remove from favorites" : "Add to favorites"}
+              aria-label={form.favorite ? t("removeFromFavorites") : t("addToFavorites")}
+              title={form.favorite ? t("removeFromFavorites") : t("addToFavorites")}
             >
               {form.favorite ? "\u2605" : "\u2606"}
             </button>
-            <button type="submit">Save</button>
-            <button type="button" onClick={onClose}>Close</button>
+            <button type="submit">{t("save")}</button>
+            <button type="button" onClick={onClose}>{t("close")}</button>
           </div>
         </header>
         <div className="form-grid">
-          <label>Title<input required value={form.title} onChange={(event) => update("title", event.target.value)} /></label>
-          <label>Issuing Entity<IssuingEntityCombobox countries={countries} value={form.country_id || ""} onChange={(value) => update("country_id", value)} /></label>
-          <label>Type<select value={form.type_id || ""} onChange={(event) => update("type_id", event.target.value)}><option value="">None</option>{orderedRows(types).map((type) => <option value={type.id} key={type.id}>{type.name}</option>)}</select></label>
-          <label>Year<input value={form.year || ""} onChange={(event) => update("year", event.target.value)} /></label>
-          <label>Condition<input value={form.condition || ""} onChange={(event) => update("condition", event.target.value)} /></label>
-          <label>Purchase price<input value={form.purchase_price || ""} onChange={(event) => update("purchase_price", event.target.value)} /></label>
-          <label>Source<input value={form.source || ""} onChange={(event) => update("source", event.target.value)} /></label>
-          <label>Tags<input value={form.tags || ""} onChange={(event) => update("tags", event.target.value)} /></label>
-          <label className="full">Description<textarea value={form.description || ""} onChange={(event) => update("description", event.target.value)} /></label>
+          <label>{t("title")}<input required value={form.title} onChange={(event) => update("title", event.target.value)} /></label>
+          <label>{t("issuingEntity")}<IssuingEntityCombobox countries={countries} value={form.country_id || ""} onChange={(value) => update("country_id", value)} /></label>
+          <label>{t("type")}<select value={form.type_id || ""} onChange={(event) => update("type_id", event.target.value)}><option value="">{t("none")}</option>{orderedRows(types).map((type) => <option value={type.id} key={type.id}>{type.name}</option>)}</select></label>
+          <label>{t("year")}<input value={form.year || ""} onChange={(event) => update("year", event.target.value)} /></label>
+          <label>{t("condition")}<input value={form.condition || ""} onChange={(event) => update("condition", event.target.value)} /></label>
+          <label>{t("purchasePrice")}<input value={form.purchase_price || ""} onChange={(event) => update("purchase_price", event.target.value)} /></label>
+          <label>{t("source")}<input value={form.source || ""} onChange={(event) => update("source", event.target.value)} /></label>
+          <label>{t("tagsComma")}<input value={form.tags || ""} onChange={(event) => update("tags", event.target.value)} /></label>
+          <label className="full">{t("description")}<textarea value={form.description || ""} onChange={(event) => update("description", event.target.value)} /></label>
           <details className="custom-fields-section full" open={customFieldsOpen} onToggle={(event) => setCustomFieldsOpen(event.currentTarget.open)}>
-            <summary>Custom fields</summary>
-            <label>JSON-style lines<textarea value={form.customFieldsText || ""} onChange={(event) => update("customFieldsText", event.target.value)} /></label>
+            <summary>{t("customFields")}</summary>
+            <label>{t("jsonStyleLines")}<textarea value={form.customFieldsText || ""} onChange={(event) => update("customFieldsText", event.target.value)} /></label>
           </details>
         </div>
       </form>

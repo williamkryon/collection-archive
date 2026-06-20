@@ -116,6 +116,21 @@ nav,
   margin-top: auto;
 }
 
+.language-select {
+  display: grid;
+  gap: 5px;
+  color: #d7e7e4;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.language-select select {
+  width: 100%;
+  min-height: 34px;
+  border-color: rgba(255, 255, 255, 0.25);
+  background: #f4f8f7;
+}
+
 .sidebar button {
   width: 100%;
   text-align: left;
@@ -601,11 +616,18 @@ dd {
   padding: 0;
   border-color: #d4dddd;
   background: #ebf0ef;
+  cursor: grab;
 }
 
 .thumb-strip button.active {
   border-color: #1f5d57;
   box-shadow: inset 0 0 0 2px #1f5d57;
+}
+
+.thumb-strip button.dragging {
+  opacity: 0.55;
+  border-style: dashed;
+  cursor: grabbing;
 }
 
 .image-actions,
@@ -909,7 +931,8 @@ dd {
   justify-content: end;
 }
 
-.album-export-actions {
+.album-export-actions,
+.album-pdf-export-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -917,7 +940,8 @@ dd {
   gap: 8px;
 }
 
-.album-export-actions button {
+.album-export-actions button,
+.album-pdf-export-actions button {
   min-height: 34px;
   padding: 0 10px;
 }
@@ -971,7 +995,7 @@ dd {
 }
 
 .album-page-row {
-  grid-template-columns: minmax(180px, 320px) auto;
+  grid-template-columns: minmax(180px, 320px) auto minmax(260px, auto) auto;
   justify-content: start;
 }
 
@@ -1016,8 +1040,40 @@ dd {
 }
 
 .album-page-selector {
-  grid-template-columns: minmax(180px, 320px);
+  grid-template-columns: minmax(180px, 320px) auto minmax(260px, auto) auto;
+  align-items: center;
   justify-content: start;
+}
+
+.page-order-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.page-order-controls button {
+  min-height: 34px;
+  padding: 0 9px;
+}
+
+.page-copy-controls {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.page-copy-controls select {
+  width: auto;
+  min-width: 170px;
+  max-width: 240px;
+  min-height: 34px;
+}
+
+.page-copy-controls button {
+  min-height: 34px;
+  padding: 0 9px;
 }
 
 .edit-layout .album-controls {
@@ -1484,6 +1540,20 @@ dd {
   overflow-wrap: anywhere;
 }
 
+.text-placement.editable .album-text-content {
+  cursor: text;
+}
+
+.album-text-editor {
+  display: block;
+  overflow: auto;
+  border: 0;
+  outline: 2px solid rgba(31, 93, 87, 0.35);
+  resize: none;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
 .placement-inspector {
   display: grid;
   grid-template-columns: 1fr;
@@ -1691,6 +1761,7 @@ dd {
   .album-toolbar-actions .segmented,
   .album-toolbar-actions button,
   .album-export-actions,
+  .album-pdf-export-actions,
   .pdf-quality-select,
   .pdf-quality-select select {
     width: 100%;

@@ -340,6 +340,42 @@ async function main() {
   client = await connect(portBase + 1);
   await waitFor(client, "Boolean(window.archiveAPI && document.querySelector('.app'))", "App did not render");
 
+  const zhLanguageState = await evaluate(
+    client,
+    `(async () => {
+      const select = document.querySelector('.language-select select');
+      if (!select) throw new Error('Language selector not found');
+      select.value = 'zh';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const zh = {
+        library: [...document.querySelectorAll('nav button')].some((button) => button.textContent.trim() === '馆藏'),
+        newItem: [...document.querySelectorAll('.sidebar-actions button')].some((button) => button.textContent.trim() === '新建藏品'),
+        stored: localStorage.getItem('collectionArchive.language')
+      };
+      return zh;
+    })()`
+  );
+  assert(zhLanguageState.library && zhLanguageState.newItem && zhLanguageState.stored === "zh", `Chinese labels did not render or persist: ${JSON.stringify(zhLanguageState)}`);
+  await evaluate(client, "window.location.reload()");
+  await waitFor(client, "Boolean(window.archiveAPI && document.querySelector('.language-select select'))", "App did not reload after language change");
+  const languageState = await evaluate(
+    client,
+    `(async () => {
+      const persisted = [...document.querySelectorAll('nav button')].some((button) => button.textContent.trim() === '馆藏');
+      document.querySelector('.language-select select').value = 'en';
+      document.querySelector('.language-select select').dispatchEvent(new Event('change', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      return {
+        persisted,
+        englishRestored: [...document.querySelectorAll('nav button')].some((button) => button.textContent.trim() === 'Library'),
+        storedAfterRestore: localStorage.getItem('collectionArchive.language')
+      };
+    })()`
+  );
+  assert(languageState.persisted, `Language did not persist after reload: ${JSON.stringify(languageState)}`);
+  assert(languageState.englishRestored && languageState.storedAfterRestore === "en", `Language did not switch back to English: ${JSON.stringify(languageState)}`);
+
   const exportSmokePng = path.join(tempRoot, "export-smoke-page.png");
   const exportSmokePdfOriginal = path.join(tempRoot, "export-smoke-album-original.pdf");
   const exportSmokePdfLow = path.join(tempRoot, "export-smoke-album-low.pdf");
@@ -392,6 +428,95 @@ async function main() {
   assert(JSON.stringify(data.coverIds) === JSON.stringify(["image-two", "image-one"]), `Unexpected album cover ids: ${data.coverIds.join(", ")}`);
   assert(data.imageCounts.every((count) => count === 2), "Album slot image selector data is missing images");
   assert(data.placementBoxes.every((box) => box.width > 20 && box.height > 20), "Album placements did not load freeform dimensions");
+
+  const pageCopySmoke = await evaluate(
+    client,
+    `(async () => {
+      const original = await window.archiveAPI.getAlbum("album-smoke");
+      const sourcePage = original.pages.find((page) => page.id === "page-one");
+      const sourcePlacements = sourcePage.items.filter((entry) => entry.element_type !== "text");
+      const duplicated = await window.archiveAPI.copyAlbumPage({ pageId: "page-one", targetAlbumId: "album-smoke", insertAfterPageId: "page-one" });
+      const copiedPageId = duplicated.copiedPageId;
+      const copiedPage = duplicated.album.pages.find((page) => page.id === copiedPageId);
+      const copiedPlacements = copiedPage.items.filter((entry) => entry.element_type !== "text");
+      const duplicateCheck = {
+        pageIds: duplicated.album.pages.map((page) => page.id),
+        pageNumbers: duplicated.album.pages.map((page) => page.page_number),
+        copiedPageNumber: copiedPage.page_number,
+        copiedTitle: copiedPage.title,
+        copiedBackground: copiedPage.background,
+        copiedImageIds: copiedPlacements.map((entry) => entry.image_id),
+        copiedItemIds: copiedPlacements.map((entry) => entry.item_id),
+        sourceImageIds: sourcePlacements.map((entry) => entry.image_id),
+        sourceItemIds: sourcePlacements.map((entry) => entry.item_id),
+        copiedPlacementIds: copiedPlacements.map((entry) => entry.id),
+        sourcePlacementIds: sourcePlacements.map((entry) => entry.id)
+      };
+      const afterDelete = await window.archiveAPI.deleteAlbumPage(copiedPageId);
+      const createdLibrary = await window.archiveAPI.createAlbum({ title: "Album Copy Target Smoke", description: "" });
+      const target = createdLibrary.albums.find((entry) => entry.title === "Album Copy Target Smoke");
+      const copiedToTarget = await window.archiveAPI.copyAlbumPage({ pageId: "page-one", targetAlbumId: target.id });
+      const targetPage = copiedToTarget.album.pages.find((page) => page.id === copiedToTarget.copiedPageId);
+      const targetPlacements = targetPage.items.filter((entry) => entry.element_type !== "text");
+      const targetCheck = {
+        targetPageCount: copiedToTarget.album.pages.length,
+        targetPageNumber: targetPage.page_number,
+        targetTitle: targetPage.title,
+        targetBackground: targetPage.background,
+        targetImageIds: targetPlacements.map((entry) => entry.image_id),
+        targetPlacementIds: targetPlacements.map((entry) => entry.id),
+        targetItemIds: targetPlacements.map((entry) => entry.item_id)
+      };
+      await window.archiveAPI.deleteAlbum(target.id);
+      return {
+        duplicateCheck,
+        afterDeletePageIds: afterDelete.pages.map((page) => page.id),
+        afterDeleteNumbers: afterDelete.pages.map((page) => page.page_number),
+        targetCheck
+      };
+    })()`
+  );
+  assert(JSON.stringify(pageCopySmoke.duplicateCheck.pageNumbers) === JSON.stringify([1, 2, 3]), `Duplicated page numbers were not normalized: ${JSON.stringify(pageCopySmoke)}`);
+  assert(pageCopySmoke.duplicateCheck.pageIds[1] !== "page-one" && pageCopySmoke.duplicateCheck.pageIds[1] !== "page-two", `Duplicated page was not inserted after current page: ${JSON.stringify(pageCopySmoke)}`);
+  assert(pageCopySmoke.duplicateCheck.copiedTitle === "First page" && pageCopySmoke.duplicateCheck.copiedBackground === "cream", `Duplicated page settings were not copied: ${JSON.stringify(pageCopySmoke)}`);
+  assert(JSON.stringify(pageCopySmoke.duplicateCheck.copiedImageIds) === JSON.stringify(pageCopySmoke.duplicateCheck.sourceImageIds), `Duplicated placements did not preserve image ids: ${JSON.stringify(pageCopySmoke)}`);
+  assert(JSON.stringify(pageCopySmoke.duplicateCheck.copiedItemIds) === JSON.stringify(pageCopySmoke.duplicateCheck.sourceItemIds), `Duplicated placements did not preserve item ids: ${JSON.stringify(pageCopySmoke)}`);
+  assert(pageCopySmoke.duplicateCheck.copiedPlacementIds.every((id) => !pageCopySmoke.duplicateCheck.sourcePlacementIds.includes(id)), `Duplicated placements reused source ids: ${JSON.stringify(pageCopySmoke)}`);
+  assert(JSON.stringify(pageCopySmoke.afterDeleteNumbers) === JSON.stringify([1, 2]), `Page numbers were not normalized after deleting duplicate: ${JSON.stringify(pageCopySmoke)}`);
+  assert(pageCopySmoke.targetCheck.targetPageCount === 1 && pageCopySmoke.targetCheck.targetPageNumber === 1, `Cross-album copy did not append a page to target album: ${JSON.stringify(pageCopySmoke)}`);
+  assert(pageCopySmoke.targetCheck.targetTitle === "First page" && pageCopySmoke.targetCheck.targetBackground === "cream", `Cross-album page settings were not copied: ${JSON.stringify(pageCopySmoke)}`);
+  assert(JSON.stringify(pageCopySmoke.targetCheck.targetImageIds) === JSON.stringify(pageCopySmoke.duplicateCheck.sourceImageIds), `Cross-album copy did not preserve image ids: ${JSON.stringify(pageCopySmoke)}`);
+  assert(pageCopySmoke.targetCheck.targetPlacementIds.every((id) => !pageCopySmoke.duplicateCheck.sourcePlacementIds.includes(id)), `Cross-album copy reused source placement ids: ${JSON.stringify(pageCopySmoke)}`);
+
+  const pageImageReorder = await evaluate(
+    client,
+    `(async () => {
+      let album = await window.archiveAPI.reorderAlbumPages({ albumId: "album-smoke", ids: ["page-two", "page-one"] });
+      const moved = {
+        pageIds: album.pages.map((page) => page.id),
+        pageNumbers: album.pages.map((page) => page.page_number),
+        firstPageTitle: album.pages[0].title,
+        firstPageBackground: album.pages[0].background,
+        secondPageSlots: album.pages[1].items.filter((entry) => entry.element_type !== "text").map((entry) => entry.id)
+      };
+      album = await window.archiveAPI.reorderAlbumPages({ albumId: "album-smoke", ids: ["page-one", "page-two"] });
+      const itemAfterReorder = await window.archiveAPI.reorderImages({ itemId: "item-multi", ids: ["image-two", "image-one"] });
+      const imageOrder = itemAfterReorder.images.map((image) => image.id);
+      await window.archiveAPI.reorderImages({ itemId: "item-multi", ids: ["image-one", "image-two"] });
+      const itemRestored = await window.archiveAPI.getItem("item-multi");
+      return {
+        moved,
+        imageOrder,
+        restoredImageOrder: itemRestored.images.map((image) => image.id)
+      };
+    })()`
+  );
+  assert(JSON.stringify(pageImageReorder.moved.pageIds) === JSON.stringify(["page-two", "page-one"]), `Album page reorder failed: ${JSON.stringify(pageImageReorder)}`);
+  assert(JSON.stringify(pageImageReorder.moved.pageNumbers) === JSON.stringify([1, 2]), `Album page numbers were not normalized: ${JSON.stringify(pageImageReorder)}`);
+  assert(pageImageReorder.moved.firstPageTitle === "Second page" && pageImageReorder.moved.firstPageBackground === "white", `Reordered page settings did not stay with its page: ${JSON.stringify(pageImageReorder)}`);
+  assert(JSON.stringify(pageImageReorder.moved.secondPageSlots) === JSON.stringify(["slot-two", "slot-one"]), `Reordered page lost placements: ${JSON.stringify(pageImageReorder)}`);
+  assert(JSON.stringify(pageImageReorder.imageOrder) === JSON.stringify(["image-two", "image-one"]), `Item image reorder failed: ${JSON.stringify(pageImageReorder)}`);
+  assert(JSON.stringify(pageImageReorder.restoredImageOrder) === JSON.stringify(["image-one", "image-two"]), `Item image order restore failed: ${JSON.stringify(pageImageReorder)}`);
 
   const reordered = await evaluate(
     client,
@@ -903,6 +1028,27 @@ async function main() {
   assert(defaultPreview.pageLabel === "Page 1" && defaultPreview.pageTitle === "First page", `Unexpected page heading: ${defaultPreview.pageLabel} ${defaultPreview.pageTitle}`);
   assert(defaultPreview.canvasWidth > 300, "Album canvas did not render at a visible size");
   assert(defaultPreview.previewWrapper.borderTopWidth === "0px", `Preview still shows an outer page border: ${JSON.stringify(defaultPreview.previewWrapper)}`);
+
+  const previewExportLayout = await evaluate(
+    client,
+    `(() => {
+      const selectorRow = document.querySelector('.album-page-selector');
+      const selectorRect = selectorRow.querySelector('.album-page-select').getBoundingClientRect();
+      const exportPageButton = [...selectorRow.querySelectorAll('button')].find((button) => button.textContent.trim() === 'Export page');
+      const exportPageRect = exportPageButton.getBoundingClientRect();
+      const toolbarText = document.querySelector('.album-toolbar-actions')?.textContent || '';
+      return {
+        hasExportPageInSelector: Boolean(exportPageButton),
+        exportPageNearSelector: Math.abs((exportPageRect.top + exportPageRect.height / 2) - (selectorRect.top + selectorRect.height / 2)) < 12,
+        hasPdfQuality: Boolean(document.querySelector('.album-toolbar-actions .pdf-quality-select')),
+        hasPdfExport: toolbarText.includes('Export PDF'),
+        exportPageInMainToolbar: toolbarText.includes('Export page')
+      };
+    })()`
+  );
+  assert(previewExportLayout.hasExportPageInSelector && previewExportLayout.exportPageNearSelector, `Export page should sit beside the preview page selector: ${JSON.stringify(previewExportLayout)}`);
+  assert(previewExportLayout.hasPdfQuality && previewExportLayout.hasPdfExport, `Preview mode missing PDF export group: ${JSON.stringify(previewExportLayout)}`);
+  assert(!previewExportLayout.exportPageInMainToolbar, `Export page should not remain in the main preview toolbar: ${JSON.stringify(previewExportLayout)}`);
   assert(defaultPreview.previewWrapper.boxShadow === "none", `Preview still shows an outer page shadow: ${defaultPreview.previewWrapper.boxShadow}`);
   assert(!defaultPreview.previewWrapper.headerVisible, "Preview should not show the outer page header wrapper");
   const singlePagePreview = await evaluate(
@@ -1071,13 +1217,17 @@ async function main() {
       nativeItemSelectCount: [...document.querySelectorAll('.album-controls select')].filter((select) => [...select.options].some((option) => option.textContent.includes('Multi Image Test'))).length,
       hasAddButton: [...document.querySelectorAll('button')].some((button) => button.textContent.trim() === 'Add item'),
       pageSelectorInAddRow: Boolean(document.querySelector('form.album-page-row .album-page-select')),
-      duplicateTopPageTitle: Boolean([...document.querySelectorAll('.album-toolbar input')].find((input) => input.placeholder === 'Page title'))
+      duplicateTopPageTitle: Boolean([...document.querySelectorAll('.album-toolbar input')].find((input) => input.placeholder === 'Page title')),
+      editActionBarText: document.querySelector('.page-action-bar')?.textContent || '',
+      hasPageOrderControls: document.querySelectorAll('form.album-page-row .page-order-controls button').length === 2
     }))()`
   );
   assert(addPicker.nativeItemSelectCount === 0, "Album edit mode still renders a giant native item select");
   assert(addPicker.hasAddButton, "Album edit mode missing Add item button");
   assert(addPicker.pageSelectorInAddRow, "Page selector should share the compact Add page row in Edit mode");
   assert(!addPicker.duplicateTopPageTitle, "Edit header should not show a duplicate Page title input");
+  assert(addPicker.hasPageOrderControls, "Edit page row missing page move controls");
+  assert(!/Export page|Export PDF|PDF quality/.test(addPicker.editActionBarText), `Edit action bar should not show export controls: ${JSON.stringify(addPicker)}`);
   const editLayoutState = await evaluate(
     client,
     `(() => {
@@ -1407,14 +1557,23 @@ async function main() {
       textBox.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: textBox.getBoundingClientRect().left + 10, clientY: textBox.getBoundingClientRect().top + 10, button: 0 }));
       window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, button: 0 }));
       await new Promise((resolve) => setTimeout(resolve, 150));
+      const content = textBox.querySelector('.album-text-content');
+      content.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: textBox.getBoundingClientRect().left + 20, clientY: textBox.getBoundingClientRect().top + 20 }));
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      const editor = textBox.querySelector('.album-text-editor');
+      const editable = Boolean(editor);
+      const focused = document.activeElement === editor;
+      editor.value = 'Smoke text box';
+      editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'Smoke text box' }));
+      editor.blur();
+      await new Promise((resolve) => setTimeout(resolve, 500));
       let album = await window.archiveAPI.getAlbum('album-smoke');
-      let textEntry = album.pages[0].items.find((entry) => entry.element_type === 'text');
-      await window.archiveAPI.updateAlbumPageItem({ ...textEntry, text_content: 'Smoke text box' });
-      album = await window.archiveAPI.getAlbum('album-smoke');
-      textEntry = album.pages[0].items.find((entry) => entry.element_type === 'text');
+      const textEntry = album.pages[0].items.find((entry) => entry.element_type === 'text' && entry.text_content === 'Smoke text box');
       return {
         selectedText: document.querySelectorAll('.text-placement.selected').length,
         persistedText: textEntry?.text_content,
+        editable,
+        focused,
         designedTextVisible: Boolean(document.querySelector('.album-text-content')),
         handleWidth: (() => {
           const handle = document.querySelector('.album-placement.selected .resize-handle') || document.querySelector('.resize-handle');
@@ -1423,9 +1582,77 @@ async function main() {
       };
     })()`
   );
+  assert(textBoxState.selectedText === 1, "Text box did not stay selected after in-place edit");
+  assert(textBoxState.editable && textBoxState.focused, `Text box did not enter focused content-edit mode: ${JSON.stringify(textBoxState)}`);
   assert(textBoxState.persistedText === "Smoke text box", `Text box did not persist edited text: ${textBoxState.persistedText}`);
   assert(textBoxState.designedTextVisible, "Text box content did not render in edit/designed canvas");
   assert(textBoxState.handleWidth >= 18, `Resize handle is still too small: ${textBoxState.handleWidth}`);
+
+  const textBoxUsability = await evaluate(
+    client,
+    `(async () => {
+      const editText = async (expected) => {
+        const textBox = [...document.querySelectorAll('.text-placement')].find((node) => node.textContent.includes('Smoke text box') || node.textContent.includes('After'));
+        const content = textBox.querySelector('.album-text-content');
+        content.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: textBox.getBoundingClientRect().left + 12, clientY: textBox.getBoundingClientRect().top + 12 }));
+        await new Promise((resolve) => setTimeout(resolve, 120));
+        const editor = textBox.querySelector('.album-text-editor');
+        const beforeTextCount = document.querySelectorAll('.text-placement').length;
+        const enteredEditable = Boolean(editor) && document.activeElement === editor;
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true, bubbles: true }));
+        editor.value = expected;
+        editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: expected }));
+        editor.blur();
+        await new Promise((resolve) => setTimeout(resolve, 450));
+        return {
+          enteredEditable,
+          beforeTextCount,
+          afterTextCount: document.querySelectorAll('.text-placement').length
+        };
+      };
+      const textBox = document.querySelector('.text-placement');
+      const rect = textBox.getBoundingClientRect();
+      textBox.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: rect.left + 3, clientY: rect.top + 3, button: 0 }));
+      window.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: rect.left + 28, clientY: rect.top + 28, button: 0 }));
+      window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: rect.left + 28, clientY: rect.top + 28, button: 0 }));
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      const afterDrag = await editText('After drag edit');
+      const selector = document.querySelector('.album-page-select');
+      selector.value = 'page-two';
+      selector.dispatchEvent(new Event('change', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      selector.value = 'page-one';
+      selector.dispatchEvent(new Event('change', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      const afterPageSwitch = await editText('After page switch edit');
+      [...document.querySelectorAll("button")].find((button) => button.textContent.trim() === "Preview").click();
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      [...document.querySelectorAll("button")].find((button) => button.textContent.trim() === "Edit").click();
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      const afterModeSwitch = await editText('After mode switch edit');
+      document.querySelector('.language-select select').value = 'zh';
+      document.querySelector('.language-select select').dispatchEvent(new Event('change', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      document.querySelector('.language-select select').value = 'en';
+      document.querySelector('.language-select select').dispatchEvent(new Event('change', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      const afterLanguageSwitch = await editText('After language switch edit');
+      const album = await window.archiveAPI.getAlbum('album-smoke');
+      const textEntry = album.pages[0].items.find((entry) => entry.element_type === 'text' && entry.text_content === 'After language switch edit');
+      return {
+        afterDrag,
+        afterPageSwitch,
+        afterModeSwitch,
+        afterLanguageSwitch,
+        persisted: textEntry?.text_content
+      };
+    })()`
+  );
+  assert(textBoxUsability.afterDrag.enteredEditable && textBoxUsability.afterDrag.afterTextCount === textBoxUsability.afterDrag.beforeTextCount, `Text edit after drag failed or shortcut leaked: ${JSON.stringify(textBoxUsability)}`);
+  assert(textBoxUsability.afterPageSwitch.enteredEditable, `Text edit after page switch failed: ${JSON.stringify(textBoxUsability)}`);
+  assert(textBoxUsability.afterModeSwitch.enteredEditable, `Text edit after Preview/Edit switch failed: ${JSON.stringify(textBoxUsability)}`);
+  assert(textBoxUsability.afterLanguageSwitch.enteredEditable, `Text edit after language switch failed: ${JSON.stringify(textBoxUsability)}`);
+  assert(textBoxUsability.persisted === "After language switch edit", `Text edits did not persist after usability sequence: ${JSON.stringify(textBoxUsability)}`);
 
   const shortcutState = await evaluate(
     client,
