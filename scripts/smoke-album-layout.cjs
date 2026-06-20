@@ -51,6 +51,15 @@ function findFile(folder, filename) {
   return null;
 }
 
+function pngDimensions(filePath) {
+  const data = fs.readFileSync(filePath);
+  assert(data.slice(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])), `Not a PNG file: ${filePath}`);
+  return {
+    width: data.readUInt32BE(16),
+    height: data.readUInt32BE(20)
+  };
+}
+
 function launchElectron(port) {
   const electronExe = path.join(root, "node_modules", "electron", "dist", "electron.exe");
   const child = spawn(electronExe, [`--remote-debugging-port=${port}`, `--user-data-dir=${userData}`, ".", "--disable-gpu"], {
@@ -59,6 +68,7 @@ function launchElectron(port) {
       ...process.env,
       APPDATA: appData,
       COLLECTION_ARCHIVE_DATA_DIR: archiveData,
+      COLLECTION_ARCHIVE_ALLOW_EXPORT_PATH: "1",
       ELECTRON_ENABLE_LOGGING: "1"
     },
     stdio: ["ignore", "pipe", "pipe"]
@@ -269,6 +279,25 @@ async function main() {
   child = launchElectron(portBase + 1);
   client = await connect(portBase + 1);
   await waitFor(client, "Boolean(window.archiveAPI && document.querySelector('.app'))", "App did not render");
+
+  const exportSmokePng = path.join(tempRoot, "export-smoke-page.png");
+  const exportSmokePdf = path.join(tempRoot, "export-smoke-album.pdf");
+  const exportSmoke = await evaluate(
+    client,
+    `(async () => {
+      const html = '<!doctype html><html class="png-export"><head><style>@page{size:120px 180px;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;overflow:hidden;width:120px;height:180px}.page{position:relative;width:120px;height:180px;overflow:hidden;background:#f7f0dd;color:#1f5d57;font:700 14px Arial}.bg{position:absolute;inset:0;opacity:.45;z-index:0}.bg img{display:block;width:100%;height:100%;object-fit:contain}.placement{position:absolute;left:40px;top:52px;width:42px;height:72px;z-index:1}.placement img{display:block;width:100%;height:100%;object-fit:contain}.text{position:absolute;left:8px;right:8px;bottom:10px;z-index:2;text-align:center}</style></head><body class="png-export"><section class="page" data-export-page><div class="bg"><img src="archive://local/images/album-smoke-image-1.png" alt=""></div><div class="placement"><img src="archive://local/images/album-smoke-image-2.png" alt=""></div><div class="text">Export smoke</div></section></body></html>';
+      const png = await window.archiveAPI.exportAlbumPagePng({ html, width: 120, height: 180, filePath: ${JSON.stringify(exportSmokePng)}, defaultFilename: 'export-smoke-page.png' });
+      const pdf = await window.archiveAPI.exportAlbumPdf({ html, width: 120, height: 180, filePath: ${JSON.stringify(exportSmokePdf)}, defaultFilename: 'export-smoke-album.pdf' });
+      return { png, pdf };
+    })()`
+  );
+  assert(!exportSmoke.png.canceled && fs.existsSync(exportSmokePng) && fs.statSync(exportSmokePng).size > 20, `PNG export smoke failed: ${JSON.stringify(exportSmoke)}`);
+  assert(!exportSmoke.pdf.canceled && fs.existsSync(exportSmokePdf) && fs.statSync(exportSmokePdf).size > 20, `PDF export smoke failed: ${JSON.stringify(exportSmoke)}`);
+  const exportPngSize = pngDimensions(exportSmokePng);
+  assert(exportPngSize.width === 120 && exportPngSize.height === 180, `PNG export dimensions are not full logical page size: ${JSON.stringify(exportPngSize)}`);
+  assert(exportSmoke.png.diagnostics.imageCount >= 2, `PNG export did not wait for background and placement images: ${JSON.stringify(exportSmoke.png.diagnostics)}`);
+  assert(exportSmoke.pdf.diagnostics.imageCount >= 2, `PDF export did not wait for background and placement images: ${JSON.stringify(exportSmoke.pdf.diagnostics)}`);
+  assert(!exportSmoke.png.diagnostics.hasHorizontalScrollbar && !exportSmoke.png.diagnostics.hasVerticalScrollbar, `PNG export had scrollbars: ${JSON.stringify(exportSmoke.png.diagnostics)}`);
 
   const data = await evaluate(
     client,
@@ -546,6 +575,59 @@ async function main() {
   assert(JSON.stringify(entityTabUi.entityRows) === JSON.stringify(["China"]) && entityTabUi.entityDragHidden && entityTabUi.entityAddVisible, `Issuing Entities searchable tab failed: ${JSON.stringify(entityTabUi)}`);
   assert(JSON.stringify(groupTabUi.groupRows) === JSON.stringify(["Europe"]) && groupTabUi.groupDragHidden && groupTabUi.groupAddVisible, `Entity Groups searchable tab failed: ${JSON.stringify(groupTabUi)}`);
 
+  const libraryFilterComboboxUi = await evaluate(
+    client,
+    `(async () => {
+      const nativeEntitySelects = [...document.querySelectorAll('.filter-control-row select')]
+        .filter((select) => [...select.options].some((option) => option.textContent.includes('issuing entities') || option.textContent.includes('entity groups'))).length;
+      const filterRow = document.querySelector('.filters').getBoundingClientRect();
+      const filterOverflow = document.querySelector('.filters').scrollWidth > document.querySelector('.filters').clientWidth + 2;
+      const combo = (index) => document.querySelectorAll('.filter-combobox')[index];
+      combo(0).querySelector('.entity-combobox-trigger').click();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      let search = combo(0).querySelector('.entity-combobox-panel input');
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(search, 'Chi');
+      search.dispatchEvent(new Event('input', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      [...combo(0).querySelectorAll('.entity-combobox-results button')]
+        .find((button) => button.textContent.trim() === 'China').click();
+      await new Promise((resolve) => setTimeout(resolve, 160));
+      combo(1).querySelector('.entity-combobox-trigger').click();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      search = combo(1).querySelector('.entity-combobox-panel input');
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(search, 'British');
+      search.dispatchEvent(new Event('input', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      [...combo(1).querySelectorAll('.entity-combobox-results button')]
+        .find((button) => button.textContent.trim() === 'British Empire').click();
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const librarySearch = document.querySelector('.search-filter input');
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(librarySearch, 'Multi');
+      librarySearch.dispatchEvent(new Event('input', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 650));
+      const selectedEntity = combo(0).querySelector('.entity-combobox-trigger').textContent.trim();
+      const selectedGroup = combo(1).querySelector('.entity-combobox-trigger').textContent.trim();
+      const cardTitles = [...document.querySelectorAll('.item-card .title-button')].map((button) => button.textContent.trim());
+      document.querySelector('.clear-filters').click();
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      return {
+        nativeEntitySelects,
+        filterWidth: Math.round(filterRow.width),
+        filterOverflow,
+        selectedEntity,
+        selectedGroup,
+        cardTitles,
+        clearedEntity: combo(0).querySelector('.entity-combobox-trigger').textContent.trim(),
+        clearedGroup: combo(1).querySelector('.entity-combobox-trigger').textContent.trim()
+      };
+    })()`
+  );
+  assert(libraryFilterComboboxUi.nativeEntitySelects === 0, `Library entity filters still use native selects: ${JSON.stringify(libraryFilterComboboxUi)}`);
+  assert(!libraryFilterComboboxUi.filterOverflow, `Library filters overflow horizontally: ${JSON.stringify(libraryFilterComboboxUi)}`);
+  assert(libraryFilterComboboxUi.selectedEntity === "China" && libraryFilterComboboxUi.selectedGroup === "British Empire", `Library filter comboboxes did not select values: ${JSON.stringify(libraryFilterComboboxUi)}`);
+  assert(libraryFilterComboboxUi.cardTitles.includes("Multi Image Test"), `Search plus entity/group filters did not show expected item: ${JSON.stringify(libraryFilterComboboxUi)}`);
+  assert(libraryFilterComboboxUi.clearedEntity === "All issuing entities" && libraryFilterComboboxUi.clearedGroup === "All entity groups", `Clear filters did not reset comboboxes: ${JSON.stringify(libraryFilterComboboxUi)}`);
+
   await evaluate(
     client,
     `(() => {
@@ -560,32 +642,48 @@ async function main() {
       const titleInput = document.querySelector('.form-grid input[required]');
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(titleInput, 'Combobox Smoke');
       titleInput.dispatchEvent(new Event('input', { bubbles: true }));
-      document.querySelector('.entity-combobox-trigger').click();
+      const formCombo = document.querySelector('.modal .entity-combobox');
+      formCombo.querySelector('.entity-combobox-trigger').click();
       await new Promise((resolve) => setTimeout(resolve, 80));
-      const search = document.querySelector('.entity-combobox-panel input');
+      const search = formCombo.querySelector('.entity-combobox-panel input');
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(search, 'Aust');
       search.dispatchEvent(new Event('input', { bubbles: true }));
       await new Promise((resolve) => setTimeout(resolve, 80));
-      const resultNames = [...document.querySelectorAll('.entity-combobox-results button')].map((button) => button.textContent.trim()).filter(Boolean);
-      [...document.querySelectorAll('.entity-combobox-results button')]
+      const resultNames = [...formCombo.querySelectorAll('.entity-combobox-results button')].map((button) => button.textContent.trim()).filter(Boolean);
+      [...formCombo.querySelectorAll('.entity-combobox-results button')]
         .find((button) => button.textContent.trim() === 'Austria').click();
       await new Promise((resolve) => setTimeout(resolve, 80));
-      const selectedBeforeSave = document.querySelector('.entity-combobox-trigger')?.textContent.trim();
-      document.querySelector('.entity-combobox-clear').click();
+      const selectedBeforeSave = formCombo.querySelector('.entity-combobox-trigger')?.textContent.trim();
+      formCombo.querySelector('.entity-combobox-clear').click();
       await new Promise((resolve) => setTimeout(resolve, 80));
-      const selectedClearBeforeSave = document.querySelector('.entity-combobox-trigger')?.textContent.trim();
-      document.querySelector('.entity-combobox-trigger').click();
+      const selectedClearBeforeSave = formCombo.querySelector('.entity-combobox-trigger')?.textContent.trim();
+      formCombo.querySelector('.entity-combobox-trigger').click();
       await new Promise((resolve) => setTimeout(resolve, 80));
-      const searchAgain = document.querySelector('.entity-combobox-panel input');
+      const searchAgain = formCombo.querySelector('.entity-combobox-panel input');
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(searchAgain, 'Aust');
       searchAgain.dispatchEvent(new Event('input', { bubbles: true }));
       await new Promise((resolve) => setTimeout(resolve, 80));
-      [...document.querySelectorAll('.entity-combobox-results button')]
+      [...formCombo.querySelectorAll('.entity-combobox-results button')]
         .find((button) => button.textContent.trim() === 'Austria').click();
       await new Promise((resolve) => setTimeout(resolve, 80));
-      [...document.querySelectorAll('.modal footer button')]
+      const initialCustomOpen = document.querySelector('.custom-fields-section')?.open;
+      document.querySelector('.custom-fields-section summary').click();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      const customText = document.querySelector('.custom-fields-section textarea');
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(customText, 'smoke: yes');
+      customText.dispatchEvent(new Event('input', { bubbles: true }));
+      const favoriteBefore = document.querySelector('.form-favorite')?.textContent.trim();
+      document.querySelector('.form-favorite').click();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      const favoriteAfter = document.querySelector('.form-favorite')?.textContent.trim();
+      const headerHasSave = Boolean([...document.querySelectorAll('.modal header button')]
+        .find((button) => button.textContent.trim() === 'Save'));
+      [...document.querySelectorAll('.modal header button')]
         .find((button) => button.textContent.trim() === 'Save').click();
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      const toastAfterCreate = document.querySelector('.toast')?.textContent.trim() || '';
+      await new Promise((resolve) => setTimeout(resolve, 2200));
+      const toastGone = !document.querySelector('.toast');
       let created = await window.archiveAPI.queryItems({ searchText: 'Combobox Smoke', limit: 1, offset: 0 });
       const item = created.items[0];
       if (!item) return { error: 'created item not found', resultNames, selectedBeforeSave, createdTotal: created.total };
@@ -611,12 +709,24 @@ async function main() {
         selectedBeforeSave,
         selectedClearBeforeSave,
         createdCountry: item.country_name,
+        createdFavorite: item.favorite,
+        createdCustomSmoke: detailBeforeClear.customFields?.smoke || '',
+        favoriteBefore,
+        favoriteAfter,
+        headerHasSave,
+        initialCustomOpen,
+        toastAfterCreate,
+        toastGone,
         clearedCountryId: detail.country_id || ''
       };
     })()`
   );
   assert(itemComboboxUi.resultNames.includes("Austria"), `Issuing entity combobox search did not find Austria: ${JSON.stringify(itemComboboxUi)}`);
   assert(itemComboboxUi.selectedBeforeSave === "Austria" && itemComboboxUi.createdCountry === "Austria", `Selected issuing entity did not persist on create: ${JSON.stringify(itemComboboxUi)}`);
+  assert(itemComboboxUi.headerHasSave, `Item form Save button is not in the header: ${JSON.stringify(itemComboboxUi)}`);
+  assert(itemComboboxUi.favoriteBefore === "☆" && itemComboboxUi.favoriteAfter === "★" && itemComboboxUi.createdFavorite, `Item form favorite star did not persist: ${JSON.stringify(itemComboboxUi)}`);
+  assert(itemComboboxUi.initialCustomOpen === false && itemComboboxUi.createdCustomSmoke === "yes", `Custom fields section did not stay compact/editable: ${JSON.stringify(itemComboboxUi)}`);
+  assert(itemComboboxUi.toastAfterCreate === "Item created." && itemComboboxUi.toastGone, `Toast did not auto-dismiss after item create: ${JSON.stringify(itemComboboxUi)}`);
   assert(itemComboboxUi.selectedClearBeforeSave === "None" && itemComboboxUi.clearedCountryId === "", `Clearing issuing entity did not work: ${JSON.stringify(itemComboboxUi)}`);
 
   await evaluate(client, `(() => { window.location.reload(); return true; })()`);
@@ -652,6 +762,43 @@ async function main() {
     })()`
   );
   await waitFor(client, "document.querySelector('.album-list button')", "Album list did not render");
+  const albumCreateUi = await evaluate(
+    client,
+    `(async () => {
+      const newAlbumButton = document.querySelector('.album-list-header button');
+      const titleRect = document.querySelector('.album-list-header h1').getBoundingClientRect();
+      const buttonRect = newAlbumButton.getBoundingClientRect();
+      newAlbumButton.click();
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      const titleInput = document.querySelector('.modal input[required]');
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(titleInput, 'Temporary Smoke Album');
+      titleInput.dispatchEvent(new Event('input', { bubbles: true }));
+      [...document.querySelectorAll('.modal footer button')]
+        .find((button) => button.textContent.trim() === 'Save').click();
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      let library = await window.archiveAPI.getLibrary();
+      const created = library.albums.find((entry) => entry.title === 'Temporary Smoke Album');
+      if (created) await window.archiveAPI.deleteAlbum(created.id);
+      window.location.reload();
+      return {
+        buttonText: newAlbumButton.innerText.trim(),
+        buttonColor: getComputedStyle(newAlbumButton).color,
+        alignedWithTitle: Math.abs((buttonRect.top + buttonRect.height / 2) - (titleRect.top + titleRect.height / 2)) < 12,
+        created: Boolean(created)
+      };
+    })()`
+  );
+  assert(albumCreateUi.buttonText === "New album" && albumCreateUi.alignedWithTitle, `Albums page New album button is not beside the title: ${JSON.stringify(albumCreateUi)}`);
+  assert(albumCreateUi.buttonColor === "rgb(255, 255, 255)", `Albums page New album text is not white: ${JSON.stringify(albumCreateUi)}`);
+  assert(albumCreateUi.created, `Albums page New album button did not create an album: ${JSON.stringify(albumCreateUi)}`);
+  await waitFor(client, "Boolean(window.archiveAPI && document.querySelector('.app'))", "App did not reload after temporary album cleanup");
+  await evaluate(
+    client,
+    `(() => {
+      [...document.querySelectorAll("button")].find((button) => button.textContent.trim() === "Albums").click();
+    })()`
+  );
+  await waitFor(client, "document.querySelector('.album-list button')", "Album list did not render after album cleanup");
   await evaluate(
     client,
     `(() => {
@@ -1321,16 +1468,26 @@ async function main() {
     client,
     `(() => {
       const sidebar = document.querySelector('.sidebar').getBoundingClientRect();
-      const action = [...document.querySelectorAll('.sidebar-actions button')].find((button) => button.textContent.trim() === 'New album').getBoundingClientRect();
+      const actions = [...document.querySelectorAll('.sidebar-actions button')].map((button) => button.textContent.trim());
+      const lastAction = document.querySelector('.sidebar-actions button:last-child').getBoundingClientRect();
+      const albumNewButton = document.querySelector('.album-list-header button');
+      const albumNewRect = albumNewButton.getBoundingClientRect();
       return {
+        actions,
         sidebarHeight: Math.round(sidebar.height),
         viewportHeight: window.innerHeight,
-        actionInView: action.bottom <= window.innerHeight + 1
+        actionInView: lastAction.bottom <= window.innerHeight + 1,
+        albumNewText: albumNewButton.innerText.trim(),
+        albumNewColor: getComputedStyle(albumNewButton).color,
+        albumNewVisible: albumNewRect.width > 20 && albumNewRect.height > 20
       };
     })()`
   );
+  assert(JSON.stringify(sidebarState.actions) === JSON.stringify(["New item", "Manage lists", "Data folder"]), `Sidebar actions are not reduced: ${JSON.stringify(sidebarState)}`);
   assert(Math.abs(sidebarState.sidebarHeight - sidebarState.viewportHeight) <= 2, "Sidebar is not constrained to viewport height");
   assert(sidebarState.actionInView, "Sidebar action buttons are not visible near the bottom of the viewport");
+  assert(sidebarState.albumNewText === "New" && sidebarState.albumNewVisible, `Album edit mode New button is blank or hidden: ${JSON.stringify(sidebarState)}`);
+  assert(sidebarState.albumNewColor === "rgb(255, 255, 255)", `Album edit mode New button text is not white: ${JSON.stringify(sidebarState)}`);
   await captureScreenshot(client, "album-edit-canvas");
 
   const longRows = await evaluate(

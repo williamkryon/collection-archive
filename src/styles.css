@@ -273,6 +273,10 @@ main {
   min-width: 0;
 }
 
+.filter-combobox {
+  width: 100%;
+}
+
 .entity-combobox-value {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -310,6 +314,10 @@ main {
   background: #fff;
   padding: 10px;
   box-shadow: 0 18px 44px rgba(34, 49, 52, 0.18);
+}
+
+.filter-combobox .entity-combobox-panel {
+  min-width: min(360px, calc(100vw - 48px));
 }
 
 .entity-combobox-results {
@@ -768,8 +776,16 @@ dd {
   padding: 10px 5px;
 }
 
+.album-list-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
 .edit-layout .album-list h1,
-.edit-layout .album-list span {
+.edit-layout .album-list span:not(.album-new-short) {
   display: none;
 }
 
@@ -781,7 +797,15 @@ dd {
 }
 
 .album-list h1 {
-  margin-bottom: 12px;
+  margin: 0;
+}
+
+.album-list-header button {
+  min-height: 36px;
+  padding: 0 12px;
+  background: #1f5d57;
+  color: #fff;
+  text-align: center;
 }
 
 .album-list button {
@@ -791,6 +815,51 @@ dd {
   background: #fff;
   color: #202629;
   text-align: left;
+}
+
+.album-list .album-list-header button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 12px;
+  background: #1f5d57;
+  color: #fff !important;
+  text-align: center;
+  opacity: 1;
+}
+
+.album-list .album-list-header button span {
+  color: inherit;
+  font-weight: 750;
+}
+
+.album-new-short {
+  display: none;
+}
+
+.edit-layout .album-list .album-list-header {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.edit-layout .album-list .album-list-header button {
+  display: inline-flex;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 4px;
+  font-size: 12px;
+  background: #1f5d57;
+  color: #fff !important;
+  opacity: 1;
+}
+
+.edit-layout .album-new-full {
+  display: none;
+}
+
+.edit-layout .album-new-short {
+  display: inline;
 }
 
 .edit-layout .album-list button strong {
@@ -835,9 +904,22 @@ dd {
 }
 
 .album-toolbar-actions {
-  grid-template-columns: repeat(2, max-content);
+  grid-template-columns: repeat(3, max-content);
   align-items: center;
   justify-content: end;
+}
+
+.album-export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.album-export-actions button {
+  min-height: 34px;
+  padding: 0 10px;
 }
 
 .edit-layout .album-toolbar {
@@ -1874,9 +1956,32 @@ dd {
   gap: 12px;
 }
 
-.modal header button {
+.modal header > button {
   background: transparent;
   color: #1f5d57;
+}
+
+.modal-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: end;
+  gap: 8px;
+}
+
+.modal-header-actions button[type="submit"] {
+  background: #1f5d57;
+  color: #fff;
+  border-color: #1f5d57;
+}
+
+.modal-header-actions button[type="button"]:not(.form-favorite) {
+  background: transparent;
+  color: #1f5d57;
+}
+
+.form-favorite {
+  position: static;
+  flex: 0 0 auto;
 }
 
 .modal label {
@@ -2188,6 +2293,29 @@ dd {
 
 .form-grid .full {
   grid-column: 1 / -1;
+}
+
+.custom-fields-section {
+  border: 1px solid #d4dddd;
+  border-radius: 8px;
+  background: #fbfdfc;
+  padding: 0;
+}
+
+.custom-fields-section summary {
+  cursor: pointer;
+  padding: 10px 12px;
+  color: #526266;
+  font-size: 13px;
+  font-weight: 760;
+}
+
+.custom-fields-section label {
+  padding: 0 12px 12px;
+}
+
+.custom-fields-section textarea {
+  min-height: 96px;
 }
 
 @media (max-width: 1100px) {

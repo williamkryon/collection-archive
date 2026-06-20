@@ -716,6 +716,12 @@ function App() {
   }, [activeView, debouncedSearch, filters.country, filters.entityGroup, filters.favorites, filters.tag, filters.type, filters.year, itemsVersion, library, reloadGalleryItems]);
 
   useEffect(() => {
+    if (!message) return undefined;
+    const timeout = window.setTimeout(() => setMessage(""), 2000);
+    return () => window.clearTimeout(timeout);
+  }, [message]);
+
+  useEffect(() => {
     if (!perfTraceEnabled()) return undefined;
     const frame = requestAnimationFrame(() => {
       perfTrace("library.render.ready", {
@@ -862,9 +868,6 @@ function App() {
         </div>
         <div className="sidebar-actions">
           <button onClick={() => setItemFormOpen(true)}>New item</button>
-          <button onClick={() => setCountryFormOpen(true)}>New entity</button>
-          <button onClick={() => setTypeFormOpen(true)}>New type</button>
-          <button onClick={() => setAlbumFormOpen(true)}>New album</button>
           <button onClick={() => setManageOpen(true)}>Manage lists</button>
           <button className="ghost" onClick={() => api.revealDataFolder()}>
             Data folder
@@ -941,6 +944,7 @@ function App() {
             selectedAlbumId={selectedAlbumId}
             setSelectedAlbumId={setSelectedAlbumId}
             album={album}
+            onNewAlbum={() => setAlbumFormOpen(true)}
             onCreatePage={async (payload) => {
               const updated = await api.createAlbumPage(payload);
               setAlbum(updated);
@@ -993,6 +997,7 @@ function App() {
               setAlbum(updated);
               return updated;
             }}
+            onMessage={setMessage}
           />
         )}
       </main>
@@ -1136,22 +1141,26 @@ function FilterBar({ library, filters, setFilters }) {
         </label>
       </div>
       <div className="filter-control-row">
-        <select value={filters.country} onChange={(event) => update({ country: event.target.value })} aria-label="Issuing Entity">
-          <option value="">All issuing entities</option>
-          {orderedRows(library.countries).map((country) => (
-            <option value={country.id} key={country.id}>
-              {country.name}
-            </option>
-          ))}
-        </select>
-        <select value={filters.entityGroup} onChange={(event) => update({ entityGroup: event.target.value })} aria-label="Entity Group">
-          <option value="">All entity groups</option>
-          {orderedRows(library.entityGroups || []).map((group) => (
-            <option value={group.id} key={group.id}>
-              {group.name}
-            </option>
-          ))}
-        </select>
+        <SearchableCombobox
+          rows={library.countries}
+          value={filters.country}
+          onChange={(value) => update({ country: value })}
+          allLabel="All issuing entities"
+          searchPlaceholder="Search issuing entities..."
+          searchLabel="Search issuing entities"
+          clearLabel="Clear issuing entity filter"
+          className="filter-combobox"
+        />
+        <SearchableCombobox
+          rows={library.entityGroups || []}
+          value={filters.entityGroup}
+          onChange={(value) => update({ entityGroup: value })}
+          allLabel="All entity groups"
+          searchPlaceholder="Search entity groups..."
+          searchLabel="Search entity groups"
+          clearLabel="Clear entity group filter"
+          className="filter-combobox"
+        />
         <select value={filters.type} onChange={(event) => update({ type: event.target.value })}>
           <option value="">All types</option>
           {orderedRows(library.types).map((type) => (
@@ -1373,6 +1382,7 @@ function AlbumsView({
   selectedAlbumId,
   setSelectedAlbumId,
   album,
+  onNewAlbum,
   onCreatePage,
   onAddItemToPage,
   onRemoveItemFromPage,
@@ -1381,7 +1391,8 @@ function AlbumsView({
   onUpdatePage,
   onDeletePage,
   onUpdatePageItem,
-  onAddTextToPage
+  onAddTextToPage,
+  onMessage
 }) {
   const [selectedPage, setSelectedPage] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -1408,19 +1419,62 @@ function AlbumsView({
 
   const albumPages = album?.pages || [];
   const activePageId = albumPages.some((page) => page.id === selectedPage) ? selectedPage : (albumPages[0]?.id || "");
+  const activePage = albumPages.find((page) => page.id === activePageId) || null;
   const visiblePages = activePageId ? albumPages.filter((page) => page.id === activePageId) : [];
+
+  async function exportPageImage(page = activePage) {
+    if (!page) return;
+    try {
+      const { width, height } = logicalPageSize(page);
+      const result = await api.exportAlbumPagePng({
+        html: buildAlbumExportHtml([page], album.title),
+        width,
+        height,
+        defaultFilename: `${safeExportFilename(album.title || "album")}_page-${page.page_number || 1}.png`
+      });
+      if (!result?.canceled) onMessage?.("Album page image exported.");
+    } catch (error) {
+      console.error("[album-export] page PNG failed", error);
+      onMessage?.(`Export failed: ${error.message}`);
+    }
+  }
+
+  async function exportAlbumPdf() {
+    if (!albumPages.length) return;
+    try {
+      const pageSizes = albumPages.map(logicalPageSize);
+      const pdfWidth = Math.max(...pageSizes.map((size) => size.width));
+      const pdfHeight = Math.max(...pageSizes.map((size) => size.height));
+      const result = await api.exportAlbumPdf({
+        html: buildAlbumExportHtml(albumPages, album.title, { pdf: true }),
+        width: pdfWidth,
+        height: pdfHeight,
+        defaultFilename: `${safeExportFilename(album.title || "album")}.pdf`
+      });
+      if (!result?.canceled) onMessage?.("Album PDF exported.");
+    } catch (error) {
+      console.error("[album-export] PDF failed", error);
+      onMessage?.(`Export failed: ${error.message}`);
+    }
+  }
 
   return (
     <section className={`albums-view ${mode === "edit" ? "edit-layout" : "preview-layout"}`}>
       <aside className="album-list">
-        <h1>Albums</h1>
+        <div className="album-list-header">
+          <h1>Albums</h1>
+          <button type="button" onClick={onNewAlbum}>
+            <span className="album-new-full">New album</span>
+            <span className="album-new-short">New</span>
+          </button>
+        </div>
         {library.albums.map((entry) => (
           <button className={entry.id === selectedAlbumId ? "active" : ""} key={entry.id} onClick={() => setSelectedAlbumId(entry.id)}>
             <strong>{entry.title}</strong>
             <span>{entry.page_count} pages</span>
           </button>
         ))}
-        {library.albums.length === 0 && <p className="quiet">Create an album from the sidebar.</p>}
+        {library.albums.length === 0 && <p className="quiet">Create an album to get started.</p>}
       </aside>
 
       <div className="album-stage">
@@ -1464,6 +1518,10 @@ function AlbumsView({
                     <p>{album.description || "Digital album"}</p>
                   </div>
                   <div className="album-toolbar-actions">
+                    <div className="album-export-actions">
+                      <button type="button" onClick={() => exportPageImage()}>Export page</button>
+                      <button type="button" onClick={exportAlbumPdf}>Export PDF</button>
+                    </div>
                     <div className="segmented">
                       <button className={mode === "preview" ? "active" : ""} type="button" onClick={() => setMode("preview")}>Preview</button>
                       <button className={mode === "edit" ? "active" : ""} type="button" onClick={() => setMode("edit")}>Edit</button>
@@ -1508,6 +1566,8 @@ function AlbumsView({
                     setSelectedPage(pageId);
                     setPickerOpen("background");
                   }}
+                  onExportPage={exportPageImage}
+                  onExportAlbum={exportAlbumPdf}
                 />
               ))}
             </div>
@@ -1677,6 +1737,191 @@ function thumbnailImageUrl(image) {
     image?.thumb_url ||
     localMediaUrl("thumbnails", image?.thumbnail_path || image?.thumbnailPath || image?.thumb_path || image?.thumbPath)
   );
+}
+
+function resolvePlacementExportImage(entry) {
+  if (!entry || entry.element_type === "text") return null;
+  const images = Array.isArray(entry.images) ? entry.images : [];
+  const placementImageId = entry.image_id || entry.imageId || entry.selected_image_id || entry.selectedImageId || entry.image?.id || null;
+  const selectedImage = placementImageId ? images.find((image) => image.id === placementImageId) : null;
+  const coverImage = entry.cover?.id ? images.find((image) => image.id === entry.cover.id) : null;
+  const directImage = entry.image || entry.display_image || entry.selected_image || null;
+  const image = selectedImage || directImage || coverImage || entry.cover || images[0] || null;
+  const imageLike = image || entry;
+  const fullUrl = fullImageUrl(imageLike) || fullImageUrl(entry);
+  const thumbUrl = thumbnailImageUrl(imageLike) || thumbnailImageUrl(entry);
+  if (!fullUrl && !thumbUrl) return null;
+  return {
+    ...imageLike,
+    id: imageLike.id || placementImageId || entry.cover?.id || entry.image_id || entry.id,
+    url: fullUrl || thumbUrl,
+    thumbnailUrl: thumbUrl || fullUrl
+  };
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function cssUrl(value) {
+  return String(value || "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+function cssValue(key, value) {
+  if (typeof value === "number") return `${value}px`;
+  return String(value);
+}
+
+function styleToCss(style) {
+  const unitless = new Set(["opacity", "zIndex", "fontWeight", "lineHeight", "flexGrow", "flexShrink"]);
+  return Object.entries(style)
+    .filter(([, value]) => value !== undefined && value !== null && value !== "")
+    .map(([key, value]) => `${key.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`)}:${unitless.has(key) ? String(value) : cssValue(key, value)}`)
+    .join(";");
+}
+
+function safeExportFilename(name) {
+  const cleaned = String(name || "album")
+    .replace(/[<>:"/\\|?*\x00-\x1f]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned || "album";
+}
+
+function exportFrameCss(entry) {
+  return styleToCss({
+    boxSizing: "border-box",
+    ...placementFrameStyle(entry)
+  });
+}
+
+function renderExportPlacement(entry) {
+  const baseStyle = {
+    left: Number(entry.x || 0),
+    top: Number(entry.y || 0),
+    width: Number(entry.width || 100),
+    height: Number(entry.height || 100),
+    zIndex: Number(entry.z_index || 0),
+    transform: `rotate(${Number(entry.rotation || 0)}deg)`
+  };
+
+  if (entry.element_type === "text") {
+    return `
+      <div class="export-placement export-text-placement" style="${styleToCss(baseStyle)}">
+        <div class="export-text-content" style="${styleToCss({
+          fontSize: Number(entry.font_size || 24),
+          fontWeight: entry.bold ? 800 : 500,
+          fontStyle: entry.italic ? "italic" : "normal",
+          textAlign: entry.text_align || "center",
+          color: entry.text_color || "#202629",
+          background: entry.background === "white" ? "#fff" : "transparent"
+        })}">${escapeHtml(entry.text_content || "")}</div>
+      </div>
+    `;
+  }
+
+  const image = resolvePlacementExportImage(entry);
+  const imageHtml = image?.url
+    ? `<img src="${escapeHtml(image.url)}" alt="${escapeHtml(entry.title || image.original_filename || "Album image")}" />`
+    : `<div class="export-placeholder">No image</div>`;
+  const textParts = [];
+  if (entry.show_title) textParts.push(`<strong>${escapeHtml(entry.title || "")}</strong>`);
+  if (entry.show_caption && entry.caption) textParts.push(`<span>${escapeHtml(entry.caption)}</span>`);
+  if (entry.show_metadata) {
+    const metadata = [entry.country_name, entry.type_name, entry.year].filter(Boolean).join(" / ");
+    if (metadata) textParts.push(`<span>${escapeHtml(metadata)}</span>`);
+  }
+
+  return `
+    <div class="export-placement export-image-placement" style="${styleToCss(baseStyle)};${exportFrameCss(entry)}">
+      <div class="export-image-box">${imageHtml}</div>
+      ${textParts.length ? `<div class="export-placement-text">${textParts.join("")}</div>` : ""}
+    </div>
+  `;
+}
+
+function renderExportBackgroundImage(page) {
+  if (!page.background_image_enabled || !page.background_image?.url) return "";
+  const fit = page.background_fit || "contain";
+  if (fit === "tile") {
+    return `
+      <img class="export-preload-image" src="${escapeHtml(page.background_image.url)}" alt="" />
+      <div class="export-page-background-tile" style="${styleToCss({
+        backgroundImage: `url("${cssUrl(page.background_image.url)}")`,
+        opacity: clamp(Number(page.background_opacity ?? 1), 0, 1)
+      })}"></div>
+    `;
+  }
+  return `
+    <div class="export-page-background-image" style="${styleToCss({ opacity: clamp(Number(page.background_opacity ?? 1), 0, 1) })}">
+      <img src="${escapeHtml(page.background_image.url)}" alt="" style="${styleToCss({
+        objectFit: fit === "stretch" ? "fill" : fit
+      })}" />
+    </div>
+  `;
+}
+
+function renderExportPage(page) {
+  const { width, height } = logicalPageSize(page);
+  const items = [...(page.items || [])].sort((a, b) => Number(a.z_index || 0) - Number(b.z_index || 0));
+  return `
+    <section class="export-page" data-export-page style="${styleToCss({ width, height, background: pageBackground(page) })}">
+      ${renderExportBackgroundImage(page)}
+      ${items.map(renderExportPlacement).join("")}
+    </section>
+  `;
+}
+
+function buildAlbumExportHtml(pages, albumTitle, options = {}) {
+  const exportPages = pages.length ? pages : [{ page_width: 1000, page_height: 1400, items: [] }];
+  const pageSizes = exportPages.map(logicalPageSize);
+  const firstSize = pageSizes[0];
+  const exportWidth = options.pdf ? Math.max(...pageSizes.map((size) => size.width)) : firstSize.width;
+  const exportHeight = options.pdf ? Math.max(...pageSizes.map((size) => size.height)) : firstSize.height;
+  const pdfClass = options.pdf ? "pdf-export" : "png-export";
+  const pageMarkup = options.pdf
+    ? exportPages.map((page) => `<div class="export-page-frame" style="${styleToCss({ width: exportWidth, height: exportHeight })}">${renderExportPage(page)}</div>`).join("")
+    : exportPages.map(renderExportPage).join("");
+  return `<!doctype html>
+<html class="${pdfClass}">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(albumTitle || "Album export")}</title>
+  <style>
+    @page { size: ${exportWidth}px ${exportHeight}px; margin: 0; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: #fff; font-family: Inter, Segoe UI, Arial, sans-serif; }
+    html.png-export, body.png-export { width: ${exportWidth}px; height: ${exportHeight}px; overflow: hidden; }
+    html.pdf-export { width: ${exportWidth}px; overflow: hidden; }
+    body.pdf-export { width: ${exportWidth}px; overflow: hidden; }
+    .export-page-frame { display: grid; place-items: center; overflow: hidden; break-after: page; page-break-after: always; }
+    .export-page-frame:last-child { break-after: auto; page-break-after: auto; }
+    .export-page { position: relative; overflow: hidden; break-after: page; page-break-after: always; }
+    .export-page:last-child { break-after: auto; page-break-after: auto; }
+    body.pdf-export .export-page { break-after: auto; page-break-after: auto; }
+    .export-page-background-image, .export-page-background-tile { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+    .export-page-background-image img { display: block; width: 100%; height: 100%; object-position: center; }
+    .export-page-background-tile { background-repeat: repeat; background-position: top left; background-size: auto; }
+    .export-preload-image { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+    .export-placement { position: absolute; display: grid; transform-origin: center; overflow: hidden; min-width: 0; min-height: 0; }
+    .export-image-placement { grid-template-rows: minmax(0, 1fr) auto; gap: 8px; }
+    .export-image-box { display: grid; min-width: 0; min-height: 0; width: 100%; height: 100%; place-items: center; overflow: hidden; }
+    .export-image-box img { display: block; width: 100%; height: 100%; object-fit: contain; }
+    .export-placeholder { display: grid; width: 100%; height: 100%; place-items: center; color: #667477; background: #eef3f2; }
+    .export-placement-text { display: grid; gap: 2px; max-height: 72px; overflow: hidden; color: #263234; font-size: 14px; line-height: 1.25; }
+    .export-placement-text strong, .export-placement-text span { min-width: 0; overflow-wrap: anywhere; }
+    .export-text-content { display: grid; width: 100%; height: 100%; align-items: center; overflow: hidden; white-space: pre-wrap; padding: 4px; }
+  </style>
+</head>
+<body class="${pdfClass}">
+  ${pageMarkup}
+</body>
+</html>`;
 }
 
 function templateLayout(templateName, items, page) {
@@ -1928,7 +2173,7 @@ function AlbumItemPicker({ countries, entityGroups = [], types, pageId, title = 
   );
 }
 
-function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePage, onDeletePage, onUpdatePageItem, onAddItemToPage, onAddTextToPage, onOpenItemPicker, onPickBackground }) {
+function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePage, onDeletePage, onUpdatePageItem, onAddItemToPage, onAddTextToPage, onOpenItemPicker, onPickBackground, onExportPage, onExportAlbum }) {
   const [viewerIndex, setViewerIndex] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
   const [draftItems, setDraftItems] = useState(page.items || []);
@@ -2560,6 +2805,8 @@ function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePag
             onZoomIn={() => setEditorZoom((current) => clamp(current * 1.18, MIN_EDITOR_ZOOM, MAX_EDITOR_ZOOM))}
             onFitPage={() => fitPage("button")}
             onActualSize={() => setEditorZoom(1)}
+            onExportPage={() => onExportPage?.(page)}
+            onExportAlbum={onExportAlbum}
             onSavePage={() => (pageSettingsSaveRef.current ? pageSettingsSaveRef.current() : onUpdatePage(page))}
             onDeletePage={() => onDeletePage(page.id)}
             onUndo={undo}
@@ -2931,7 +3178,7 @@ function MultiPlacementInspector({ entries, saveStatus, onUpdateMany, onLayer, o
   );
 }
 
-function PageActionBar({ onAddItem, onAddText, onZoomOut, onZoomIn, onFitPage, onActualSize, onSavePage, onDeletePage, onUndo, onRedo, canUndo, canRedo }) {
+function PageActionBar({ onAddItem, onAddText, onZoomOut, onZoomIn, onFitPage, onActualSize, onExportPage, onExportAlbum, onSavePage, onDeletePage, onUndo, onRedo, canUndo, canRedo }) {
   return (
     <div className="page-action-bar">
       <button type="button" onClick={onAddItem}>Add item</button>
@@ -2940,6 +3187,8 @@ function PageActionBar({ onAddItem, onAddText, onZoomOut, onZoomIn, onFitPage, o
       <button type="button" onClick={onZoomIn}>Zoom +</button>
       <button type="button" onClick={onFitPage}>Fit page</button>
       <button type="button" onClick={onActualSize}>100%</button>
+      <button type="button" onClick={onExportPage}>Export page</button>
+      <button type="button" onClick={onExportAlbum}>Export PDF</button>
       <button type="button" onClick={onSavePage}>Save page</button>
       <button type="button" className="danger" onClick={onDeletePage}>Delete page</button>
       <button type="button" disabled={!canUndo} onClick={onUndo}>Undo</button>
@@ -3112,15 +3361,24 @@ function PageSettingsPanel({ page, onRegisterSave, onApplyTemplate, onUpdatePage
   );
 }
 
-function IssuingEntityCombobox({ countries, value, onChange }) {
+function SearchableCombobox({
+  rows,
+  value,
+  onChange,
+  allLabel,
+  searchPlaceholder,
+  searchLabel,
+  clearLabel,
+  className = ""
+}) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [highlighted, setHighlighted] = useState(0);
   const inputRef = useRef(null);
-  const orderedEntities = useMemo(() => orderedRows(countries), [countries]);
-  const selected = orderedEntities.find((country) => country.id === value);
+  const orderedEntries = useMemo(() => orderedRows(rows), [rows]);
+  const selected = orderedEntries.find((entry) => String(entry.id) === String(value));
   const normalizedQuery = query.trim().toLowerCase();
-  const matches = orderedEntities.filter((country) => !normalizedQuery || String(country.name || "").toLowerCase().includes(normalizedQuery));
+  const matches = orderedEntries.filter((entry) => !normalizedQuery || String(entry.name || "").toLowerCase().includes(normalizedQuery));
   const visibleMatches = matches.slice(0, 80);
 
   useEffect(() => {
@@ -3129,13 +3387,13 @@ function IssuingEntityCombobox({ countries, value, onChange }) {
     window.setTimeout(() => inputRef.current?.focus(), 0);
   }, [open]);
 
-  function selectEntity(entity) {
-    onChange(entity.id);
+  function selectEntry(entry) {
+    onChange(entry.id);
     setQuery("");
     setOpen(false);
   }
 
-  function clearEntity() {
+  function clearSelection() {
     onChange("");
     setQuery("");
     setOpen(false);
@@ -3161,19 +3419,19 @@ function IssuingEntityCombobox({ countries, value, onChange }) {
       setHighlighted((index) => Math.max(index - 1, 0));
     } else if (event.key === "Enter") {
       event.preventDefault();
-      if (visibleMatches[highlighted]) selectEntity(visibleMatches[highlighted]);
+      if (visibleMatches[highlighted]) selectEntry(visibleMatches[highlighted]);
     }
   }
 
   return (
-    <div className="entity-combobox" onBlur={(event) => {
+    <div className={`entity-combobox ${className}`} onBlur={(event) => {
       if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
     }}>
       <div className="entity-combobox-value">
         <button type="button" className="entity-combobox-trigger" onClick={() => setOpen((current) => !current)} onKeyDown={handleKeyDown}>
-          {selected ? selected.name : "None"}
+          {selected ? selected.name : allLabel}
         </button>
-        {selected && <button type="button" className="entity-combobox-clear" aria-label="Clear issuing entity" onClick={clearEntity}>X</button>}
+        {selected && <button type="button" className="entity-combobox-clear" aria-label={clearLabel} onClick={clearSelection}>X</button>}
       </div>
       {open && (
         <div className="entity-combobox-panel">
@@ -3185,30 +3443,30 @@ function IssuingEntityCombobox({ countries, value, onChange }) {
               setHighlighted(0);
             }}
             onKeyDown={handleKeyDown}
-            placeholder="Search issuing entities..."
-            aria-label="Search issuing entities"
+            placeholder={searchPlaceholder}
+            aria-label={searchLabel}
           />
           <div className="entity-combobox-results" role="listbox">
-            <button type="button" className={!value ? "active" : ""} onMouseDown={(event) => event.preventDefault()} onClick={clearEntity}>
-              None
+            <button type="button" className={!value ? "active" : ""} onMouseDown={(event) => event.preventDefault()} onClick={clearSelection}>
+              {allLabel}
             </button>
-            {visibleMatches.map((country, index) => (
+            {visibleMatches.map((entry, index) => (
               <button
                 type="button"
-                key={country.id}
-                className={`${country.id === value ? "selected" : ""} ${index === highlighted ? "active" : ""}`}
+                key={entry.id}
+                className={`${String(entry.id) === String(value) ? "selected" : ""} ${index === highlighted ? "active" : ""}`}
                 role="option"
-                aria-selected={country.id === value}
-                title={country.name}
+                aria-selected={String(entry.id) === String(value)}
+                title={entry.name}
                 onMouseDown={(event) => event.preventDefault()}
                 onMouseEnter={() => setHighlighted(index)}
-                onClick={() => selectEntity(country)}
+                onClick={() => selectEntry(entry)}
               >
-                {country.name}
+                {entry.name}
               </button>
             ))}
             {matches.length > visibleMatches.length && <p className="quiet">Showing first {visibleMatches.length} matches. Type to narrow results.</p>}
-            {visibleMatches.length === 0 && <p className="quiet">No matching issuing entities</p>}
+            {visibleMatches.length === 0 && <p className="quiet">No matching results</p>}
           </div>
         </div>
       )}
@@ -3216,13 +3474,29 @@ function IssuingEntityCombobox({ countries, value, onChange }) {
   );
 }
 
+function IssuingEntityCombobox({ countries, value, onChange }) {
+  return (
+    <SearchableCombobox
+      rows={countries}
+      value={value}
+      onChange={onChange}
+      allLabel="None"
+      searchPlaceholder="Search issuing entities..."
+      searchLabel="Search issuing entities"
+      clearLabel="Clear issuing entity"
+    />
+  );
+}
+
 function ItemForm({ title, item, countries, types, onClose, onSubmit }) {
+  const initialCustomFieldsText = customFieldsToText(item?.customFields);
   const [form, setForm] = useState(() => ({
     ...emptyItem,
     ...(item || {}),
     tags: item?.tags?.join(", ") || "",
-    customFieldsText: customFieldsToText(item?.customFields)
+    customFieldsText: initialCustomFieldsText
   }));
+  const [customFieldsOpen, setCustomFieldsOpen] = useState(() => Boolean(initialCustomFieldsText.trim()));
 
   function update(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -3251,7 +3525,19 @@ function ItemForm({ title, item, countries, types, onClose, onSubmit }) {
       >
         <header>
           <h2>{title}</h2>
-          <button type="button" onClick={onClose}>Close</button>
+          <div className="modal-header-actions">
+            <button
+              type="button"
+              className={`favorite form-favorite ${form.favorite ? "active" : ""}`}
+              onClick={() => update("favorite", !form.favorite)}
+              aria-label={form.favorite ? "Remove from favorites" : "Add to favorites"}
+              title={form.favorite ? "Remove from favorites" : "Add to favorites"}
+            >
+              {form.favorite ? "\u2605" : "\u2606"}
+            </button>
+            <button type="submit">Save</button>
+            <button type="button" onClick={onClose}>Close</button>
+          </div>
         </header>
         <div className="form-grid">
           <label>Title<input required value={form.title} onChange={(event) => update("title", event.target.value)} /></label>
@@ -3263,12 +3549,11 @@ function ItemForm({ title, item, countries, types, onClose, onSubmit }) {
           <label>Source<input value={form.source || ""} onChange={(event) => update("source", event.target.value)} /></label>
           <label>Tags<input value={form.tags || ""} onChange={(event) => update("tags", event.target.value)} /></label>
           <label className="full">Description<textarea value={form.description || ""} onChange={(event) => update("description", event.target.value)} /></label>
-          <label className="full">Custom fields<textarea value={form.customFieldsText || ""} onChange={(event) => update("customFieldsText", event.target.value)} /></label>
-          <label className="check full"><input type="checkbox" checked={Boolean(form.favorite)} onChange={(event) => update("favorite", event.target.checked)} /> Favorite</label>
+          <details className="custom-fields-section full" open={customFieldsOpen} onToggle={(event) => setCustomFieldsOpen(event.currentTarget.open)}>
+            <summary>Custom fields</summary>
+            <label>JSON-style lines<textarea value={form.customFieldsText || ""} onChange={(event) => update("customFieldsText", event.target.value)} /></label>
+          </details>
         </div>
-        <footer>
-          <button type="submit">Save</button>
-        </footer>
       </form>
     </div>
   );

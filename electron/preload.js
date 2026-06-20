@@ -43,5 +43,7 @@ contextBridge.exposeInMainWorld("archiveAPI", {
   addTextToPage: (payload) => invoke("album-text:add", payload),
   updateAlbumPageItem: (payload) => invoke("album-page-item:update", payload),
   removeItemFromPage: (id) => invoke("album-page-item:remove", id),
+  exportAlbumPagePng: (payload) => invoke("album-export:page-png", payload),
+  exportAlbumPdf: (payload) => invoke("album-export:pdf", payload),
   revealDataFolder: () => invoke("app:reveal-data-folder")
 });

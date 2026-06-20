@@ -1903,6 +1903,144 @@ ipcMain.handle("album-page-item:remove", (_event, pageItemId) => {
   return page ? getAlbum(page.album_id) : null;
 });
 
+function sanitizeExportFilename(value, fallback) {
+  const cleaned = String(value || fallback || "album-export")
+    .replace(/[<>:"/\\|?*\x00-\x1f]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned || fallback || "album-export";
+}
+
+async function chooseExportPath(payload, options) {
+  if (payload?.filePath && process.env.COLLECTION_ARCHIVE_ALLOW_EXPORT_PATH === "1") {
+    ensureDir(path.dirname(payload.filePath));
+    return payload.filePath;
+  }
+  const result = await dialog.showSaveDialog({
+    title: options.title,
+    defaultPath: sanitizeExportFilename(payload?.defaultFilename, options.defaultFilename),
+    filters: options.filters
+  });
+  return result.canceled ? null : result.filePath;
+}
+
+async function loadExportWindow(html, width, height) {
+  const safeWidth = Math.max(100, Math.ceil(Number(width || 1000)));
+  const safeHeight = Math.max(100, Math.ceil(Number(height || 1400)));
+  const win = new BrowserWindow({
+    show: false,
+    width: safeWidth,
+    height: safeHeight,
+    useContentSize: true,
+    backgroundColor: "#ffffff",
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
+    }
+  });
+  win.webContents.setZoomFactor(1);
+  await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(String(html || ""))}`);
+  const diagnostics = await win.webContents.executeJavaScript(`
+    (async () => {
+      const images = Array.from(document.images);
+      const results = await Promise.all(images.map((image) => {
+        if (image.complete && image.naturalWidth > 0) {
+          return { src: image.currentSrc || image.src, ok: true, width: image.naturalWidth, height: image.naturalHeight };
+        }
+        return new Promise((resolve) => {
+          image.addEventListener("load", () => resolve({ src: image.currentSrc || image.src, ok: true, width: image.naturalWidth, height: image.naturalHeight }), { once: true });
+          image.addEventListener("error", () => resolve({ src: image.currentSrc || image.src, ok: false, width: 0, height: 0 }), { once: true });
+        });
+      }));
+      if (document.fonts && document.fonts.ready) await document.fonts.ready;
+      const failed = results.filter((entry) => !entry.ok);
+      if (failed.length) {
+        throw new Error("Export image failed to load: " + failed.map((entry) => entry.src).join(", "));
+      }
+      document.documentElement.style.margin = "0";
+      document.documentElement.style.overflow = "hidden";
+      document.body.style.margin = "0";
+      document.body.style.overflow = "hidden";
+      const page = document.querySelector("[data-export-page]") || document.body;
+      const rect = page.getBoundingClientRect();
+      return {
+        imageCount: results.length,
+        pageWidth: Math.ceil(rect.width),
+        pageHeight: Math.ceil(rect.height),
+        scrollWidth: document.documentElement.scrollWidth,
+        scrollHeight: document.documentElement.scrollHeight,
+        clientWidth: document.documentElement.clientWidth,
+        clientHeight: document.documentElement.clientHeight,
+        hasHorizontalScrollbar: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+        hasVerticalScrollbar: document.documentElement.scrollHeight > document.documentElement.clientHeight
+      };
+    })()
+  `, true);
+  win.setContentSize(safeWidth, safeHeight);
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  return { win, diagnostics };
+}
+
+ipcMain.handle("album-export:page-png", async (_event, payload = {}) => {
+  const filePath = await chooseExportPath(payload, {
+    title: "Export album page as PNG",
+    defaultFilename: "album-page.png",
+    filters: [{ name: "PNG image", extensions: ["png"] }]
+  });
+  if (!filePath) return { canceled: true };
+
+  let win = null;
+  let diagnostics = null;
+  try {
+    const loaded = await loadExportWindow(payload.html, payload.width, payload.height);
+    win = loaded.win;
+    diagnostics = loaded.diagnostics;
+    const image = await win.webContents.capturePage({
+      x: 0,
+      y: 0,
+      width: Math.max(100, Math.ceil(Number(payload.width || 1000))),
+      height: Math.max(100, Math.ceil(Number(payload.height || 1400)))
+    });
+    const outputWidth = Math.max(100, Math.ceil(Number(payload.width || 1000)));
+    const outputHeight = Math.max(100, Math.ceil(Number(payload.height || 1400)));
+    const capturedSize = image.getSize();
+    const outputImage = capturedSize.width === outputWidth && capturedSize.height === outputHeight
+      ? image
+      : image.resize({ width: outputWidth, height: outputHeight, quality: "best" });
+    fs.writeFileSync(filePath, outputImage.toPNG());
+    return { canceled: false, filePath, diagnostics: { ...diagnostics, capturedSize, outputWidth, outputHeight } };
+  } finally {
+    if (win && !win.isDestroyed()) win.destroy();
+  }
+});
+
+ipcMain.handle("album-export:pdf", async (_event, payload = {}) => {
+  const filePath = await chooseExportPath(payload, {
+    title: "Export album as PDF",
+    defaultFilename: "album.pdf",
+    filters: [{ name: "PDF document", extensions: ["pdf"] }]
+  });
+  if (!filePath) return { canceled: true };
+
+  let win = null;
+  let diagnostics = null;
+  try {
+    const loaded = await loadExportWindow(payload.html, payload.width, payload.height);
+    win = loaded.win;
+    diagnostics = loaded.diagnostics;
+    const data = await win.webContents.printToPDF({
+      printBackground: true,
+      preferCSSPageSize: true,
+      margins: { marginType: "none" }
+    });
+    fs.writeFileSync(filePath, data);
+    return { canceled: false, filePath, diagnostics };
+  } finally {
+    if (win && !win.isDestroyed()) win.destroy();
+  }
+});
+
 ipcMain.handle("app:reveal-data-folder", () => {
   shell.openPath(paths.base);
   return paths.base;
