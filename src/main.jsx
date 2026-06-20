@@ -1403,6 +1403,7 @@ function AlbumsView({
   });
   const [albumTitle, setAlbumTitle] = useState("");
   const [albumDescription, setAlbumDescription] = useState("");
+  const [pdfQuality, setPdfQuality] = useState(() => sessionStorage.getItem("albumPdfQuality") || "medium");
 
   useEffect(() => {
     setSelectedPage(album?.pages?.[0]?.id || "");
@@ -1416,6 +1417,10 @@ function AlbumsView({
   useEffect(() => {
     sessionStorage.setItem("albumPreviewStyle", previewStyle);
   }, [previewStyle]);
+
+  useEffect(() => {
+    sessionStorage.setItem("albumPdfQuality", pdfQuality);
+  }, [pdfQuality]);
 
   const albumPages = album?.pages || [];
   const activePageId = albumPages.some((page) => page.id === selectedPage) ? selectedPage : (albumPages[0]?.id || "");
@@ -1449,9 +1454,13 @@ function AlbumsView({
         html: buildAlbumExportHtml(albumPages, album.title, { pdf: true }),
         width: pdfWidth,
         height: pdfHeight,
+        quality: pdfQuality,
         defaultFilename: `${safeExportFilename(album.title || "album")}.pdf`
       });
-      if (!result?.canceled) onMessage?.("Album PDF exported.");
+      if (!result?.canceled) {
+        const label = PDF_QUALITY_OPTIONS.find((entry) => entry.value === pdfQuality)?.label || "Medium";
+        onMessage?.(`Album PDF exported (${label}).`);
+      }
     } catch (error) {
       console.error("[album-export] PDF failed", error);
       onMessage?.(`Export failed: ${error.message}`);
@@ -1520,6 +1529,7 @@ function AlbumsView({
                   <div className="album-toolbar-actions">
                     <div className="album-export-actions">
                       <button type="button" onClick={() => exportPageImage()}>Export page</button>
+                      <PdfQualitySelect value={pdfQuality} onChange={setPdfQuality} />
                       <button type="button" onClick={exportAlbumPdf}>Export PDF</button>
                     </div>
                     <div className="segmented">
@@ -1568,6 +1578,8 @@ function AlbumsView({
                   }}
                   onExportPage={exportPageImage}
                   onExportAlbum={exportAlbumPdf}
+                  pdfQuality={pdfQuality}
+                  onPdfQualityChange={setPdfQuality}
                 />
               ))}
             </div>
@@ -1621,6 +1633,12 @@ const PAPER_PRESETS = {
 
 const MIN_EDITOR_ZOOM = 0.1;
 const MAX_EDITOR_ZOOM = 5;
+const PDF_QUALITY_OPTIONS = [
+  { value: "original", label: "Original quality" },
+  { value: "high", label: "High" },
+  { value: "medium", label: "Medium" },
+  { value: "low", label: "Low" }
+];
 
 function snapshotItems(items) {
   return items.map((item) => ({
@@ -2173,7 +2191,7 @@ function AlbumItemPicker({ countries, entityGroups = [], types, pageId, title = 
   );
 }
 
-function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePage, onDeletePage, onUpdatePageItem, onAddItemToPage, onAddTextToPage, onOpenItemPicker, onPickBackground, onExportPage, onExportAlbum }) {
+function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePage, onDeletePage, onUpdatePageItem, onAddItemToPage, onAddTextToPage, onOpenItemPicker, onPickBackground, onExportPage, onExportAlbum, pdfQuality, onPdfQualityChange }) {
   const [viewerIndex, setViewerIndex] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
   const [draftItems, setDraftItems] = useState(page.items || []);
@@ -2807,6 +2825,8 @@ function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePag
             onActualSize={() => setEditorZoom(1)}
             onExportPage={() => onExportPage?.(page)}
             onExportAlbum={onExportAlbum}
+            pdfQuality={pdfQuality}
+            onPdfQualityChange={onPdfQualityChange}
             onSavePage={() => (pageSettingsSaveRef.current ? pageSettingsSaveRef.current() : onUpdatePage(page))}
             onDeletePage={() => onDeletePage(page.id)}
             onUndo={undo}
@@ -3178,7 +3198,20 @@ function MultiPlacementInspector({ entries, saveStatus, onUpdateMany, onLayer, o
   );
 }
 
-function PageActionBar({ onAddItem, onAddText, onZoomOut, onZoomIn, onFitPage, onActualSize, onExportPage, onExportAlbum, onSavePage, onDeletePage, onUndo, onRedo, canUndo, canRedo }) {
+function PdfQualitySelect({ value, onChange }) {
+  return (
+    <label className="pdf-quality-select">
+      <span>PDF quality</span>
+      <select value={value} onChange={(event) => onChange(event.target.value)}>
+        {PDF_QUALITY_OPTIONS.map((option) => (
+          <option value={option.value} key={option.value}>{option.label}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function PageActionBar({ onAddItem, onAddText, onZoomOut, onZoomIn, onFitPage, onActualSize, onExportPage, onExportAlbum, pdfQuality, onPdfQualityChange, onSavePage, onDeletePage, onUndo, onRedo, canUndo, canRedo }) {
   return (
     <div className="page-action-bar">
       <button type="button" onClick={onAddItem}>Add item</button>
@@ -3188,6 +3221,7 @@ function PageActionBar({ onAddItem, onAddText, onZoomOut, onZoomIn, onFitPage, o
       <button type="button" onClick={onFitPage}>Fit page</button>
       <button type="button" onClick={onActualSize}>100%</button>
       <button type="button" onClick={onExportPage}>Export page</button>
+      <PdfQualitySelect value={pdfQuality} onChange={onPdfQualityChange} />
       <button type="button" onClick={onExportAlbum}>Export PDF</button>
       <button type="button" onClick={onSavePage}>Save page</button>
       <button type="button" className="danger" onClick={onDeletePage}>Delete page</button>

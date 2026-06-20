@@ -1911,6 +1911,100 @@ function sanitizeExportFilename(value, fallback) {
   return cleaned || fallback || "album-export";
 }
 
+const PDF_QUALITY_PRESETS = {
+  original: { label: "Original quality", maxDimension: Infinity, jpegQuality: 100, rewriteImages: false },
+  high: { label: "High", maxDimension: 2400, jpegQuality: 90, rewriteImages: true },
+  medium: { label: "Medium", maxDimension: 1400, jpegQuality: 78, rewriteImages: true },
+  low: { label: "Low", maxDimension: 800, jpegQuality: 58, rewriteImages: true }
+};
+
+function pdfQualityPreset(value) {
+  return PDF_QUALITY_PRESETS[value] || PDF_QUALITY_PRESETS.medium;
+}
+
+function archiveUrlToFilePath(rawUrl) {
+  const normalized = String(rawUrl || "").replace(/&amp;/g, "&");
+  return mediaFileForRequest(normalized);
+}
+
+function imageDataUrlForPdf(filePath, preset) {
+  let image = nativeImage.createFromPath(filePath);
+  if (image.isEmpty() && fs.existsSync(filePath)) {
+    image = nativeImage.createFromBuffer(fs.readFileSync(filePath));
+  }
+  if (image.isEmpty()) {
+    const bytes = fs.readFileSync(filePath);
+    return {
+      dataUrl: `data:${imageMime(path.extname(filePath))};base64,${bytes.toString("base64")}`,
+      sourceWidth: 0,
+      sourceHeight: 0,
+      outputWidth: 0,
+      outputHeight: 0,
+      outputBytes: bytes.length,
+      downscaled: false,
+      passthrough: true
+    };
+  }
+  const size = image.getSize();
+  const maxSide = Math.max(size.width, size.height);
+  const scale = Number.isFinite(preset.maxDimension) && maxSide > preset.maxDimension
+    ? preset.maxDimension / maxSide
+    : 1;
+  const outputWidth = Math.max(1, Math.round(size.width * scale));
+  const outputHeight = Math.max(1, Math.round(size.height * scale));
+  const outputImage = scale < 1
+    ? image.resize({ width: outputWidth, height: outputHeight, quality: "best" })
+    : image;
+  const jpeg = outputImage.toJPEG(preset.jpegQuality);
+  return {
+    dataUrl: `data:image/jpeg;base64,${jpeg.toString("base64")}`,
+    sourceWidth: size.width,
+    sourceHeight: size.height,
+    outputWidth,
+    outputHeight,
+    outputBytes: jpeg.length,
+    downscaled: scale < 1
+  };
+}
+
+function preparePdfHtmlForQuality(html, quality) {
+  const preset = pdfQualityPreset(quality);
+  const diagnostics = {
+    quality: Object.entries(PDF_QUALITY_PRESETS).find(([, entry]) => entry === preset)?.[0] || "medium",
+    label: preset.label,
+    rewrittenImages: 0,
+    downscaledImages: 0,
+    skippedImages: 0,
+    errors: []
+  };
+  if (!preset.rewriteImages) {
+    return { html, diagnostics };
+  }
+
+  const cache = new Map();
+  const preparedHtml = String(html || "").replace(/archive:\/\/local\/(?:images|thumbnails)\/[^"')<\s]+/g, (rawUrl) => {
+    if (cache.has(rawUrl)) return cache.get(rawUrl);
+    try {
+      const filePath = archiveUrlToFilePath(rawUrl);
+      const optimized = imageDataUrlForPdf(filePath, preset);
+      if (!optimized) {
+        diagnostics.skippedImages += 1;
+        cache.set(rawUrl, rawUrl);
+        return rawUrl;
+      }
+      diagnostics.rewrittenImages += 1;
+      if (optimized.downscaled) diagnostics.downscaledImages += 1;
+      cache.set(rawUrl, optimized.dataUrl);
+      return optimized.dataUrl;
+    } catch (error) {
+      diagnostics.errors.push({ url: rawUrl, message: error.message });
+      cache.set(rawUrl, rawUrl);
+      return rawUrl;
+    }
+  });
+  return { html: preparedHtml, diagnostics };
+}
+
 async function chooseExportPath(payload, options) {
   if (payload?.filePath && process.env.COLLECTION_ARCHIVE_ALLOW_EXPORT_PATH === "1") {
     ensureDir(path.dirname(payload.filePath));
@@ -1927,6 +2021,9 @@ async function chooseExportPath(payload, options) {
 async function loadExportWindow(html, width, height) {
   const safeWidth = Math.max(100, Math.ceil(Number(width || 1000)));
   const safeHeight = Math.max(100, Math.ceil(Number(height || 1400)));
+  const tempFolder = fs.mkdtempSync(path.join(app.getPath("temp"), "collection-archive-export-"));
+  const tempHtmlPath = path.join(tempFolder, "export.html");
+  fs.writeFileSync(tempHtmlPath, String(html || ""), "utf8");
   const win = new BrowserWindow({
     show: false,
     width: safeWidth,
@@ -1940,7 +2037,7 @@ async function loadExportWindow(html, width, height) {
     }
   });
   win.webContents.setZoomFactor(1);
-  await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(String(html || ""))}`);
+  await win.loadFile(tempHtmlPath);
   const diagnostics = await win.webContents.executeJavaScript(`
     (async () => {
       const images = Array.from(document.images);
@@ -1979,7 +2076,7 @@ async function loadExportWindow(html, width, height) {
   `, true);
   win.setContentSize(safeWidth, safeHeight);
   await new Promise((resolve) => setTimeout(resolve, 100));
-  return { win, diagnostics };
+  return { win, diagnostics, tempFolder };
 }
 
 ipcMain.handle("album-export:page-png", async (_event, payload = {}) => {
@@ -1992,10 +2089,12 @@ ipcMain.handle("album-export:page-png", async (_event, payload = {}) => {
 
   let win = null;
   let diagnostics = null;
+  let tempFolder = null;
   try {
     const loaded = await loadExportWindow(payload.html, payload.width, payload.height);
     win = loaded.win;
     diagnostics = loaded.diagnostics;
+    tempFolder = loaded.tempFolder;
     const image = await win.webContents.capturePage({
       x: 0,
       y: 0,
@@ -2012,6 +2111,7 @@ ipcMain.handle("album-export:page-png", async (_event, payload = {}) => {
     return { canceled: false, filePath, diagnostics: { ...diagnostics, capturedSize, outputWidth, outputHeight } };
   } finally {
     if (win && !win.isDestroyed()) win.destroy();
+    if (tempFolder) fs.rmSync(tempFolder, { recursive: true, force: true });
   }
 });
 
@@ -2025,19 +2125,23 @@ ipcMain.handle("album-export:pdf", async (_event, payload = {}) => {
 
   let win = null;
   let diagnostics = null;
+  let tempFolder = null;
   try {
-    const loaded = await loadExportWindow(payload.html, payload.width, payload.height);
+    const prepared = preparePdfHtmlForQuality(payload.html, payload.quality || "medium");
+    const loaded = await loadExportWindow(prepared.html, payload.width, payload.height);
     win = loaded.win;
     diagnostics = loaded.diagnostics;
+    tempFolder = loaded.tempFolder;
     const data = await win.webContents.printToPDF({
       printBackground: true,
       preferCSSPageSize: true,
       margins: { marginType: "none" }
     });
     fs.writeFileSync(filePath, data);
-    return { canceled: false, filePath, diagnostics };
+    return { canceled: false, filePath, diagnostics: { ...diagnostics, pdfQuality: prepared.diagnostics } };
   } finally {
     if (win && !win.isDestroyed()) win.destroy();
+    if (tempFolder) fs.rmSync(tempFolder, { recursive: true, force: true });
   }
 });
 

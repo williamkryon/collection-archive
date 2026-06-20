@@ -922,6 +922,24 @@ dd {
   padding: 0 10px;
 }
 
+.pdf-quality-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: #526266;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.pdf-quality-select select {
+  width: auto;
+  min-width: 116px;
+  min-height: 34px;
+  padding: 0 8px;
+}
+
 .edit-layout .album-toolbar {
   display: grid;
   gap: 6px;
@@ -1671,7 +1689,10 @@ dd {
   }
 
   .album-toolbar-actions .segmented,
-  .album-toolbar-actions button {
+  .album-toolbar-actions button,
+  .album-export-actions,
+  .pdf-quality-select,
+  .pdf-quality-select select {
     width: 100%;
   }
 }

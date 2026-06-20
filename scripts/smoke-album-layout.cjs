@@ -19,6 +19,64 @@ const pngBytes = Buffer.from(
   "base64"
 );
 
+const crcTable = Array.from({ length: 256 }, (_, index) => {
+  let value = index;
+  for (let bit = 0; bit < 8; bit += 1) {
+    value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+  }
+  return value >>> 0;
+});
+
+function crc32(buffers) {
+  let crc = 0xffffffff;
+  for (const buffer of buffers) {
+    for (const byte of buffer) {
+      crc = crcTable[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function pngChunk(type, data) {
+  const typeBuffer = Buffer.from(type, "ascii");
+  const length = Buffer.alloc(4);
+  const crc = Buffer.alloc(4);
+  length.writeUInt32BE(data.length, 0);
+  crc.writeUInt32BE(crc32([typeBuffer, data]), 0);
+  return Buffer.concat([length, typeBuffer, data, crc]);
+}
+
+function createNoisePng(width, height) {
+  const zlib = require("zlib");
+  const raw = Buffer.alloc((width * 3 + 1) * height);
+  let seed = 0x12345678;
+  for (let y = 0; y < height; y += 1) {
+    const rowStart = y * (width * 3 + 1);
+    raw[rowStart] = 0;
+    for (let x = 0; x < width; x += 1) {
+      seed = (1664525 * seed + 1013904223) >>> 0;
+      const offset = rowStart + 1 + x * 3;
+      raw[offset] = seed & 0xff;
+      raw[offset + 1] = (seed >>> 8) & 0xff;
+      raw[offset + 2] = (seed >>> 16) & 0xff;
+    }
+  }
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header[8] = 8;
+  header[9] = 2;
+  header[10] = 0;
+  header[11] = 0;
+  header[12] = 0;
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk("IHDR", header),
+    pngChunk("IDAT", zlib.deflateSync(raw, { level: 6 })),
+    pngChunk("IEND", Buffer.alloc(0))
+  ]);
+}
+
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
@@ -210,7 +268,9 @@ async function seedDatabase(dbPath) {
   const imageTwo = path.join(imagesFolder, "album-smoke-image-2.png");
   const thumbOne = path.join(thumbsFolder, "album-smoke-thumb-1.png");
   const thumbTwo = path.join(thumbsFolder, "album-smoke-thumb-2.png");
+  const exportLarge = path.join(imagesFolder, "album-smoke-large-export.png");
   [imageOne, imageTwo, thumbOne, thumbTwo].forEach((file) => fs.writeFileSync(file, pngBytes));
+  fs.writeFileSync(exportLarge, createNoisePng(1600, 1200));
 
   const now = new Date().toISOString();
   runStatement(db, "INSERT INTO countries (id, name, sort_key, sort_order, notes, created_at) VALUES (?, ?, ?, ?, ?, ?)", ["country-jp", "Japan", "Zulu", 0, "", now]);
@@ -281,22 +341,33 @@ async function main() {
   await waitFor(client, "Boolean(window.archiveAPI && document.querySelector('.app'))", "App did not render");
 
   const exportSmokePng = path.join(tempRoot, "export-smoke-page.png");
-  const exportSmokePdf = path.join(tempRoot, "export-smoke-album.pdf");
+  const exportSmokePdfOriginal = path.join(tempRoot, "export-smoke-album-original.pdf");
+  const exportSmokePdfLow = path.join(tempRoot, "export-smoke-album-low.pdf");
   const exportSmoke = await evaluate(
     client,
     `(async () => {
-      const html = '<!doctype html><html class="png-export"><head><style>@page{size:120px 180px;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;overflow:hidden;width:120px;height:180px}.page{position:relative;width:120px;height:180px;overflow:hidden;background:#f7f0dd;color:#1f5d57;font:700 14px Arial}.bg{position:absolute;inset:0;opacity:.45;z-index:0}.bg img{display:block;width:100%;height:100%;object-fit:contain}.placement{position:absolute;left:40px;top:52px;width:42px;height:72px;z-index:1}.placement img{display:block;width:100%;height:100%;object-fit:contain}.text{position:absolute;left:8px;right:8px;bottom:10px;z-index:2;text-align:center}</style></head><body class="png-export"><section class="page" data-export-page><div class="bg"><img src="archive://local/images/album-smoke-image-1.png" alt=""></div><div class="placement"><img src="archive://local/images/album-smoke-image-2.png" alt=""></div><div class="text">Export smoke</div></section></body></html>';
+      const html = '<!doctype html><html class="png-export"><head><style>@page{size:120px 180px;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;overflow:hidden;width:120px;height:180px}.page{position:relative;width:120px;height:180px;overflow:hidden;background:#f7f0dd;color:#1f5d57;font:700 14px Arial}.bg{position:absolute;inset:0;opacity:.45;z-index:0}.bg img{display:block;width:100%;height:100%;object-fit:contain}.placement{position:absolute;left:40px;top:52px;width:42px;height:72px;z-index:1}.placement img{display:block;width:100%;height:100%;object-fit:contain}.large{position:absolute;left:2px;top:2px;width:24px;height:18px;opacity:.01;z-index:1}.large img{display:block;width:100%;height:100%;object-fit:cover}.text{position:absolute;left:8px;right:8px;bottom:10px;z-index:2;text-align:center}</style></head><body class="png-export"><section class="page" data-export-page><div class="bg"><img src="archive://local/images/album-smoke-image-1.png" alt=""></div><div class="placement"><img src="archive://local/images/album-smoke-image-2.png" alt=""></div><div class="large"><img src="archive://local/images/album-smoke-large-export.png" alt=""></div><div class="text">Export smoke</div></section></body></html>';
       const png = await window.archiveAPI.exportAlbumPagePng({ html, width: 120, height: 180, filePath: ${JSON.stringify(exportSmokePng)}, defaultFilename: 'export-smoke-page.png' });
-      const pdf = await window.archiveAPI.exportAlbumPdf({ html, width: 120, height: 180, filePath: ${JSON.stringify(exportSmokePdf)}, defaultFilename: 'export-smoke-album.pdf' });
-      return { png, pdf };
+      const pdfOriginal = await window.archiveAPI.exportAlbumPdf({ html, width: 120, height: 180, quality: 'original', filePath: ${JSON.stringify(exportSmokePdfOriginal)}, defaultFilename: 'export-smoke-album-original.pdf' });
+      const pdfLow = await window.archiveAPI.exportAlbumPdf({ html, width: 120, height: 180, quality: 'low', filePath: ${JSON.stringify(exportSmokePdfLow)}, defaultFilename: 'export-smoke-album-low.pdf' });
+      return { png, pdfOriginal, pdfLow };
     })()`
   );
   assert(!exportSmoke.png.canceled && fs.existsSync(exportSmokePng) && fs.statSync(exportSmokePng).size > 20, `PNG export smoke failed: ${JSON.stringify(exportSmoke)}`);
-  assert(!exportSmoke.pdf.canceled && fs.existsSync(exportSmokePdf) && fs.statSync(exportSmokePdf).size > 20, `PDF export smoke failed: ${JSON.stringify(exportSmoke)}`);
+  assert(!exportSmoke.pdfOriginal.canceled && fs.existsSync(exportSmokePdfOriginal) && fs.statSync(exportSmokePdfOriginal).size > 20, `Original PDF export smoke failed: ${JSON.stringify(exportSmoke)}`);
+  assert(!exportSmoke.pdfLow.canceled && fs.existsSync(exportSmokePdfLow) && fs.statSync(exportSmokePdfLow).size > 20, `Low-quality PDF export smoke failed: ${JSON.stringify(exportSmoke)}`);
   const exportPngSize = pngDimensions(exportSmokePng);
   assert(exportPngSize.width === 120 && exportPngSize.height === 180, `PNG export dimensions are not full logical page size: ${JSON.stringify(exportPngSize)}`);
-  assert(exportSmoke.png.diagnostics.imageCount >= 2, `PNG export did not wait for background and placement images: ${JSON.stringify(exportSmoke.png.diagnostics)}`);
-  assert(exportSmoke.pdf.diagnostics.imageCount >= 2, `PDF export did not wait for background and placement images: ${JSON.stringify(exportSmoke.pdf.diagnostics)}`);
+  assert(exportSmoke.png.diagnostics.imageCount >= 3, `PNG export did not wait for background and placement images: ${JSON.stringify(exportSmoke.png.diagnostics)}`);
+  assert(exportSmoke.pdfOriginal.diagnostics.imageCount >= 3, `Original PDF export did not wait for images: ${JSON.stringify(exportSmoke.pdfOriginal.diagnostics)}`);
+  assert(exportSmoke.pdfLow.diagnostics.imageCount >= 3, `Low-quality PDF export did not wait for images: ${JSON.stringify(exportSmoke.pdfLow.diagnostics)}`);
+  assert(exportSmoke.pdfOriginal.diagnostics.pdfQuality.quality === "original", `PDF export did not use original quality: ${JSON.stringify(exportSmoke.pdfOriginal.diagnostics.pdfQuality)}`);
+  assert(exportSmoke.pdfLow.diagnostics.pdfQuality.quality === "low", `PDF export did not use selected quality: ${JSON.stringify(exportSmoke.pdfLow.diagnostics.pdfQuality)}`);
+  assert(exportSmoke.pdfLow.diagnostics.pdfQuality.rewrittenImages >= 3, `PDF export did not rewrite local images for lower quality: ${JSON.stringify(exportSmoke.pdfLow.diagnostics.pdfQuality)}`);
+  assert(exportSmoke.pdfLow.diagnostics.pdfQuality.downscaledImages >= 1, `PDF export did not downscale the large image: ${JSON.stringify(exportSmoke.pdfLow.diagnostics.pdfQuality)}`);
+  const originalPdfSize = fs.statSync(exportSmokePdfOriginal).size;
+  const lowPdfSize = fs.statSync(exportSmokePdfLow).size;
+  assert(lowPdfSize <= originalPdfSize, `Low-quality PDF is larger than original-quality PDF: ${JSON.stringify({ originalPdfSize, lowPdfSize })}`);
   assert(!exportSmoke.png.diagnostics.hasHorizontalScrollbar && !exportSmoke.png.diagnostics.hasVerticalScrollbar, `PNG export had scrollbars: ${JSON.stringify(exportSmoke.png.diagnostics)}`);
 
   const data = await evaluate(
