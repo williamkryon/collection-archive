@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld("archiveAPI", {
   queryGalleryItems: (payload) => invoke("gallery:query", payload),
   queryRecentItems: (payload) => invoke("items:recent", payload),
   queryFavoriteItems: (payload) => invoke("items:favorites", payload),
+  getStartupTimings: () => invoke("app:startup-timings"),
   createCountry: (payload) => invoke("country:create", payload),
   updateCountry: (payload) => invoke("country:update", payload),
   reorderCountries: (ids) => invoke("country:reorder", ids),

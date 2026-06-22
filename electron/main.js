@@ -8,9 +8,14 @@ const initSqlJs = require("sql.js");
 let db;
 let SQL;
 let paths;
+let databaseReady = false;
+let mediaProtocolRegistered = false;
+const mainStartedAt = performance.now();
+const startupTimings = [];
 
 const now = () => new Date().toISOString();
 const id = () => crypto.randomUUID();
+const startupTraceOn = () => process.env.ARCHIVE_PERF_TRACE === "1" || !app.isPackaged;
 const perfTraceOn = () => process.env.ARCHIVE_PERF_TRACE === "1";
 
 function perfTrace(event, data = {}) {
@@ -20,6 +25,40 @@ function perfTrace(event, data = {}) {
     t: Math.round(performance.now() * 10) / 10,
     ...data
   })}`);
+}
+
+function startupLog(event, data = {}) {
+  if (!startupTraceOn()) return;
+  console.log(`[startup] ${JSON.stringify({
+    event,
+    t: Math.round((performance.now() - mainStartedAt) * 10) / 10,
+    ...data
+  })}`);
+}
+
+async function measureStartup(label, fn) {
+  const started = performance.now();
+  startupLog(`${label}.start`);
+  try {
+    const result = await fn();
+    const ms = Math.round((performance.now() - started) * 10) / 10;
+    startupTimings.push({ label, ms });
+    startupLog(`${label}.end`, { ms });
+    return result;
+  } catch (error) {
+    const ms = Math.round((performance.now() - started) * 10) / 10;
+    startupTimings.push({ label, ms, error: error.message });
+    startupLog(`${label}.error`, { ms, message: error.message });
+    throw error;
+  }
+}
+
+function startupSummary(extra = {}) {
+  startupLog("summary", {
+    totalMs: Math.round((performance.now() - mainStartedAt) * 10) / 10,
+    timings: startupTimings,
+    ...extra
+  });
 }
 
 protocol.registerSchemesAsPrivileged([
@@ -103,6 +142,8 @@ function mediaFileForRequest(requestUrl) {
 }
 
 function registerMediaProtocol() {
+  if (mediaProtocolRegistered) return;
+  mediaProtocolRegistered = true;
   protocol.handle("archive", async (request) => {
     try {
       const filePath = mediaFileForRequest(request.url);
@@ -159,7 +200,33 @@ function saveDb() {
   fs.writeFileSync(paths.db, Buffer.from(db.export()));
 }
 
-function execSchema() {
+function tableExists(name) {
+  return Boolean(get("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?", [name]));
+}
+
+function indexExists(name) {
+  return Boolean(get("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?", [name]));
+}
+
+function execSchema(databaseWasCreated = false) {
+  let dirty = databaseWasCreated;
+  const expectedTables = [
+    "countries",
+    "collection_types",
+    "entity_groups",
+    "entity_group_memberships",
+    "items",
+    "images",
+    "albums",
+    "album_pages",
+    "album_page_items",
+    "album_text_items",
+    "album_page_templates"
+  ];
+  if (!dirty) {
+    dirty = expectedTables.some((name) => !tableExists(name));
+  }
+
   db.exec(`
     PRAGMA foreign_keys = ON;
 
@@ -310,31 +377,53 @@ function execSchema() {
       rotation REAL DEFAULT 0,
       z_index INTEGER DEFAULT 0,
       text_content TEXT DEFAULT '',
+      font_family TEXT DEFAULT 'system',
       font_size INTEGER DEFAULT 24,
       bold INTEGER DEFAULT 0,
       italic INTEGER DEFAULT 0,
+      underline INTEGER DEFAULT 0,
       text_align TEXT DEFAULT 'center',
+      line_height REAL DEFAULT 1.25,
       text_color TEXT DEFAULT '#202629',
       background TEXT DEFAULT 'transparent',
+      background_color TEXT DEFAULT '#ffffff',
+      background_opacity REAL DEFAULT 0,
+      border_color TEXT DEFAULT '#202629',
+      border_width REAL DEFAULT 0,
+      border_radius REAL DEFAULT 0,
+      padding REAL DEFAULT 8,
       locked INTEGER DEFAULT 0,
       sort_order INTEGER DEFAULT 0,
       created_at TEXT NOT NULL,
       FOREIGN KEY (page_id) REFERENCES album_pages(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS album_page_templates (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      template_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `);
   const countryColumns = all("PRAGMA table_info(countries)").map((column) => column.name);
   if (!countryColumns.includes("sort_key")) {
     db.exec("ALTER TABLE countries ADD COLUMN sort_key TEXT DEFAULT ''");
+    dirty = true;
   }
   if (!countryColumns.includes("sort_order")) {
     db.exec("ALTER TABLE countries ADD COLUMN sort_order INTEGER DEFAULT 0");
+    dirty = true;
   }
   if (!countryColumns.includes("notes")) {
     db.exec("ALTER TABLE countries ADD COLUMN notes TEXT DEFAULT ''");
+    dirty = true;
   }
   const pageColumns = all("PRAGMA table_info(album_pages)").map((column) => column.name);
   if (!pageColumns.includes("column_count")) {
     db.exec("ALTER TABLE album_pages ADD COLUMN column_count INTEGER DEFAULT 3");
+    dirty = true;
   }
   [
     ["page_width", "INTEGER DEFAULT 1000"],
@@ -354,24 +443,30 @@ function execSchema() {
   ].forEach(([name, definition]) => {
     if (!pageColumns.includes(name)) {
       db.exec(`ALTER TABLE album_pages ADD COLUMN ${name} ${definition}`);
+      dirty = true;
     }
   });
   if (!pageColumns.includes("layout_version")) {
     db.exec("ALTER TABLE album_pages ADD COLUMN layout_version INTEGER DEFAULT 1");
+    dirty = true;
   }
   const typeColumns = all("PRAGMA table_info(collection_types)").map((column) => column.name);
   if (!typeColumns.includes("sort_key")) {
     db.exec("ALTER TABLE collection_types ADD COLUMN sort_key TEXT DEFAULT ''");
+    dirty = true;
   }
   if (!typeColumns.includes("sort_order")) {
     db.exec("ALTER TABLE collection_types ADD COLUMN sort_order INTEGER DEFAULT 0");
+    dirty = true;
   }
   if (!typeColumns.includes("custom_fields_json")) {
     db.exec("ALTER TABLE collection_types ADD COLUMN custom_fields_json TEXT DEFAULT '{}'");
+    dirty = true;
   }
   const pageItemColumns = all("PRAGMA table_info(album_page_items)").map((column) => column.name);
   if (!pageItemColumns.includes("image_id")) {
     db.exec("ALTER TABLE album_page_items ADD COLUMN image_id TEXT");
+    dirty = true;
   }
   [
     ["rotation", "REAL DEFAULT 0"],
@@ -389,58 +484,96 @@ function execSchema() {
   ].forEach(([name, definition]) => {
     if (!pageItemColumns.includes(name)) {
       db.exec(`ALTER TABLE album_page_items ADD COLUMN ${name} ${definition}`);
+      dirty = true;
     }
   });
-  normalizeSortOrder("countries");
-  normalizeSortOrder("collection_types");
-  normalizeSortOrder("entity_groups");
-  migrateAlbumLayouts();
-  createIndexes();
-  saveDb();
+  const textItemColumns = all("PRAGMA table_info(album_text_items)").map((column) => column.name);
+  [
+    ["font_family", "TEXT DEFAULT 'system'"],
+    ["underline", "INTEGER DEFAULT 0"],
+    ["line_height", "REAL DEFAULT 1.25"],
+    ["background_color", "TEXT DEFAULT '#ffffff'"],
+    ["background_opacity", "REAL DEFAULT 0"],
+    ["border_color", "TEXT DEFAULT '#202629'"],
+    ["border_width", "REAL DEFAULT 0"],
+    ["border_radius", "REAL DEFAULT 0"],
+    ["padding", "REAL DEFAULT 8"]
+  ].forEach(([name, definition]) => {
+    if (!textItemColumns.includes(name)) {
+      db.exec(`ALTER TABLE album_text_items ADD COLUMN ${name} ${definition}`);
+      dirty = true;
+    }
+  });
+  dirty = normalizeSortOrder("countries") || dirty;
+  dirty = normalizeSortOrder("collection_types") || dirty;
+  dirty = normalizeSortOrder("entity_groups") || dirty;
+  dirty = migrateAlbumLayouts() || dirty;
+  dirty = createIndexes() || dirty;
+  if (dirty) {
+    saveDb();
+  }
 }
 
 function createIndexes() {
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_items_country_id ON items(country_id);
-    CREATE INDEX IF NOT EXISTS idx_items_type_id ON items(type_id);
-    CREATE INDEX IF NOT EXISTS idx_items_year ON items(year);
-    CREATE INDEX IF NOT EXISTS idx_items_favorite ON items(favorite);
-    CREATE INDEX IF NOT EXISTS idx_items_updated_at ON items(updated_at);
-    CREATE INDEX IF NOT EXISTS idx_items_title ON items(title COLLATE NOCASE);
-    CREATE INDEX IF NOT EXISTS idx_items_tags_json ON items(tags_json);
-    CREATE INDEX IF NOT EXISTS idx_images_item_id ON images(item_id);
-    CREATE INDEX IF NOT EXISTS idx_images_item_sort ON images(item_id, sort_order, created_at);
-    CREATE INDEX IF NOT EXISTS idx_album_page_items_page_id ON album_page_items(page_id);
-    CREATE INDEX IF NOT EXISTS idx_album_page_items_item_id ON album_page_items(item_id);
-    CREATE INDEX IF NOT EXISTS idx_album_page_items_image_id ON album_page_items(image_id);
-    CREATE INDEX IF NOT EXISTS idx_album_page_items_page_sort ON album_page_items(page_id, sort_order, created_at);
-    CREATE INDEX IF NOT EXISTS idx_album_text_items_page_sort ON album_text_items(page_id, sort_order, created_at);
-    CREATE INDEX IF NOT EXISTS idx_album_pages_background_image_id ON album_pages(background_image_id);
-    CREATE INDEX IF NOT EXISTS idx_countries_sort_order ON countries(sort_order);
-    CREATE INDEX IF NOT EXISTS idx_collection_types_sort_order ON collection_types(sort_order);
-    CREATE INDEX IF NOT EXISTS idx_entity_groups_sort_order ON entity_groups(sort_order);
-    CREATE INDEX IF NOT EXISTS idx_entity_group_memberships_entity ON entity_group_memberships(entity_id);
-    CREATE INDEX IF NOT EXISTS idx_entity_group_memberships_group ON entity_group_memberships(group_id);
-  `);
+  let dirty = false;
+  [
+    ["idx_items_country_id", "CREATE INDEX idx_items_country_id ON items(country_id)"],
+    ["idx_items_type_id", "CREATE INDEX idx_items_type_id ON items(type_id)"],
+    ["idx_items_year", "CREATE INDEX idx_items_year ON items(year)"],
+    ["idx_items_favorite", "CREATE INDEX idx_items_favorite ON items(favorite)"],
+    ["idx_items_updated_at", "CREATE INDEX idx_items_updated_at ON items(updated_at)"],
+    ["idx_items_title", "CREATE INDEX idx_items_title ON items(title COLLATE NOCASE)"],
+    ["idx_items_tags_json", "CREATE INDEX idx_items_tags_json ON items(tags_json)"],
+    ["idx_images_item_id", "CREATE INDEX idx_images_item_id ON images(item_id)"],
+    ["idx_images_item_sort", "CREATE INDEX idx_images_item_sort ON images(item_id, sort_order, created_at)"],
+    ["idx_album_page_items_page_id", "CREATE INDEX idx_album_page_items_page_id ON album_page_items(page_id)"],
+    ["idx_album_page_items_item_id", "CREATE INDEX idx_album_page_items_item_id ON album_page_items(item_id)"],
+    ["idx_album_page_items_image_id", "CREATE INDEX idx_album_page_items_image_id ON album_page_items(image_id)"],
+    ["idx_album_page_items_page_sort", "CREATE INDEX idx_album_page_items_page_sort ON album_page_items(page_id, sort_order, created_at)"],
+    ["idx_album_text_items_page_sort", "CREATE INDEX idx_album_text_items_page_sort ON album_text_items(page_id, sort_order, created_at)"],
+    ["idx_album_pages_background_image_id", "CREATE INDEX idx_album_pages_background_image_id ON album_pages(background_image_id)"],
+    ["idx_album_page_templates_updated_at", "CREATE INDEX idx_album_page_templates_updated_at ON album_page_templates(updated_at)"],
+    ["idx_countries_sort_order", "CREATE INDEX idx_countries_sort_order ON countries(sort_order)"],
+    ["idx_collection_types_sort_order", "CREATE INDEX idx_collection_types_sort_order ON collection_types(sort_order)"],
+    ["idx_entity_groups_sort_order", "CREATE INDEX idx_entity_groups_sort_order ON entity_groups(sort_order)"],
+    ["idx_entity_group_memberships_entity", "CREATE INDEX idx_entity_group_memberships_entity ON entity_group_memberships(entity_id)"],
+    ["idx_entity_group_memberships_group", "CREATE INDEX idx_entity_group_memberships_group ON entity_group_memberships(group_id)"]
+  ].forEach(([name, statement]) => {
+    if (!indexExists(name)) {
+      db.exec(statement);
+      dirty = true;
+    }
+  });
+  return dirty;
 }
 
 async function initDatabase() {
-  paths = getPaths();
-  ensureDir(paths.base);
-  ensureDir(paths.images);
-  ensureDir(paths.thumbs);
+  const dbExistedBeforeOpen = fs.existsSync(getPaths().db);
 
-  SQL = await initSqlJs({
-    locateFile: sqlJsWasmPath
+  await measureStartup("paths.ensure", async () => {
+    paths = getPaths();
+    ensureDir(paths.base);
+    ensureDir(paths.images);
+    ensureDir(paths.thumbs);
   });
 
-  if (fs.existsSync(paths.db)) {
-    db = new SQL.Database(fs.readFileSync(paths.db));
-  } else {
-    db = new SQL.Database();
-  }
+  SQL = await measureStartup("sqljs.init", () => initSqlJs({
+    locateFile: sqlJsWasmPath
+  }));
 
-  execSchema();
+  await measureStartup("database.open", async () => {
+    if (fs.existsSync(paths.db)) {
+      const dbBytes = await measureStartup("database.file.read", () => fs.promises.readFile(paths.db));
+      db = new SQL.Database(dbBytes);
+      startupLog("database.file.loaded", { bytes: dbBytes.byteLength });
+    } else {
+      db = new SQL.Database();
+      startupLog("database.file.created");
+    }
+  });
+
+  await measureStartup("database.schema", () => execSchema(!dbExistedBeforeOpen));
+  databaseReady = true;
 }
 
 function parseJson(value, fallback) {
@@ -662,10 +795,23 @@ function albumList() {
 }
 
 function normalizeSortOrder(table) {
-  const rows = all(`SELECT id FROM ${table} ORDER BY sort_order ASC, created_at ASC, name ASC`);
-  rows.forEach((row, index) => {
-    run(`UPDATE ${table} SET sort_order = ? WHERE id = ?`, [index, row.id]);
-  });
+  const rows = all(`SELECT id, sort_order FROM ${table} ORDER BY sort_order ASC, created_at ASC, name ASC`);
+  const changedRows = rows.filter((row, index) => Number(row.sort_order) !== index);
+  if (changedRows.length === 0) return false;
+
+  db.exec("BEGIN TRANSACTION");
+  try {
+    rows.forEach((row, index) => {
+      if (Number(row.sort_order) !== index) {
+        bindAndStep(`UPDATE ${table} SET sort_order = ? WHERE id = ?`, [index, row.id]);
+      }
+    });
+    db.exec("COMMIT");
+    return true;
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
 }
 
 function nextSortOrder(table) {
@@ -701,6 +847,10 @@ function reorderRows(table, ids) {
 
 function migrateAlbumLayouts() {
   const pages = all("SELECT * FROM album_pages WHERE COALESCE(layout_version, 1) < 2");
+  if (pages.length === 0) return false;
+
+  db.exec("BEGIN TRANSACTION");
+  try {
   pages.forEach((page) => {
     const pageWidth = Number(page.page_width || 1000);
     const pageHeight = Number(page.page_height || 1400);
@@ -716,7 +866,7 @@ function migrateAlbumLayouts() {
     placements.forEach((placement, index) => {
       const column = index % columns;
       const row = Math.floor(index / columns);
-      run(
+      bindAndStep(
         `
           UPDATE album_page_items
           SET x = ?, y = ?, width = ?, height = ?, rotation = 0, z_index = ?, show_caption = 1,
@@ -735,7 +885,7 @@ function migrateAlbumLayouts() {
       );
     });
 
-    run(
+    bindAndStep(
       `
         UPDATE album_pages
         SET page_width = ?, page_height = ?, orientation = ?, background = COALESCE(background, 'white'),
@@ -747,6 +897,12 @@ function migrateAlbumLayouts() {
       [pageWidth, pageHeight, pageWidth >= pageHeight ? "landscape" : "portrait", page.id]
     );
   });
+    db.exec("COMMIT");
+    return true;
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
 }
 
 function getLibrary() {
@@ -797,6 +953,140 @@ function cleanupItemImages(images) {
   images.forEach((image) => cleanupImageFiles(image));
 }
 
+function textStylePayload(source = {}) {
+  return {
+    font_family: String(source.font_family || "system"),
+    font_size: Number(source.font_size || 24),
+    bold: source.bold ? 1 : 0,
+    italic: source.italic ? 1 : 0,
+    underline: source.underline ? 1 : 0,
+    text_align: ["left", "center", "right"].includes(source.text_align) ? source.text_align : "center",
+    line_height: Number(source.line_height || 1.25),
+    text_color: String(source.text_color || "#202629"),
+    background: String(source.background || "transparent"),
+    background_color: String(source.background_color || "#ffffff"),
+    background_opacity: Number(source.background_opacity ?? (source.background === "white" ? 1 : 0)),
+    border_color: String(source.border_color || "#202629"),
+    border_width: Number(source.border_width || 0),
+    border_radius: Number(source.border_radius || 0),
+    padding: Number(source.padding ?? 8)
+  };
+}
+
+function mapTextRow(row) {
+  const style = textStylePayload(row);
+  return {
+    ...row,
+    ...style,
+    element_type: "text",
+    x: Number(row.x || 0),
+    y: Number(row.y || 0),
+    width: Number(row.width || 260),
+    height: Number(row.height || 120),
+    rotation: Number(row.rotation || 0),
+    z_index: Number(row.z_index || 0),
+    font_size: style.font_size,
+    bold: Boolean(row.bold),
+    italic: Boolean(row.italic),
+    underline: Boolean(row.underline),
+    locked: Boolean(row.locked),
+    show_caption: false,
+    show_title: false,
+    show_metadata: false,
+    title: "Text box"
+  };
+}
+
+function splashHtml(status = "Loading database...") {
+  const safeStatus = String(status).replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  }[char]));
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Collection Archive</title>
+  <style>
+    :root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: radial-gradient(circle at 50% 32%, #fffaf0 0, #f4ead7 34%, #e8eee8 100%);
+      color: #202629;
+    }
+    .splash {
+      width: min(420px, calc(100vw - 48px));
+      border: 1px solid #d5ded9;
+      border-radius: 10px;
+      padding: 28px;
+      background: rgba(255, 253, 248, 0.9);
+      box-shadow: 0 22px 58px rgba(35, 32, 25, 0.16);
+      text-align: center;
+    }
+    .mark {
+      width: 44px;
+      height: 54px;
+      margin: 0 auto 16px;
+      border: 1px solid #d7c9ae;
+      border-radius: 4px;
+      background: linear-gradient(180deg, #fffaf0, #f4ead7);
+      box-shadow: 0 8px 18px rgba(35, 32, 25, 0.12);
+    }
+    h1 { margin: 0 0 8px; font-size: 22px; letter-spacing: 0; }
+    p { margin: 0; color: #657375; font-size: 14px; }
+    .spinner {
+      width: 24px;
+      height: 24px;
+      margin: 20px auto 0;
+      border: 3px solid #d5ded9;
+      border-top-color: #1f5d57;
+      border-radius: 999px;
+      animation: spin 800ms linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <main class="splash" role="status" aria-live="polite">
+    <div class="mark" aria-hidden="true"></div>
+    <h1>Collection Archive</h1>
+    <p>${safeStatus}</p>
+    <div class="spinner" aria-hidden="true"></div>
+  </main>
+</body>
+</html>`;
+}
+
+function startupErrorHtml(error) {
+  const message = String(error?.message || error || "Startup failed").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  }[char]));
+  return splashHtml(`Startup failed: ${message}`);
+}
+
+function loadHtml(win, html) {
+  return win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+}
+
+function loadApp(win) {
+  if (process.env.VITE_DEV_SERVER_URL) {
+    return win.loadURL(process.env.VITE_DEV_SERVER_URL);
+  }
+  return win.loadFile(path.join(app.getAppPath(), "dist", "index.html"));
+}
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1360,
@@ -812,15 +1102,19 @@ function createWindow() {
     }
   });
 
-  win.webContents.session.clearCache().catch((error) => {
-    console.warn("[app] failed to clear renderer cache", error);
+  if (process.env.ARCHIVE_CLEAR_RENDERER_CACHE === "1") {
+    win.webContents.session.clearCache().catch((error) => {
+      console.warn("[app] failed to clear renderer cache", error);
+    });
+  }
+
+  win.__archiveSplashLoaded = loadHtml(win, splashHtml("Loading database...")).catch((error) => {
+    if (error?.code !== "ERR_ABORTED" && error?.errno !== -3) {
+      console.warn("[startup] failed to load splash", error);
+    }
   });
 
-  if (process.env.VITE_DEV_SERVER_URL) {
-    win.loadURL(process.env.VITE_DEV_SERVER_URL);
-  } else {
-    win.loadFile(path.join(app.getAppPath(), "dist", "index.html"));
-  }
+  return win;
 }
 
 function imageMime(extension) {
@@ -999,7 +1293,11 @@ function handlePerfIpc(channel, handler) {
   });
 }
 
-ipcMain.handle("library:get", () => getLibrary());
+handlePerfIpc("library:get", () => getLibrary());
+ipcMain.handle("app:startup-timings", () => ({
+  totalMs: Math.round((performance.now() - mainStartedAt) * 10) / 10,
+  timings: startupTimings
+}));
 handlePerfIpc("items:query", (_event, payload) => itemPage(payload || {}, false));
 handlePerfIpc("items:count", (_event, payload) => countItems(payload || {}, false));
 handlePerfIpc("gallery:query", (_event, payload) => itemPage(payload || {}, true));
@@ -1063,7 +1361,7 @@ ipcMain.handle("country:delete", (_event, payload) => {
   }
 
   run("DELETE FROM countries WHERE id = ?", [countryId]);
-  normalizeSortOrder("countries");
+  if (normalizeSortOrder("countries")) saveDb();
   return { deleted: true };
 });
 
@@ -1108,7 +1406,7 @@ ipcMain.handle("entity-group:reorder", (_event, ids) => {
 
 ipcMain.handle("entity-group:delete", (_event, groupId) => {
   run("DELETE FROM entity_groups WHERE id = ?", [Number(groupId)]);
-  normalizeSortOrder("entity_groups");
+  if (normalizeSortOrder("entity_groups")) saveDb();
   return getLibrary();
 });
 
@@ -1190,7 +1488,7 @@ ipcMain.handle("type:delete", (_event, payload) => {
   }
 
   run("DELETE FROM collection_types WHERE id = ?", [typeId]);
-  normalizeSortOrder("collection_types");
+  if (normalizeSortOrder("collection_types")) saveDb();
   return { deleted: true };
 });
 
@@ -1687,14 +1985,17 @@ function copyAlbumPage(sourcePageId, targetAlbumId, options = {}) {
 
     const textItems = all("SELECT * FROM album_text_items WHERE page_id = ? ORDER BY sort_order ASC, created_at ASC", [sourcePageId]);
     textItems.forEach((entry) => {
+      const style = textStylePayload(entry);
       bindAndStep(
         `
           INSERT INTO album_text_items (
             id, page_id, x, y, width, height, rotation, z_index, text_content,
-            font_size, bold, italic, text_align, text_color, background, locked,
+            font_family, font_size, bold, italic, underline, text_align, line_height,
+            text_color, background, background_color, background_opacity, border_color,
+            border_width, border_radius, padding, locked,
             sort_order, created_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         [
           id(),
@@ -1706,12 +2007,21 @@ function copyAlbumPage(sourcePageId, targetAlbumId, options = {}) {
           Number(entry.rotation || 0),
           Number(entry.z_index || 0),
           entry.text_content || "",
-          Number(entry.font_size || 24),
+          style.font_family,
+          style.font_size,
           entry.bold ? 1 : 0,
           entry.italic ? 1 : 0,
-          entry.text_align || "center",
-          entry.text_color || "#202629",
-          entry.background || "transparent",
+          entry.underline ? 1 : 0,
+          style.text_align,
+          style.line_height,
+          style.text_color,
+          style.background,
+          style.background_color,
+          style.background_opacity,
+          style.border_color,
+          style.border_width,
+          style.border_radius,
+          style.padding,
           entry.locked ? 1 : 0,
           Number(entry.sort_order || 0),
           timestamp
@@ -1842,24 +2152,7 @@ function getAlbum(albumId) {
         ORDER BY sort_order ASC, created_at ASC
       `,
       [page.id]
-    ).map((row) => ({
-      ...row,
-      element_type: "text",
-      x: Number(row.x || 0),
-      y: Number(row.y || 0),
-      width: Number(row.width || 260),
-      height: Number(row.height || 120),
-      rotation: Number(row.rotation || 0),
-      z_index: Number(row.z_index || 0),
-      font_size: Number(row.font_size || 24),
-      bold: Boolean(row.bold),
-      italic: Boolean(row.italic),
-      locked: Boolean(row.locked),
-      show_caption: false,
-      show_title: false,
-      show_metadata: false,
-      title: "Text box"
-    }));
+    ).map(mapTextRow);
 
     const backgroundImage = page.background_image_id
       ? get("SELECT * FROM images WHERE id = ?", [page.background_image_id])
@@ -1954,12 +2247,15 @@ ipcMain.handle("album-page-item:update", (_event, payload) => {
       [payload.id]
     );
     if (!row) return null;
+    const style = textStylePayload(payload);
     run(
       `
         UPDATE album_text_items
         SET x = ?, y = ?, width = ?, height = ?, rotation = ?, z_index = ?,
-            text_content = ?, font_size = ?, bold = ?, italic = ?, text_align = ?,
-            text_color = ?, background = ?, locked = ?, sort_order = ?
+            text_content = ?, font_family = ?, font_size = ?, bold = ?, italic = ?, underline = ?,
+            text_align = ?, line_height = ?, text_color = ?, background = ?, background_color = ?,
+            background_opacity = ?, border_color = ?, border_width = ?, border_radius = ?,
+            padding = ?, locked = ?, sort_order = ?
         WHERE id = ?
       `,
       [
@@ -1970,12 +2266,21 @@ ipcMain.handle("album-page-item:update", (_event, payload) => {
         Number(payload.rotation || 0),
         Number(payload.z_index || 0),
         String(payload.text_content || ""),
-        Number(payload.font_size || 24),
+        style.font_family,
+        style.font_size,
         payload.bold ? 1 : 0,
         payload.italic ? 1 : 0,
-        ["left", "center", "right"].includes(payload.text_align) ? payload.text_align : "center",
-        String(payload.text_color || "#202629"),
-        String(payload.background || "transparent"),
+        payload.underline ? 1 : 0,
+        style.text_align,
+        style.line_height,
+        style.text_color,
+        style.background,
+        style.background_color,
+        style.background_opacity,
+        style.border_color,
+        style.border_width,
+        style.border_radius,
+        style.padding,
         payload.locked ? 1 : 0,
         Number(payload.sort_order || 0),
         payload.id
@@ -2047,13 +2352,16 @@ ipcMain.handle("album-text:add", (_event, payload) => {
     Number(get("SELECT MAX(z_index) AS max_z FROM album_page_items WHERE page_id = ?", [payload.page_id])?.max_z ?? -1),
     Number(get("SELECT MAX(z_index) AS max_z FROM album_text_items WHERE page_id = ?", [payload.page_id])?.max_z ?? -1)
   );
+  const style = textStylePayload(payload);
   run(
     `
       INSERT INTO album_text_items (
         id, page_id, x, y, width, height, rotation, z_index, text_content, font_size,
-        bold, italic, text_align, text_color, background, locked, sort_order, created_at
+        font_family, bold, italic, underline, text_align, line_height, text_color, background,
+        background_color, background_opacity, border_color, border_width, border_radius, padding,
+        locked, sort_order, created_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     [
       rowId,
@@ -2065,12 +2373,21 @@ ipcMain.handle("album-text:add", (_event, payload) => {
       Number(payload.rotation || 0),
       Number(payload.z_index ?? maxZ + 1),
       String(payload.text_content || "Album text"),
-      Number(payload.font_size || 24),
+      style.font_size,
+      style.font_family,
       payload.bold ? 1 : 0,
       payload.italic ? 1 : 0,
-      ["left", "center", "right"].includes(payload.text_align) ? payload.text_align : "center",
-      String(payload.text_color || "#202629"),
-      String(payload.background || "transparent"),
+      payload.underline ? 1 : 0,
+      style.text_align,
+      style.line_height,
+      style.text_color,
+      style.background,
+      style.background_color,
+      style.background_opacity,
+      style.border_color,
+      style.border_width,
+      style.border_radius,
+      style.padding,
       payload.locked ? 1 : 0,
       sortOrder,
       now()
@@ -2355,13 +2672,31 @@ ipcMain.handle("app:reveal-data-folder", () => {
 });
 
 app.whenReady().then(async () => {
-  await initDatabase();
-  registerMediaProtocol();
-  createWindow();
+  const win = createWindow();
+  startupLog("main.ready", { msSinceProcessStart: Math.round((performance.now() - mainStartedAt) * 10) / 10 });
+
+  try {
+    await win.__archiveSplashLoaded;
+    await initDatabase();
+    registerMediaProtocol();
+    await measureStartup("renderer.load", () => loadApp(win));
+    startupSummary({ status: "ready" });
+  } catch (error) {
+    console.error("[startup] failed", error);
+    startupSummary({ status: "error", message: error.message });
+    if (win && !win.isDestroyed()) {
+      await loadHtml(win, startupErrorHtml(error)).catch(() => {});
+    }
+  }
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+      const nextWin = createWindow();
+      if (databaseReady) {
+        loadApp(nextWin).catch((error) => {
+          console.error("[startup] failed to load app window", error);
+        });
+      }
     }
   });
 });

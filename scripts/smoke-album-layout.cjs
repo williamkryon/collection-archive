@@ -109,6 +109,16 @@ function findFile(folder, filename) {
   return null;
 }
 
+async function waitForFile(folder, filename, timeoutMs = 15000) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const found = findFile(folder, filename);
+    if (found) return found;
+    await sleep(100);
+  }
+  return null;
+}
+
 function pngDimensions(filePath) {
   const data = fs.readFileSync(filePath);
   assert(data.slice(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])), `Not a PNG file: ${filePath}`);
@@ -161,13 +171,21 @@ class CdpClient {
       this.socket = new WebSocket(wsUrl);
       this.socket.addEventListener("open", resolve);
       this.socket.addEventListener("error", reject);
+      this.socket.addEventListener("close", () => {
+        for (const [id, pending] of this.pending) {
+          clearTimeout(pending.timeout);
+          pending.reject(new Error(`${pending.method} failed: DevTools socket closed`));
+          this.pending.delete(id);
+        }
+      });
       this.socket.addEventListener("message", (event) => {
         const message = JSON.parse(event.data);
         if (message.method === "Runtime.exceptionThrown") {
           this.runtimeExceptions.push(message.params?.exceptionDetails || message.params || message);
         }
         if (message.id && this.pending.has(message.id)) {
-          const { resolve: done, reject: fail, method, expression } = this.pending.get(message.id);
+          const { resolve: done, reject: fail, method, expression, timeout } = this.pending.get(message.id);
+          clearTimeout(timeout);
           this.pending.delete(message.id);
           if (message.error) fail(new Error(`${method} failed: ${message.error.message}${expression ? `\n${expression}` : ""}`));
           else done(message.result);
@@ -181,7 +199,11 @@ class CdpClient {
     const id = this.nextId++;
     this.socket.send(JSON.stringify({ id, method, params }));
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject, method, expression: params.expression });
+      const timeout = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error(`${method} timed out${params.expression ? `\n${params.expression}` : ""}`));
+      }, 60000);
+      this.pending.set(id, { resolve, reject, method, expression: params.expression, timeout });
     });
   }
 
@@ -227,6 +249,10 @@ function assertNoRuntimeTypeErrors(client, context) {
 }
 
 async function captureScreenshot(client, label) {
+  if (process.env.ARCHIVE_SMOKE_SCREENSHOTS !== "1") {
+    console.log(`screenshot skipped ${label}: set ARCHIVE_SMOKE_SCREENSHOTS=1 to capture`);
+    return null;
+  }
   fs.mkdirSync(artifactsDir, { recursive: true });
   console.log(`capturing screenshot ${label}`);
   try {
@@ -329,11 +355,11 @@ async function main() {
   let child = launchElectron(portBase);
   let client = await connect(portBase);
   await waitFor(client, "Boolean(window.archiveAPI)", "archiveAPI did not load");
+  const dbPath = await waitForFile(archiveData, "archive.sqlite");
+  assert(dbPath, "Temporary archive database was not created");
   await stop(child);
   client.close();
 
-  const dbPath = findFile(archiveData, "archive.sqlite");
-  assert(dbPath, "Temporary archive database was not created");
   await seedDatabase(dbPath);
 
   child = launchElectron(portBase + 1);
@@ -1203,6 +1229,7 @@ async function main() {
   assertNoRuntimeTypeErrors(client, "Missing image debug viewer");
   await evaluate(client, `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
   await waitFor(client, "!document.querySelector('.viewer')", "Escape did not close the viewer");
+  await evaluate(client, `localStorage.removeItem("archiveDebugMedia")`);
 
   await evaluate(
     client,
@@ -1653,6 +1680,89 @@ async function main() {
   assert(textBoxUsability.afterModeSwitch.enteredEditable, `Text edit after Preview/Edit switch failed: ${JSON.stringify(textBoxUsability)}`);
   assert(textBoxUsability.afterLanguageSwitch.enteredEditable, `Text edit after language switch failed: ${JSON.stringify(textBoxUsability)}`);
   assert(textBoxUsability.persisted === "After language switch edit", `Text edits did not persist after usability sequence: ${JSON.stringify(textBoxUsability)}`);
+
+  const textStyleState = await evaluate(
+    client,
+    `(async () => {
+      const textPlacement = [...document.querySelectorAll('.text-placement')].find((node) => node.textContent.includes('After language switch edit')) || document.querySelector('.text-placement');
+      textPlacement.click();
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const getLabels = () => [...document.querySelectorAll('.placement-inspector label')];
+      const setField = (labelText, value) => {
+        const labels = getLabels();
+        const label = labels.find((entry) => entry.textContent.includes(labelText));
+        if (!label) throw new Error('Missing label ' + labelText);
+        const control = label.querySelector('input, select, textarea');
+        if (!control) throw new Error('Missing control ' + labelText);
+        const proto = control instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+        Object.getOwnPropertyDescriptor(proto, 'value').set.call(control, String(value));
+        control.dispatchEvent(new Event('input', { bubbles: true }));
+        control.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      setField('Font', 'georgia');
+      setField('Size', 32);
+      setField('Alignment', 'right');
+      setField('Line height', 1.6);
+      setField('Text color', '#335577');
+      setField('Background', '#ffeecc');
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const transparent = getLabels().find((entry) => entry.textContent.includes('Transparent'))?.querySelector('input');
+      if (transparent?.checked) transparent.click();
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      setField('Opacity', 72);
+      setField('Border', '#884422');
+      const borderSizeLabel = getLabels().find((entry) => entry.textContent.includes('Border') && entry.textContent.includes('Size'));
+      const borderSize = borderSizeLabel?.querySelector('input');
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(borderSize, '3');
+      borderSize.dispatchEvent(new Event('input', { bubbles: true }));
+      borderSize.dispatchEvent(new Event('change', { bubbles: true }));
+      setField('Radius', 12);
+      setField('Padding', 14);
+      const underline = getLabels().find((entry) => entry.textContent.includes('Underline'))?.querySelector('input');
+      if (underline && !underline.checked) underline.click();
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      let album = await window.archiveAPI.getAlbum('album-smoke');
+      const sourcePage = album.pages.find((page) => page.id === 'page-one');
+      const styledText = sourcePage.items.find((entry) => entry.element_type === 'text' && entry.text_content === 'After language switch edit');
+      const textNode = [...document.querySelectorAll('.text-placement .album-text-content')].find((node) => node.textContent.includes('After language switch edit'));
+      const computed = getComputedStyle(textNode);
+      return {
+        styledText: {
+          font_family: styledText.font_family,
+          font_size: styledText.font_size,
+          underline: styledText.underline,
+          text_align: styledText.text_align,
+          line_height: styledText.line_height,
+          text_color: styledText.text_color,
+          background: styledText.background,
+          background_color: styledText.background_color,
+          background_opacity: styledText.background_opacity,
+          border_color: styledText.border_color,
+          border_width: styledText.border_width,
+          border_radius: styledText.border_radius,
+          padding: styledText.padding
+        },
+        computed: {
+          textAlign: computed.textAlign,
+          textDecoration: computed.textDecorationLine,
+          borderWidth: computed.borderTopWidth,
+          padding: computed.paddingTop
+        },
+        labels: {
+          noSavedTemplates: ![...document.querySelectorAll('button, summary')].some((entry) => /Save page as template|New page from template|Manage templates/.test(entry.textContent)),
+          font: getLabels().some((label) => label.textContent.includes('Font')),
+          underline: getLabels().some((label) => label.textContent.includes('Underline'))
+        }
+      };
+    })()`
+  );
+  assert(textStyleState.styledText.font_family === "georgia", `Text font family did not persist: ${JSON.stringify(textStyleState)}`);
+  assert(textStyleState.styledText.font_size === 32 && textStyleState.styledText.underline, `Text size/underline did not persist: ${JSON.stringify(textStyleState)}`);
+  assert(textStyleState.styledText.text_align === "right" && Math.abs(textStyleState.styledText.line_height - 1.6) < 0.01, `Text alignment/line height did not persist: ${JSON.stringify(textStyleState)}`);
+  assert(textStyleState.styledText.background === "color" && textStyleState.styledText.background_color === "#ffeecc", `Text background did not persist: ${JSON.stringify(textStyleState)}`);
+  assert(textStyleState.styledText.border_width === 3 && textStyleState.styledText.border_radius === 12 && textStyleState.styledText.padding === 14, `Text border layout did not persist: ${JSON.stringify(textStyleState)}`);
+  assert(textStyleState.computed.textAlign === "right" && textStyleState.computed.textDecoration.includes("underline"), `Styled text did not render in edit mode: ${JSON.stringify(textStyleState)}`);
+  assert(textStyleState.labels.noSavedTemplates && textStyleState.labels.font && textStyleState.labels.underline, `Saved-template buttons remained or text labels disappeared: ${JSON.stringify(textStyleState.labels)}`);
 
   const shortcutState = await evaluate(
     client,

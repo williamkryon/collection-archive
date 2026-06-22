@@ -4,9 +4,54 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Collection Archive</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: #f4f6f1;
+      }
+
+      .static-splash {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: #202629;
+        background: radial-gradient(circle at 50% 28%, #fffaf0, #f4ead7 34%, #e8eee8 100%);
+      }
+
+      .static-splash-card {
+        width: min(420px, calc(100vw - 48px));
+        border: 1px solid #d5ded9;
+        border-radius: 10px;
+        padding: 28px;
+        background: rgba(255, 253, 248, 0.92);
+        box-shadow: 0 22px 58px rgba(35, 32, 25, 0.16);
+        text-align: center;
+      }
+
+      .static-splash-card h1 {
+        margin: 0 0 8px;
+        font-size: 22px;
+      }
+
+      .static-splash-card p {
+        margin: 0;
+        color: #657375;
+        font-size: 14px;
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="static-splash" role="status" aria-live="polite">
+        <section class="static-splash-card">
+          <h1>Collection Archive</h1>
+          <p>Opening archive...</p>
+        </section>
+      </div>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

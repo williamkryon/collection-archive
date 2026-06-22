@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import "./styles.css";
 
 const api = window.archiveAPI;
+const rendererModuleLoadedAt = performance.now();
 
 function perfTraceEnabled() {
   return Boolean(window.__archivePerfTrace || localStorage.getItem("archivePerfTrace") === "1");
@@ -35,6 +36,15 @@ const translations = {
     manageLists: "Manage lists",
     dataFolder: "Data folder",
     openingArchive: "Opening archive...",
+    loadingDatabase: "Loading database...",
+    loadingLibrary: "Loading library...",
+    preparingInterface: "Preparing workspace...",
+    ready: "Ready",
+    startupFailed: "Startup failed",
+    retry: "Retry",
+    loadingLibraryItems: "Loading library items...",
+    loadingGalleryItems: "Loading gallery...",
+    loadingAlbum: "Loading album...",
     save: "Save",
     cancel: "Cancel",
     close: "Close",
@@ -93,6 +103,12 @@ const translations = {
     saveAlbum: "Save album",
     deleteAlbum: "Delete album",
     pageSelector: "Page selector",
+    pageActions: "Page actions",
+    exportActions: "Export actions",
+    more: "More",
+    selectedObject: "Selected object",
+    textStyle: "Text style",
+    frame: "Frame",
     movePageUp: "Move page up",
     movePageDown: "Move page down",
     addPage: "Add page",
@@ -135,9 +151,30 @@ const translations = {
     backgroundFit: "Background fit",
     showGuides: "Show guides",
     snapToGrid: "Snap to grid",
+    grid: "Grid",
     gridSize: "Grid size",
     template: "Template",
     applyTemplate: "Apply template",
+    font: "Font",
+    size: "Size",
+    bold: "Bold",
+    italic: "Italic",
+    underline: "Underline",
+    textColor: "Text color",
+    background: "Background",
+    transparent: "Transparent",
+    border: "Border",
+    radius: "Radius",
+    padding: "Padding",
+    lineHeight: "Line height",
+    alignment: "Alignment",
+    left: "Left",
+    center: "Center",
+    right: "Right",
+    systemFont: "System",
+    serifFont: "Serif",
+    sansSerifFont: "Sans Serif",
+    monospaceFont: "Monospace",
     newItemTitle: "New item",
     editItemTitle: "Edit item",
     title: "Title",
@@ -273,6 +310,26 @@ const translations = {
     gridSize: "网格大小",
     template: "模板",
     applyTemplate: "应用模板",
+    font: "字体",
+    size: "大小",
+    bold: "粗体",
+    italic: "斜体",
+    underline: "下划线",
+    textColor: "文字颜色",
+    background: "背景",
+    transparent: "透明",
+    border: "边框",
+    radius: "圆角",
+    padding: "内边距",
+    lineHeight: "行高",
+    alignment: "对齐",
+    left: "左",
+    center: "居中",
+    right: "右",
+    systemFont: "系统",
+    serifFont: "衬线",
+    sansSerifFont: "无衬线",
+    monospaceFont: "等宽",
     newItemTitle: "新建藏品",
     editItemTitle: "编辑藏品",
     title: "标题",
@@ -296,6 +353,23 @@ const translations = {
     exportFailed: "导出失败：{message}"
   }
 };
+
+translations.zh.pageActions = "\u9875\u9762\u64cd\u4f5c";
+translations.zh.exportActions = "\u5bfc\u51fa\u64cd\u4f5c";
+translations.zh.more = "\u66f4\u591a";
+translations.zh.selectedObject = "\u9009\u4e2d\u5bf9\u8c61";
+translations.zh.textStyle = "\u6587\u5b57\u6837\u5f0f";
+translations.zh.frame = "\u8fb9\u6846";
+translations.zh.grid = "\u7f51\u683c";
+translations.zh.loadingDatabase = "\u6b63\u5728\u52a0\u8f7d\u6570\u636e\u5e93...";
+translations.zh.loadingLibrary = "\u6b63\u5728\u52a0\u8f7d\u9986\u85cf...";
+translations.zh.preparingInterface = "\u6b63\u5728\u51c6\u5907\u5de5\u4f5c\u533a...";
+translations.zh.ready = "\u5df2\u5c31\u7eea";
+translations.zh.startupFailed = "\u542f\u52a8\u5931\u8d25";
+translations.zh.retry = "\u91cd\u8bd5";
+translations.zh.loadingLibraryItems = "\u6b63\u5728\u52a0\u8f7d\u9986\u85cf\u85cf\u54c1...";
+translations.zh.loadingGalleryItems = "\u6b63\u5728\u52a0\u8f7d\u56fe\u5e93...";
+translations.zh.loadingAlbum = "\u6b63\u5728\u52a0\u8f7d\u518c\u9875...";
 
 function interpolate(text, values = {}) {
   return String(text).replace(/\{(\w+)\}/g, (match, key) => values[key] ?? match);
@@ -894,6 +968,41 @@ function ImageViewer({ images, initialIndex, title, onClose }) {
   );
 }
 
+function LoadingState({ title }) {
+  return (
+    <div className="loading-state" role="status" aria-live="polite">
+      <span className="loading-spinner" aria-hidden="true" />
+      <span>{title}</span>
+    </div>
+  );
+}
+
+function StartupScreen({ status, error, onRetry }) {
+  const { t } = useI18n();
+  const statusText = status ? t(status) : t("openingArchive");
+
+  return (
+    <main className="startup-screen">
+      <section className={`startup-card ${error ? "error" : ""}`} role="status" aria-live="polite">
+        <div className="startup-mark" aria-hidden="true" />
+        <h1>{t("appTitle")}</h1>
+        {error ? (
+          <>
+            <p className="startup-status">{t("startupFailed")}</p>
+            <p className="startup-error">{error}</p>
+            <button type="button" className="primary" onClick={onRetry}>{t("retry")}</button>
+          </>
+        ) : (
+          <>
+            <p className="startup-status">{statusText}</p>
+            <span className="loading-spinner" aria-hidden="true" />
+          </>
+        )}
+      </section>
+    </main>
+  );
+}
+
 function ArchiveApp() {
   const { language, setLanguage, t } = useI18n();
   const libraryPageSize = 100;
@@ -912,8 +1021,10 @@ function ArchiveApp() {
   const [manageOpen, setManageOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [itemsVersion, setItemsVersion] = useState(0);
-  const [libraryItems, setLibraryItems] = useState({ items: [], total: 0, limit: libraryPageSize, offset: 0, loading: false });
-  const [galleryItems, setGalleryItems] = useState({ items: [], total: 0, limit: galleryPageSize, offset: 0, loading: false });
+  const [startupStatus, setStartupStatus] = useState("openingArchive");
+  const [startupError, setStartupError] = useState("");
+  const [libraryItems, setLibraryItems] = useState({ items: [], total: 0, limit: libraryPageSize, offset: 0, loading: false, loaded: false });
+  const [galleryItems, setGalleryItems] = useState({ items: [], total: 0, limit: galleryPageSize, offset: 0, loading: false, loaded: false });
   const [filters, setFilters] = useState({
     search: "",
     country: "",
@@ -926,14 +1037,31 @@ function ArchiveApp() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const libraryRequestRef = useRef(0);
   const galleryRequestRef = useRef(0);
+  const startupReadyLoggedRef = useRef(false);
 
-  async function refresh() {
+  async function refresh(options = {}) {
+    const started = performance.now();
+    if (options.startup) setStartupStatus("loadingLibrary");
+    perfTrace("library.metadata.start", { startup: Boolean(options.startup) });
     const nextLibrary = await api.getLibrary();
+    perfTrace("library.metadata.end", {
+      startup: Boolean(options.startup),
+      ms: Math.round((performance.now() - started) * 10) / 10,
+      countries: nextLibrary.countries?.length || 0,
+      types: nextLibrary.types?.length || 0,
+      entityGroups: nextLibrary.entityGroups?.length || 0,
+      albums: nextLibrary.albums?.length || 0
+    });
     setLibrary(nextLibrary);
+    if (options.startup) setStartupStatus("preparingInterface");
   }
 
   useEffect(() => {
-    refresh();
+    perfTrace("react.app.mounted");
+    refresh({ startup: true }).catch((error) => {
+      console.error("[startup] renderer initialization failed", error);
+      setStartupError(error.message || String(error));
+    });
   }, []);
 
   useEffect(() => {
@@ -965,21 +1093,30 @@ function ArchiveApp() {
       const started = performance.now();
       perfTrace("library.query.start", { traceId, requestId, offset, append, query: itemQuery });
       setLibraryItems((current) => ({ ...current, loading: true }));
-      const result = await api.queryItems({ ...itemQuery, limit: libraryPageSize, offset, _traceId: traceId, _traceSource: "library" });
-      perfTrace("library.query.end", {
-        traceId,
-        requestId,
-        ms: Math.round((performance.now() - started) * 10) / 10,
-        rows: result.items.length,
-        total: result.total
-      });
-      if (libraryRequestRef.current !== requestId) return;
-      perfTrace("library.state.apply", { traceId, requestId, append, rows: result.items.length, total: result.total });
-      setLibraryItems((current) => ({
-        ...result,
-        loading: false,
-        items: append ? [...current.items, ...result.items] : result.items
-      }));
+      try {
+        const result = await api.queryItems({ ...itemQuery, limit: libraryPageSize, offset, _traceId: traceId, _traceSource: "library" });
+        perfTrace("library.query.end", {
+          traceId,
+          requestId,
+          ms: Math.round((performance.now() - started) * 10) / 10,
+          rows: result.items.length,
+          total: result.total
+        });
+        if (libraryRequestRef.current !== requestId) return;
+        perfTrace("library.state.apply", { traceId, requestId, append, rows: result.items.length, total: result.total });
+        setLibraryItems((current) => ({
+          ...result,
+          loading: false,
+          loaded: true,
+          items: append ? [...current.items, ...result.items] : result.items
+        }));
+      } catch (error) {
+        if (libraryRequestRef.current === requestId) {
+          setLibraryItems((current) => ({ ...current, loading: false, loaded: true }));
+          setMessage(`Library load failed: ${error.message || error}`);
+        }
+        throw error;
+      }
     },
     [itemQuery]
   );
@@ -992,21 +1129,30 @@ function ArchiveApp() {
       const started = performance.now();
       perfTrace("gallery.query.start", { traceId, requestId, offset, append, query: itemQuery });
       setGalleryItems((current) => ({ ...current, loading: true }));
-      const result = await api.queryGalleryItems({ ...itemQuery, limit: galleryPageSize, offset, _traceId: traceId, _traceSource: "gallery" });
-      perfTrace("gallery.query.end", {
-        traceId,
-        requestId,
-        ms: Math.round((performance.now() - started) * 10) / 10,
-        rows: result.items.length,
-        total: result.total
-      });
-      if (galleryRequestRef.current !== requestId) return;
-      perfTrace("gallery.state.apply", { traceId, requestId, append, rows: result.items.length, total: result.total });
-      setGalleryItems((current) => ({
-        ...result,
-        loading: false,
-        items: append ? [...current.items, ...result.items] : result.items
-      }));
+      try {
+        const result = await api.queryGalleryItems({ ...itemQuery, limit: galleryPageSize, offset, _traceId: traceId, _traceSource: "gallery" });
+        perfTrace("gallery.query.end", {
+          traceId,
+          requestId,
+          ms: Math.round((performance.now() - started) * 10) / 10,
+          rows: result.items.length,
+          total: result.total
+        });
+        if (galleryRequestRef.current !== requestId) return;
+        perfTrace("gallery.state.apply", { traceId, requestId, append, rows: result.items.length, total: result.total });
+        setGalleryItems((current) => ({
+          ...result,
+          loading: false,
+          loaded: true,
+          items: append ? [...current.items, ...result.items] : result.items
+        }));
+      } catch (error) {
+        if (galleryRequestRef.current === requestId) {
+          setGalleryItems((current) => ({ ...current, loading: false, loaded: true }));
+          setMessage(`Gallery load failed: ${error.message || error}`);
+        }
+        throw error;
+      }
     },
     [itemQuery]
   );
@@ -1023,7 +1169,7 @@ function ArchiveApp() {
 
   useEffect(() => {
     if (!message) return undefined;
-    const timeout = window.setTimeout(() => setMessage(""), 2000);
+    const timeout = window.setTimeout(() => setMessage(""), 1800);
     return () => window.clearTimeout(timeout);
   }, [message]);
 
@@ -1040,6 +1186,27 @@ function ArchiveApp() {
     });
     return () => cancelAnimationFrame(frame);
   }, [libraryItems.items, libraryItems.loading, libraryItems.total]);
+
+  useEffect(() => {
+    if (!library || startupReadyLoggedRef.current || !libraryItems.loaded || libraryItems.loading) return;
+    startupReadyLoggedRef.current = true;
+    setStartupStatus("ready");
+    requestAnimationFrame(() => {
+      perfTrace("startup.firstUsable", {
+        libraryRows: libraryItems.items.length,
+        libraryTotal: libraryItems.total,
+        cards: document.querySelectorAll(".item-card").length
+      });
+      if (perfTraceEnabled() && api.getStartupTimings) {
+        api.getStartupTimings().then((timings) => {
+          console.log("[startup-renderer]", {
+            firstUsableAt: Math.round(performance.now() * 10) / 10,
+            main: timings
+          });
+        }).catch(() => {});
+      }
+    });
+  }, [library, libraryItems.items.length, libraryItems.loaded, libraryItems.loading, libraryItems.total]);
 
   useEffect(() => {
     if (!perfTraceEnabled()) return undefined;
@@ -1160,7 +1327,14 @@ function ArchiveApp() {
   }
 
   if (!library) {
-    return <div className="boot">{t("openingArchive")}</div>;
+    return <StartupScreen status={startupStatus} error={startupError} onRetry={() => {
+      setStartupError("");
+      setStartupStatus("loadingLibrary");
+      refresh({ startup: true }).catch((error) => {
+        console.error("[startup] renderer retry failed", error);
+        setStartupError(error.message || String(error));
+      });
+    }} />;
   }
 
   return (
@@ -1433,6 +1607,7 @@ function LibraryView({ library, items, total, loading, filters, setFilters, onLo
           </article>
         ))}
       </div>
+      {items.length === 0 && loading && <LoadingState title={t("loadingLibraryItems")} />}
       {items.length < total && (
         <div className="load-more">
           <button type="button" disabled={loading} onClick={onLoadMore}>
@@ -1570,6 +1745,7 @@ function GalleryView({ items, total, loading, onLoadMore, onOpenItem, onToggleFa
           </article>
         ))}
       </div>
+      {items.length === 0 && loading && <LoadingState title={t("loadingGalleryItems")} />}
       {items.length < total && (
         <div className="load-more">
           <button type="button" disabled={loading} onClick={onLoadMore}>
@@ -1906,9 +2082,15 @@ function AlbumsView({
   }
 
   const copyTargetAlbums = library.albums.filter((entry) => entry.id !== album?.id);
+  const pageOrderControls = activePage ? (
+    <div className="page-order-controls">
+      <button type="button" aria-label={t("movePageUp")} title={t("movePageUp")} disabled={!activePage || albumPages.findIndex((page) => page.id === activePageId) <= 0} onClick={() => moveActivePage(-1)}>{t("moveUp")}</button>
+      <button type="button" aria-label={t("movePageDown")} title={t("movePageDown")} disabled={!activePage || albumPages.findIndex((page) => page.id === activePageId) >= albumPages.length - 1} onClick={() => moveActivePage(1)}>{t("moveDown")}</button>
+    </div>
+  ) : null;
   const pageCopyControls = activePage ? (
     <div className="page-copy-controls">
-      <button type="button" onClick={duplicateActivePage}>{t("duplicatePage")}</button>
+      <button type="button" className="secondary" onClick={duplicateActivePage}>{t("duplicatePage")}</button>
       <select
         value={copyTargetAlbumId}
         onChange={(event) => setCopyTargetAlbumId(event.target.value)}
@@ -1920,9 +2102,23 @@ function AlbumsView({
           <option value={entry.id} key={entry.id}>{entry.title}</option>
         ))}
       </select>
-      <button type="button" disabled={!copyTargetAlbumId} onClick={copyActivePageToAlbum}>{t("copy")}</button>
+      <button type="button" className="secondary" disabled={!copyTargetAlbumId} onClick={copyActivePageToAlbum}>{t("copy")}</button>
     </div>
   ) : null;
+  const pageActionsMenu = activePage ? (
+    <details className="toolbar-menu page-actions-menu">
+      <summary>{t("pageActions")}</summary>
+      <div className="toolbar-menu-content">
+        {pageCopyControls}
+      </div>
+    </details>
+  ) : null;
+  const modeToggle = (
+    <div className="segmented mode-toggle">
+      <button className={mode === "preview" ? "active" : ""} type="button" onClick={() => setMode("preview")}>{t("preview")}</button>
+      <button className={mode === "edit" ? "active" : ""} type="button" onClick={() => setMode("edit")}>{t("edit")}</button>
+    </div>
+  );
 
   return (
     <section className={`albums-view ${mode === "edit" ? "edit-layout" : "preview-layout"}`}>
@@ -1944,7 +2140,7 @@ function AlbumsView({
       </aside>
 
       <div className="album-stage">
-        {!album && <EmptyState title={t("chooseAlbum")} />}
+        {!album && (selectedAlbumId ? <LoadingState title={t("loadingAlbum")} /> : <EmptyState title={t("chooseAlbum")} />)}
         {album && (
           <>
             <header className="album-toolbar">
@@ -1953,12 +2149,9 @@ function AlbumsView({
                   <div className="album-header-row album-header-main">
                     <input value={albumTitle} onChange={(event) => setAlbumTitle(event.target.value)} placeholder={t("albumName")} />
                     <input value={albumDescription} onChange={(event) => setAlbumDescription(event.target.value)} placeholder={t("description")} />
-                    <button type="button" onClick={() => onUpdateAlbum({ id: album.id, title: albumTitle, description: albumDescription })}>{t("saveAlbum")}</button>
+                    <button type="button" className="primary compact" onClick={() => onUpdateAlbum({ id: album.id, title: albumTitle, description: albumDescription })}>{t("saveAlbum")}</button>
                     <button type="button" className="danger" onClick={() => onDeleteAlbum(album.id)}>{t("deleteAlbum")}</button>
-                    <div className="segmented">
-                      <button className={mode === "preview" ? "active" : ""} type="button" onClick={() => setMode("preview")}>{t("preview")}</button>
-                      <button className={mode === "edit" ? "active" : ""} type="button" onClick={() => setMode("edit")}>{t("edit")}</button>
-                    </div>
+                    {modeToggle}
                   </div>
                   <form
                     className="album-header-row album-page-row"
@@ -1974,32 +2167,26 @@ function AlbumsView({
                         ))}
                       </select>
                     )}
-                    <div className="page-order-controls">
-                      <button type="button" aria-label={t("movePageUp")} title={t("movePageUp")} disabled={!activePage || albumPages.findIndex((page) => page.id === activePageId) <= 0} onClick={() => moveActivePage(-1)}>{t("moveUp")}</button>
-                      <button type="button" aria-label={t("movePageDown")} title={t("movePageDown")} disabled={!activePage || albumPages.findIndex((page) => page.id === activePageId) >= albumPages.length - 1} onClick={() => moveActivePage(1)}>{t("moveDown")}</button>
-                    </div>
-                    {pageCopyControls}
-                    <button>{t("addPage")}</button>
+                    {pageOrderControls}
+                    <button className="primary compact">{t("addPage")}</button>
+                    {pageActionsMenu}
                   </form>
                 </>
               ) : (
                 <>
-                  <div>
+                  <div className="album-title-block">
                     <h1>{album.title}</h1>
                     <p>{album.description || t("digitalAlbum")}</p>
                   </div>
                   <div className="album-toolbar-actions">
-                    <div className="album-pdf-export-actions">
-                      <PdfQualitySelect value={pdfQuality} onChange={setPdfQuality} />
-                      <button type="button" onClick={exportAlbumPdf}>{t("exportPdf")}</button>
-                    </div>
-                    <div className="segmented">
-                      <button className={mode === "preview" ? "active" : ""} type="button" onClick={() => setMode("preview")}>{t("preview")}</button>
-                      <button className={mode === "edit" ? "active" : ""} type="button" onClick={() => setMode("edit")}>{t("edit")}</button>
-                    </div>
+                    {modeToggle}
                     <div className="segmented preview-style-toggle">
                       <button className={previewStyle === "standard" ? "active" : ""} type="button" onClick={() => setPreviewStyle("standard")}>{t("designedPage")}</button>
                       <button className={previewStyle === "clean" ? "active" : ""} type="button" onClick={() => setPreviewStyle("clean")}>{t("cleanPreview")}</button>
+                    </div>
+                    <div className="album-pdf-export-actions">
+                      <PdfQualitySelect value={pdfQuality} onChange={setPdfQuality} />
+                      <button type="button" className="secondary" onClick={exportAlbumPdf}>{t("exportPdf")}</button>
                     </div>
                   </div>
                 </>
@@ -2013,12 +2200,9 @@ function AlbumsView({
                     <option value={page.id} key={page.id}>{page.title}</option>
                   ))}
                 </select>
-                <div className="page-order-controls">
-                  <button type="button" aria-label={t("movePageUp")} title={t("movePageUp")} disabled={!activePage || albumPages.findIndex((page) => page.id === activePageId) <= 0} onClick={() => moveActivePage(-1)}>{t("moveUp")}</button>
-                  <button type="button" aria-label={t("movePageDown")} title={t("movePageDown")} disabled={!activePage || albumPages.findIndex((page) => page.id === activePageId) >= albumPages.length - 1} onClick={() => moveActivePage(1)}>{t("moveDown")}</button>
-                </div>
-                {pageCopyControls}
-                <button type="button" onClick={() => exportPageImage()}>{t("exportPage")}</button>
+                {pageOrderControls}
+                {pageActionsMenu}
+                <button type="button" className="secondary" onClick={() => exportPageImage()}>{t("exportPage")}</button>
               </div>
             )}
 
@@ -2102,6 +2286,21 @@ const PDF_QUALITY_OPTIONS = [
   { value: "medium", label: "Medium" },
   { value: "low", label: "Low" }
 ];
+
+const TEXT_FONT_OPTIONS = [
+  { value: "system", labelKey: "systemFont", css: "Inter, Segoe UI, Arial, sans-serif" },
+  { value: "serif", labelKey: "serifFont", css: "Georgia, Times New Roman, serif" },
+  { value: "sans", labelKey: "sansSerifFont", css: "Inter, Segoe UI, Arial, sans-serif" },
+  { value: "mono", labelKey: "monospaceFont", css: "Consolas, Menlo, monospace" },
+  { value: "georgia", label: "Georgia", css: "Georgia, serif" },
+  { value: "times", label: "Times New Roman", css: "Times New Roman, Times, serif" },
+  { value: "arial", label: "Arial", css: "Arial, Helvetica, sans-serif" },
+  { value: "verdana", label: "Verdana", css: "Verdana, Geneva, sans-serif" }
+];
+
+function textFontCss(value) {
+  return TEXT_FONT_OPTIONS.find((option) => option.value === value)?.css || TEXT_FONT_OPTIONS[0].css;
+}
 
 function snapshotItems(items) {
   return items.map((item) => ({
@@ -2187,6 +2386,49 @@ function copyFrameFields(entry) {
     background_opacity: Number(entry.background_opacity ?? 0),
     padding: Number(entry.padding ?? 4),
     border_radius: Number(entry.border_radius ?? 2)
+  };
+}
+
+function copyTextStyleFields(entry) {
+  return {
+    font_family: entry.font_family || "system",
+    font_size: Number(entry.font_size || 24),
+    bold: Boolean(entry.bold),
+    italic: Boolean(entry.italic),
+    underline: Boolean(entry.underline),
+    text_align: entry.text_align || "center",
+    line_height: Number(entry.line_height || 1.25),
+    text_color: entry.text_color || "#202629",
+    background: entry.background || "transparent",
+    background_color: entry.background_color || "#ffffff",
+    background_opacity: Number(entry.background_opacity ?? (entry.background === "white" ? 1 : 0)),
+    border_color: entry.border_color || "#202629",
+    border_width: Number(entry.border_width || 0),
+    border_radius: Number(entry.border_radius || 0),
+    padding: Number(entry.padding ?? 8)
+  };
+}
+
+function textBoxStyle(entry) {
+  const backgroundOpacity = Number(entry.background_opacity ?? (entry.background === "white" ? 1 : 0));
+  const backgroundColor = entry.background === "transparent"
+    ? "transparent"
+    : rgbaFromHex(entry.background_color || "#ffffff", backgroundOpacity);
+  return {
+    fontFamily: textFontCss(entry.font_family || "system"),
+    fontSize: Number(entry.font_size || 24),
+    fontWeight: entry.bold ? 800 : 500,
+    fontStyle: entry.italic ? "italic" : "normal",
+    textDecoration: entry.underline ? "underline" : "none",
+    textAlign: entry.text_align || "center",
+    lineHeight: Number(entry.line_height || 1.25),
+    color: entry.text_color || "#202629",
+    background: backgroundColor,
+    borderColor: entry.border_color || "#202629",
+    borderWidth: Number(entry.border_width || 0),
+    borderStyle: Number(entry.border_width || 0) > 0 ? "solid" : "none",
+    borderRadius: Number(entry.border_radius || 0),
+    padding: Number(entry.padding ?? 8)
   };
 }
 
@@ -2295,12 +2537,7 @@ function renderExportPlacement(entry) {
     return `
       <div class="export-placement export-text-placement" style="${styleToCss(baseStyle)}">
         <div class="export-text-content" style="${styleToCss({
-          fontSize: Number(entry.font_size || 24),
-          fontWeight: entry.bold ? 800 : 500,
-          fontStyle: entry.italic ? "italic" : "normal",
-          textAlign: entry.text_align || "center",
-          color: entry.text_color || "#202629",
-          background: entry.background === "white" ? "#fff" : "transparent"
+          ...textBoxStyle(entry)
         })}">${escapeHtml(entry.text_content || "")}</div>
       </div>
     `;
@@ -2396,7 +2633,7 @@ function buildAlbumExportHtml(pages, albumTitle, options = {}) {
     .export-placeholder { display: grid; width: 100%; height: 100%; place-items: center; color: #667477; background: #eef3f2; }
     .export-placement-text { display: grid; gap: 2px; max-height: 72px; overflow: hidden; color: #263234; font-size: 14px; line-height: 1.25; }
     .export-placement-text strong, .export-placement-text span { min-width: 0; overflow-wrap: anywhere; }
-    .export-text-content { display: grid; width: 100%; height: 100%; align-items: center; overflow: hidden; white-space: pre-wrap; padding: 4px; }
+    .export-text-content { display: grid; width: 100%; height: 100%; align-items: center; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
   </style>
 </head>
 <body class="${pdfClass}">
@@ -2979,19 +3216,14 @@ function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePag
         width,
         height,
         rotation: Number(entry.rotation || 0),
-        z_index: maxZ + index + 1,
-        locked: entry.locked
-      };
+          z_index: maxZ + index + 1,
+          locked: entry.locked
+        };
       if (entry.element_type === "text") {
         latestAlbum = await onAddTextToPage({
           ...common,
           text_content: entry.text_content,
-          font_size: entry.font_size,
-          bold: entry.bold,
-          italic: entry.italic,
-          text_align: entry.text_align,
-          text_color: entry.text_color,
-          background: entry.background
+          ...copyTextStyleFields(entry)
         });
       } else {
         latestAlbum = await onAddItemToPage({
@@ -3383,6 +3615,7 @@ function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePag
         text_align: entry.text_align,
         text_color: entry.text_color,
         background: entry.background,
+        ...copyTextStyleFields(entry),
         locked: entry.locked
       });
       return;
@@ -3494,12 +3727,7 @@ function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePag
                         defaultValue={entry.text_content || "Album text"}
                         aria-label="Album text box"
                         style={{
-                          fontSize: Number(entry.font_size || 24),
-                          fontWeight: entry.bold ? 800 : 500,
-                          fontStyle: entry.italic ? "italic" : "normal",
-                          textAlign: entry.text_align || "center",
-                          color: entry.text_color || "#202629",
-                          background: entry.background === "white" ? "#fff" : "transparent"
+                          ...textBoxStyle(entry)
                         }}
                         onPointerDown={(event) => event.stopPropagation()}
                         onClick={(event) => event.stopPropagation()}
@@ -3532,12 +3760,7 @@ function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePag
                         aria-label="Album text box"
                         tabIndex={mode === "edit" ? 0 : undefined}
                         style={{
-                          fontSize: Number(entry.font_size || 24),
-                          fontWeight: entry.bold ? 800 : 500,
-                          fontStyle: entry.italic ? "italic" : "normal",
-                          textAlign: entry.text_align || "center",
-                          color: entry.text_color || "#202629",
-                          background: entry.background === "white" ? "#fff" : "transparent"
+                          ...textBoxStyle(entry)
                         }}
                         onClick={(event) => {
                           if (mode !== "edit") return;
@@ -3709,6 +3932,7 @@ function FrameStyleControls({ entry, onChange, compact = false }) {
 }
 
 function PlacementInspector({ entry, saveStatus, onUpdate, onLayer, onDuplicate, onRemove }) {
+  const { t } = useI18n();
   const [caption, setCaption] = useState(entry.caption || "");
   const [textContent, setTextContent] = useState(entry.text_content || "");
 
@@ -3731,28 +3955,66 @@ function PlacementInspector({ entry, saveStatus, onUpdate, onLayer, onDuplicate,
           <small>{saveStatus}</small>
         </div>
       </header>
-      <div className="inspector-fields">
+      <div className="inspector-fields inspector-sections">
         {isText ? (
           <>
-            <label>Text<textarea value={textContent} onChange={(event) => setTextContent(event.target.value)} onBlur={() => onUpdate({ ...entry, text_content: textContent })} /></label>
-            <label>Font size<input type="number" min="8" max="96" value={Number(entry.font_size || 24)} onChange={(event) => onUpdate({ ...entry, font_size: Number(event.target.value || 24) })} /></label>
-            <label>Alignment<select value={entry.text_align || "center"} onChange={(event) => onUpdate({ ...entry, text_align: event.target.value })}><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></label>
-            <label>Text color<input type="color" value={entry.text_color || "#202629"} onChange={(event) => onUpdate({ ...entry, text_color: event.target.value })} /></label>
-            <label>Background<select value={entry.background || "transparent"} onChange={(event) => onUpdate({ ...entry, background: event.target.value })}><option value="transparent">Transparent</option><option value="white">White</option></select></label>
-            <CheckRow checked={Boolean(entry.bold)} label="Bold" onChange={(checked) => onUpdate({ ...entry, bold: checked })} />
-            <CheckRow checked={Boolean(entry.italic)} label="Italic" onChange={(checked) => onUpdate({ ...entry, italic: checked })} />
+            <section className="inspector-section">
+              <h3>{t("selectedObject")}</h3>
+              <label>Text<textarea value={textContent} onChange={(event) => setTextContent(event.target.value)} onBlur={() => onUpdate({ ...entry, text_content: textContent })} /></label>
+              <CheckRow checked={Boolean(entry.locked)} label="Lock ratio" onChange={(checked) => onUpdate({ ...entry, locked: checked })} />
+            </section>
+            <section className="inspector-section">
+              <h3>{t("textStyle")}</h3>
+              <label>{t("font")}
+                <select value={entry.font_family || "system"} onChange={(event) => onUpdate({ ...entry, font_family: event.target.value })}>
+                  {TEXT_FONT_OPTIONS.map((option) => (
+                    <option value={option.value} key={option.value}>{option.label || t(option.labelKey)}</option>
+                  ))}
+                </select>
+              </label>
+              <div className="style-field-grid">
+                <label>{t("size")}<input type="number" min="8" max="96" value={Number(entry.font_size || 24)} onChange={(event) => onUpdate({ ...entry, font_size: Number(event.target.value || 24) })} /></label>
+                <label>{t("lineHeight")}<input type="number" min="0.8" max="3" step="0.05" value={Number(entry.line_height || 1.25)} onChange={(event) => onUpdate({ ...entry, line_height: Number(event.target.value || 1.25) })} /></label>
+              </div>
+              <label>{t("alignment")}<select value={entry.text_align || "center"} onChange={(event) => onUpdate({ ...entry, text_align: event.target.value })}><option value="left">{t("left")}</option><option value="center">{t("center")}</option><option value="right">{t("right")}</option></select></label>
+              <div className="style-field-grid">
+                <label>{t("textColor")}<input type="color" value={entry.text_color || "#202629"} onChange={(event) => onUpdate({ ...entry, text_color: event.target.value })} /></label>
+                <label>{t("background")}<input type="color" value={entry.background_color || "#ffffff"} onChange={(event) => onUpdate({ ...entry, background: "color", background_color: event.target.value })} /></label>
+              </div>
+              <CheckRow checked={(entry.background || "transparent") === "transparent"} label={t("transparent")} onChange={(checked) => onUpdate({ ...entry, background: checked ? "transparent" : "color", background_opacity: checked ? 0 : Number(entry.background_opacity ?? 1) })} />
+              {(entry.background || "transparent") !== "transparent" && (
+                <label className="editor-number">{t("opacity")} <span>{Math.round(Number(entry.background_opacity ?? 1) * 100)}%</span><input type="range" min="0" max="100" value={Math.round(Number(entry.background_opacity ?? 1) * 100)} onChange={(event) => onUpdate({ ...entry, background: "color", background_opacity: Number(event.target.value) / 100 })} /></label>
+              )}
+              <div className="style-field-grid">
+                <label>{t("border")}<input type="color" value={entry.border_color || "#202629"} onChange={(event) => onUpdate({ ...entry, border_color: event.target.value })} /></label>
+                <label>{t("border")} {t("size")}<input type="number" min="0" max="24" step="0.5" value={Number(entry.border_width || 0)} onChange={(event) => onUpdate({ ...entry, border_width: Number(event.target.value || 0) })} /></label>
+                <label>{t("radius")}<input type="number" min="0" max="80" value={Number(entry.border_radius || 0)} onChange={(event) => onUpdate({ ...entry, border_radius: Number(event.target.value || 0) })} /></label>
+                <label>{t("padding")}<input type="number" min="0" max="80" value={Number(entry.padding ?? 8)} onChange={(event) => onUpdate({ ...entry, padding: Number(event.target.value || 0) })} /></label>
+              </div>
+              <div className="style-toggle-row">
+                <CheckRow checked={Boolean(entry.bold)} label={t("bold")} onChange={(checked) => onUpdate({ ...entry, bold: checked })} />
+                <CheckRow checked={Boolean(entry.italic)} label={t("italic")} onChange={(checked) => onUpdate({ ...entry, italic: checked })} />
+                <CheckRow checked={Boolean(entry.underline)} label={t("underline")} onChange={(checked) => onUpdate({ ...entry, underline: checked })} />
+              </div>
+            </section>
           </>
         ) : (
-          <>
+          <section className="inspector-section">
+            <h3>{t("selectedObject")}</h3>
             <AlbumSlotImageSelect entry={entry} onUpdate={onUpdate} />
             <label>Caption<input value={caption} onChange={(event) => setCaption(event.target.value)} onBlur={() => onUpdate({ ...entry, caption })} /></label>
             <CheckRow checked={Boolean(entry.show_title)} label="Show title" onChange={(checked) => onUpdate({ ...entry, show_title: checked })} />
             <CheckRow checked={Boolean(entry.show_caption)} label="Show caption" onChange={(checked) => onUpdate({ ...entry, show_caption: checked })} />
             <CheckRow checked={Boolean(entry.show_metadata)} label="Show item info" title="Show or hide issuing entity, type, and year for this placement." onChange={(checked) => onUpdate({ ...entry, show_metadata: checked })} />
-            <FrameStyleControls entry={entry} onChange={(changes) => onUpdate({ ...entry, ...changes })} />
-          </>
+            <CheckRow checked={Boolean(entry.locked)} label="Lock ratio" onChange={(checked) => onUpdate({ ...entry, locked: checked })} />
+          </section>
         )}
-        <CheckRow checked={Boolean(entry.locked)} label="Lock ratio" onChange={(checked) => onUpdate({ ...entry, locked: checked })} />
+        {!isText && (
+          <section className="inspector-section">
+            <h3>{t("frame")}</h3>
+            <FrameStyleControls entry={entry} onChange={(changes) => onUpdate({ ...entry, ...changes })} />
+          </section>
+        )}
       </div>
       <div className="placement-actions">
         <button type="button" title="Move selected placement up one layer" onClick={() => onLayer(entry, "forward")}>Forward</button>
@@ -3883,16 +4145,24 @@ function PageActionBar({ onAddItem, onAddText, onZoomOut, onZoomIn, onFitPage, o
   const { t } = useI18n();
   return (
     <div className="page-action-bar">
-      <button type="button" onClick={onAddItem}>{t("addItem")}</button>
-      <button type="button" onClick={onAddText}>{t("addText")}</button>
-      <button type="button" onClick={onZoomOut}>{t("zoomOut")}</button>
-      <button type="button" onClick={onZoomIn}>{t("zoomIn")}</button>
-      <button type="button" onClick={onFitPage}>{t("fitPage")}</button>
-      <button type="button" onClick={onActualSize}>{t("actualSize")}</button>
-      <button type="button" onClick={onSavePage}>{t("savePage")}</button>
-      <button type="button" className="danger" onClick={onDeletePage}>{t("deletePage")}</button>
-      <button type="button" disabled={!canUndo} onClick={onUndo}>{t("undo")}</button>
-      <button type="button" disabled={!canRedo} onClick={onRedo}>{t("redo")}</button>
+      <div className="toolbar-group">
+        <button type="button" className="primary" onClick={onAddItem}>{t("addItem")}</button>
+        <button type="button" className="primary" onClick={onAddText}>{t("addText")}</button>
+      </div>
+      <div className="toolbar-group">
+        <button type="button" className="ghost" onClick={onZoomOut}>{t("zoomOut")}</button>
+        <button type="button" className="ghost" onClick={onZoomIn}>{t("zoomIn")}</button>
+        <button type="button" className="ghost" onClick={onFitPage}>{t("fitPage")}</button>
+        <button type="button" className="ghost" onClick={onActualSize}>{t("actualSize")}</button>
+      </div>
+      <div className="toolbar-group">
+        <button type="button" className="secondary" onClick={onSavePage}>{t("savePage")}</button>
+        <button type="button" className="danger" onClick={onDeletePage}>{t("deletePage")}</button>
+      </div>
+      <div className="toolbar-group">
+        <button type="button" className="ghost" disabled={!canUndo} onClick={onUndo}>{t("undo")}</button>
+        <button type="button" className="ghost" disabled={!canRedo} onClick={onRedo}>{t("redo")}</button>
+      </div>
     </div>
   );
 }
@@ -3968,92 +4238,105 @@ function PageSettingsPanel({ page, onRegisterSave, onApplyTemplate, onUpdatePage
           <span>{t("page")} {page.page_number}</span>
         </div>
       </header>
-      <div className="inspector-fields">
-        <label>{t("pageTitle")}<input value={title} onChange={(event) => setTitle(event.target.value)} /></label>
-        <label>{t("paperSize")}
-          <select
-            value={paperPreset}
-            onChange={(event) => {
-              const value = event.target.value;
-              setPaperPreset(value);
-              if (value === "custom") {
-                const nextSize = logicalPageSize(page);
-                setCustomWidth(nextSize.width);
-                setCustomHeight(nextSize.height);
-              } else {
-                onApplyPaperPreset(value);
-              }
-            }}
-          >
-            {Object.entries(PAPER_PRESETS).map(([key, preset]) => (
-              <option value={key} key={key}>{preset.label}</option>
-            ))}
-          </select>
-        </label>
-        {paperPreset === "custom" && (
-          <div className="custom-paper-size">
-            <label>Custom width<input type="number" min="100" max="5000" value={customWidth} onChange={(event) => setCustomWidth(Number(event.target.value))} /></label>
-            <label>Custom height<input type="number" min="100" max="5000" value={customHeight} onChange={(event) => setCustomHeight(Number(event.target.value))} /></label>
+      <div className="inspector-fields inspector-sections">
+        <section className="inspector-section">
+          <h3>{t("page")}</h3>
+          <label>{t("pageTitle")}<input value={title} onChange={(event) => setTitle(event.target.value)} /></label>
+          <label>{t("paperSize")}
+            <select
+              value={paperPreset}
+              onChange={(event) => {
+                const value = event.target.value;
+                setPaperPreset(value);
+                if (value === "custom") {
+                  const nextSize = logicalPageSize(page);
+                  setCustomWidth(nextSize.width);
+                  setCustomHeight(nextSize.height);
+                } else {
+                  onApplyPaperPreset(value);
+                }
+              }}
+            >
+              {Object.entries(PAPER_PRESETS).map(([key, preset]) => (
+                <option value={key} key={key}>{preset.label}</option>
+              ))}
+            </select>
+          </label>
+          {paperPreset === "custom" && (
+            <div className="custom-paper-size">
+              <label>Custom width<input type="number" min="100" max="5000" value={customWidth} onChange={(event) => setCustomWidth(Number(event.target.value))} /></label>
+              <label>Custom height<input type="number" min="100" max="5000" value={customHeight} onChange={(event) => setCustomHeight(Number(event.target.value))} /></label>
+            </div>
+          )}
+        </section>
+        <section className="inspector-section">
+          <h3>{t("background")}</h3>
+          <label>{t("backgroundColor")}
+            <select value={background} onChange={(event) => setBackground(event.target.value)}>
+              <option value="white">White</option>
+              <option value="cream">Cream</option>
+              <option value="light gray">Light gray</option>
+              <option value="black">Black</option>
+              <option value="custom">Custom</option>
+            </select>
+          </label>
+          {background === "custom" && <label>Custom color<input type="color" value={customBackground} onChange={(event) => setCustomBackground(event.target.value)} /></label>}
+          <div className="background-controls">
+            <button type="button" className="secondary" onClick={onPickBackground}>{t("setBackgroundImage")}</button>
+            <button
+              type="button"
+              className="ghost"
+              disabled={!hasBackgroundImage}
+              onClick={() => {
+                setBackgroundImageEnabled(false);
+                onUpdatePage({ ...page, background_image_id: null, background_image_enabled: false });
+              }}
+            >
+              {t("clearBackground")}
+            </button>
           </div>
-        )}
-        <label>{t("backgroundColor")}
-          <select value={background} onChange={(event) => setBackground(event.target.value)}>
-            <option value="white">White</option>
-            <option value="cream">Cream</option>
-            <option value="light gray">Light gray</option>
-            <option value="black">Black</option>
-            <option value="custom">Custom</option>
-          </select>
-        </label>
-        {background === "custom" && <label>Custom color<input type="color" value={customBackground} onChange={(event) => setCustomBackground(event.target.value)} /></label>}
-        <div className="background-controls">
-          <button type="button" onClick={onPickBackground}>{t("setBackgroundImage")}</button>
-          <button
-            type="button"
-            disabled={!hasBackgroundImage}
-            onClick={() => {
-              setBackgroundImageEnabled(false);
-              onUpdatePage({ ...page, background_image_id: null, background_image_enabled: false });
-            }}
-          >
-            {t("clearBackground")}
-          </button>
-        </div>
-        {hasBackgroundImage && (
-          <CheckRow
-            checked={backgroundImageEnabled}
-            label={t("showBackgroundImage")}
-            onChange={(checked) => setBackgroundImageEnabled(checked)}
-          />
-        )}
-        <label className="editor-number">{t("opacity")} <span>{backgroundOpacity}%</span><input type="range" min="0" max="100" value={backgroundOpacity} onChange={(event) => setBackgroundOpacity(Number(event.target.value))} /></label>
-        <label>{t("backgroundFit")}
-          <select value={backgroundFit} onChange={(event) => setBackgroundFit(event.target.value)}>
-            <option value="contain" title="Show the whole background image without cropping.">Contain</option>
-            <option value="cover" title="Fill the page, cropping edges if needed.">Cover</option>
-            <option value="stretch" title="Stretch to page size; may distort.">Stretch</option>
-            <option value="tile" title="Repeat the image as a pattern.">Tile</option>
-          </select>
-        </label>
-        <small className="helper-text">{{
-          contain: "Contain shows the whole background image without cropping.",
-          cover: "Cover fills the page and may crop edges.",
-          stretch: "Stretch fills the page but may distort the image.",
-          tile: "Tile repeats the image as a pattern."
-        }[backgroundFit] || ""}</small>
-        <CheckRow checked={showGuides} label={t("showGuides")} title="Display alignment guides while editing the page." onChange={setShowGuides} />
-        <CheckRow checked={snapToGrid} label={t("snapToGrid")} title="When moving or resizing items, align them to the grid." onChange={setSnapToGrid} />
-        <label className="editor-number" title="Controls spacing of the snap grid; smaller values allow finer positioning.">{t("gridSize")}<input type="number" min="5" max="100" value={gridSize} onChange={(event) => setGridSize(Number(event.target.value))} /></label>
-        <label>{t("template")}
-          <select value={templateName} onChange={(event) => setTemplateName(event.target.value)}>
-            <option value="blank">Blank page</option>
-            <option value="2-column">2-column</option>
-            <option value="3-column">3-column</option>
-            <option value="4-column">4-column</option>
-            <option value="coin-tray">Coin tray</option>
-            <option value="banknote-rows">Banknote rows</option>
-          </select>
-        </label>
+          {hasBackgroundImage && (
+            <CheckRow
+              checked={backgroundImageEnabled}
+              label={t("showBackgroundImage")}
+              onChange={(checked) => setBackgroundImageEnabled(checked)}
+            />
+          )}
+          <label className="editor-number">{t("opacity")} <span>{backgroundOpacity}%</span><input type="range" min="0" max="100" value={backgroundOpacity} onChange={(event) => setBackgroundOpacity(Number(event.target.value))} /></label>
+          <label>{t("backgroundFit")}
+            <select value={backgroundFit} onChange={(event) => setBackgroundFit(event.target.value)}>
+              <option value="contain" title="Show the whole background image without cropping.">Contain</option>
+              <option value="cover" title="Fill the page, cropping edges if needed.">Cover</option>
+              <option value="stretch" title="Stretch to page size; may distort.">Stretch</option>
+              <option value="tile" title="Repeat the image as a pattern.">Tile</option>
+            </select>
+          </label>
+          <small className="helper-text">{{
+            contain: "Contain shows the whole background image without cropping.",
+            cover: "Cover fills the page and may crop edges.",
+            stretch: "Stretch fills the page but may distort the image.",
+            tile: "Tile repeats the image as a pattern."
+          }[backgroundFit] || ""}</small>
+        </section>
+        <section className="inspector-section">
+          <h3>{t("grid")}</h3>
+          <CheckRow checked={showGuides} label={t("showGuides")} title="Display alignment guides while editing the page." onChange={setShowGuides} />
+          <CheckRow checked={snapToGrid} label={t("snapToGrid")} title="When moving or resizing items, align them to the grid." onChange={setSnapToGrid} />
+          <label className="editor-number" title="Controls spacing of the snap grid; smaller values allow finer positioning.">{t("gridSize")}<input type="number" min="5" max="100" value={gridSize} onChange={(event) => setGridSize(Number(event.target.value))} /></label>
+        </section>
+        <section className="inspector-section">
+          <h3>{t("template")}</h3>
+          <label>{t("template")}
+            <select value={templateName} onChange={(event) => setTemplateName(event.target.value)}>
+              <option value="blank">Blank page</option>
+              <option value="2-column">2-column</option>
+              <option value="3-column">3-column</option>
+              <option value="4-column">4-column</option>
+              <option value="coin-tray">Coin tray</option>
+              <option value="banknote-rows">Banknote rows</option>
+            </select>
+          </label>
+        </section>
       </div>
       <div className="placement-actions">
         <button type="button" onClick={() => onApplyTemplate(templateName)}>{t("applyTemplate")}</button>
@@ -4860,4 +5143,6 @@ function EmptyState({ title }) {
   return <div className="empty">{title}</div>;
 }
 
+perfTrace("renderer.module.loaded", { ms: Math.round(rendererModuleLoadedAt * 10) / 10 });
 createRoot(document.getElementById("root")).render(<App />);
+perfTrace("renderer.root.render.called", { ms: Math.round(performance.now() * 10) / 10 });

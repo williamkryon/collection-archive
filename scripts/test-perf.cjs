@@ -291,10 +291,10 @@ async function collectDiagnostics(client) {
         loadingTexts: [...document.querySelectorAll('body *')].map((node) => node.textContent?.trim()).filter((text) => /^Loading|Loading/.test(text || '')).slice(0, 8),
         loadMore: [...document.querySelectorAll('.load-more')].map((node) => node.textContent.trim()),
         filters: {
-          country: document.querySelector('.filters select')?.value || '',
-          type: document.querySelectorAll('.filters select')[1]?.value || '',
+          country: document.querySelectorAll('.filter-combobox .entity-combobox-trigger')[0]?.textContent.trim() || '',
+          type: document.querySelector('.filters select')?.value || '',
           year: document.querySelector('.filters input[placeholder="Year"]')?.value || '',
-          tag: document.querySelector('.filters input[placeholder="Tag"]')?.value || '',
+          tag: document.querySelector('.filters input[placeholder^="Tags"]')?.value || '',
           favorite: Boolean(document.querySelector('.filters input[type="checkbox"]')?.checked)
         }
       })`,
@@ -366,7 +366,7 @@ function waitForLibraryCountScript(expectedTotal, label, timeoutMs = 8000) {
         const text = document.querySelector('.topbar p')?.textContent || '';
         const cards = document.querySelectorAll('.item-card').length;
         const loading = [...document.querySelectorAll('.load-more')].some((node) => /Loading/i.test(node.textContent || ''));
-        const matchedText = text.includes('from ' + expectedTotal + ' matching');
+        const matchedText = text.includes('of ' + expectedTotal + ' matching') || text.includes('from ' + expectedTotal + ' matching');
         if (matchedText && cards === expectedCards && !loading) {
           resolve({
             label: ${JSON.stringify(label)},
@@ -389,10 +389,10 @@ function waitForLibraryCountScript(expectedTotal, label, timeoutMs = 8000) {
             expectedCards,
             loading,
             filters: {
-              country: document.querySelector('.filters select')?.value || '',
-              type: document.querySelectorAll('.filters select')[1]?.value || '',
+              country: document.querySelectorAll('.filter-combobox .entity-combobox-trigger')[0]?.textContent.trim() || '',
+              type: document.querySelector('.filters select')?.value || '',
               year: document.querySelector('.filters input[placeholder="Year"]')?.value || '',
-              tag: document.querySelector('.filters input[placeholder="Tag"]')?.value || '',
+              tag: document.querySelector('.filters input[placeholder^="Tags"]')?.value || '',
               favorite: Boolean(document.querySelector('.filters input[type="checkbox"]')?.checked)
             }
           });
@@ -411,31 +411,40 @@ function waitForLibraryCountScript(expectedTotal, label, timeoutMs = 8000) {
 
 function resetLibraryFiltersScript(expectedTotal) {
   return `
-    const country = document.querySelector('.filters select');
-    const type = document.querySelectorAll('.filters select')[1];
-    const year = document.querySelector('.filters input[placeholder="Year"]');
-    const tag = document.querySelector('.filters input[placeholder="Tag"]');
-    const favorite = document.querySelector('.filters input[type="checkbox"]');
-    if (country.value) {
-      country.value = '';
-      country.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-    if (type.value) {
-      type.value = '';
-      type.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-    if (year.value) {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(year, '');
-      year.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-    if (tag.value) {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(tag, '');
-      tag.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-    if (favorite.checked) {
-      favorite.click();
-    }
+    const clear = document.querySelector('.clear-filters');
+    if (clear && !clear.disabled) clear.click();
     ${waitForLibraryCountScript(expectedTotal, "reset")}
+  `;
+}
+
+function chooseFilterComboboxScript(index, label) {
+  return `
+    {
+      const combo = document.querySelectorAll('.filter-combobox')[${Number(index)}];
+      if (!combo) throw new Error('Filter combobox not found at index ${Number(index)}');
+      combo.querySelector('.entity-combobox-trigger').click();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      const input = combo.querySelector('.entity-combobox-panel input');
+      if (!input) throw new Error('Filter combobox search input not found');
+      input.focus();
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(label)});
+      input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: ${JSON.stringify(label)} }));
+      const option = await new Promise((resolve) => {
+        const started = performance.now();
+        const check = () => {
+          const match = [...combo.querySelectorAll('.entity-combobox-results button')]
+            .find((button) => button.textContent.trim() === ${JSON.stringify(label)});
+          if (match || performance.now() - started > 2500) {
+            resolve(match || null);
+            return;
+          }
+          setTimeout(check, 25);
+        };
+        check();
+      });
+      if (!option) throw new Error('Filter combobox option not found for ${String(label).replace(/'/g, "\\'")}');
+      option.click();
+    }
   `;
 }
 
@@ -489,13 +498,13 @@ async function main() {
   console.log(`[perf] launched Electron with data ${dataDir}`);
   const client = await connect();
   console.log("[perf] connected to DevTools");
+  await waitFor(client, "Boolean(window.archiveAPI && document.querySelector('.app'))", "App shell did not render");
+  console.log("[perf] app shell rendered");
   await evaluate(client, `() => {
     localStorage.setItem("archivePerfTrace", "1");
     window.__archivePerfTrace = true;
     return true;
   }`);
-  await waitFor(client, "Boolean(window.archiveAPI && document.querySelector('.app'))", "App shell did not render");
-  console.log("[perf] app shell rendered");
   await waitFor(client, "document.querySelectorAll('.item-card').length > 0", "Library cards did not render");
   console.log("[perf] first library cards rendered");
   const launchMs = Math.round((performance.now() - start) * 10) / 10;
@@ -505,13 +514,15 @@ async function main() {
     `async () => {
       const library = await window.archiveAPI.getLibrary();
       const itemCount = await window.archiveAPI.countItems({});
-      const firstCountryId = library.countries[10]?.id || library.countries[0]?.id || "";
+      const firstCountry = library.countries[10] || library.countries[0] || {};
+      const firstCountryId = firstCountry.id || "";
       const firstTypeId = library.types[4]?.id || library.types[0]?.id || "";
       return {
         itemCount,
         countryCount: library.countries.length,
         typeCount: library.types.length,
         firstCountryId,
+        firstCountryName: firstCountry.name || "",
         firstTypeId,
         expected: {
           all: itemCount,
@@ -548,10 +559,8 @@ async function main() {
     ${resetLibraryFiltersScript(libraryState.expected.all)}
     mark('reset.end');
     await new Promise((resolve) => setTimeout(resolve, 0));
-    const select = document.querySelector('.filters select');
     mark('interaction.start');
-    select.value = ${JSON.stringify(libraryState.firstCountryId)};
-    select.dispatchEvent(new Event('change', { bubbles: true }));
+    ${chooseFilterComboboxScript(0, libraryState.firstCountryName)}
     mark('interaction.end');
     mark('wait.start');
     ${waitForLibraryCountScript(libraryState.expected.country, "country")}
@@ -570,10 +579,10 @@ async function main() {
     ${resetLibraryFiltersScript(libraryState.expected.all)}
     mark('reset.end');
     await new Promise((resolve) => setTimeout(resolve, 0));
-    const selects = document.querySelectorAll('.filters select');
+    const select = document.querySelector('.filters select');
     mark('interaction.start');
-    selects[1].value = ${JSON.stringify(libraryState.firstTypeId)};
-    selects[1].dispatchEvent(new Event('change', { bubbles: true }));
+    select.value = ${JSON.stringify(libraryState.firstTypeId)};
+    select.dispatchEvent(new Event('change', { bubbles: true }));
     mark('interaction.end');
     mark('wait.start');
     ${waitForLibraryCountScript(libraryState.expected.type, "type")}
@@ -614,7 +623,7 @@ async function main() {
     ${resetLibraryFiltersScript(libraryState.expected.all)}
     mark('reset.end');
     await new Promise((resolve) => setTimeout(resolve, 0));
-    const input = document.querySelector('.filters input[placeholder="Tag"]');
+    const input = document.querySelector('.filters input[placeholder^="Tags"]');
     mark('interaction.start');
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'classic');
     input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -684,7 +693,7 @@ async function main() {
   timings.push(await measure(client, "album dense page render", `() => {
     [...document.querySelectorAll('nav button')].find((button) => button.textContent.trim() === 'Albums').click();
     return new Promise((resolve) => setTimeout(() => {
-      const firstAlbum = document.querySelector('.album-list button');
+      const firstAlbum = document.querySelector('.album-list > button');
       firstAlbum?.click();
       const started = performance.now();
       const check = () => {
