@@ -2060,52 +2060,64 @@ async function main() {
   assert(textStyleState.computed.textAlign === "right" && textStyleState.computed.textDecoration.includes("underline"), `Styled text did not render in edit mode: ${JSON.stringify(textStyleState)}`);
   assert(textStyleState.labels.noSavedTemplates && textStyleState.labels.font && textStyleState.labels.underline, `Saved-template buttons remained or text labels disappeared: ${JSON.stringify(textStyleState.labels)}`);
 
-  const shortcutState = await evaluate(
-    client,
-    `(async () => {
-      window.confirm = () => true;
-      const key = (value, options = {}) => window.dispatchEvent(new KeyboardEvent('keydown', { key: value, bubbles: true, ...options }));
-      document.querySelector('.text-placement').click();
-      await new Promise((resolve) => setTimeout(resolve, 150));
-      const beforeText = document.querySelectorAll('.text-placement').length;
-      key('c', { ctrlKey: true });
-      key('v', { ctrlKey: true });
-      await new Promise((resolve) => setTimeout(resolve, 600));
-      const afterTextPaste = document.querySelectorAll('.text-placement').length;
-      key('Backspace');
-      await new Promise((resolve) => setTimeout(resolve, 600));
-      const afterTextDelete = document.querySelectorAll('.text-placement').length;
-      const image = [...document.querySelectorAll('.album-placement')].find((node) => !node.classList.contains('text-placement'));
-      image.click();
-      await new Promise((resolve) => setTimeout(resolve, 120));
-      const beforeImages = [...document.querySelectorAll('.album-placement')].filter((node) => !node.classList.contains('text-placement')).length;
-      key('c', { ctrlKey: true });
-      key('v', { ctrlKey: true });
-      await new Promise((resolve) => setTimeout(resolve, 600));
-      const afterImagePaste = [...document.querySelectorAll('.album-placement')].filter((node) => !node.classList.contains('text-placement')).length;
-      const pasted = document.querySelector('.album-placement.selected');
-      const beforeLeft = Math.round(pasted.getBoundingClientRect().left);
-      key('ArrowRight');
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      const afterLeft = Math.round(document.querySelector('.album-placement.selected').getBoundingClientRect().left);
-      key('Backspace');
-      await new Promise((resolve) => setTimeout(resolve, 600));
-      const afterImageDelete = [...document.querySelectorAll('.album-placement')].filter((node) => !node.classList.contains('text-placement')).length;
-      key('a', { ctrlKey: true });
-      await new Promise((resolve) => setTimeout(resolve, 150));
-      return {
-        beforeText,
-        afterTextPaste,
-        afterTextDelete,
-        beforeImages,
-        afterImagePaste,
-        afterImageDelete,
-        nudgeMoved: afterLeft > beforeLeft,
-        selectAll: document.querySelectorAll('.album-placement.selected').length,
-        total: document.querySelectorAll('.album-placement').length
-      };
-    })()`
-  );
+  const shortcutState = {};
+  await smokeStep(client, "shortcuts: prepare key handler", () => evaluate(client, `(() => {
+    window.confirm = () => true;
+    window.__smokeKey = (value, options = {}) => window.dispatchEvent(new KeyboardEvent('keydown', { key: value, bubbles: true, ...options }));
+    return true;
+  })()`));
+  await smokeStep(client, "shortcuts: select text placement", () => evaluate(client, `(() => {
+    document.querySelector('.text-placement').click();
+    return document.querySelectorAll('.text-placement').length;
+  })()`));
+  shortcutState.beforeText = await smokeStep(client, "shortcuts: count text before paste", () => evaluate(client, `document.querySelectorAll('.text-placement').length`));
+  await smokeStep(client, "shortcuts: copy/paste text", () => evaluate(client, `(() => {
+    window.__smokeKey('c', { ctrlKey: true });
+    window.__smokeKey('v', { ctrlKey: true });
+    return true;
+  })()`));
+  await waitForStep(client, "shortcuts: pasted text appears", `document.querySelectorAll('.text-placement').length === ${shortcutState.beforeText + 1}`, "Pasted text box did not appear");
+  shortcutState.afterTextPaste = await smokeStep(client, "shortcuts: count text after paste", () => evaluate(client, `document.querySelectorAll('.text-placement').length`));
+  await smokeStep(client, "shortcuts: delete pasted text", () => evaluate(client, `(() => {
+    window.__smokeKey('Backspace');
+    return true;
+  })()`));
+  await waitForStep(client, "shortcuts: pasted text deleted", `document.querySelectorAll('.text-placement').length === ${shortcutState.beforeText}`, "Pasted text box was not deleted");
+  shortcutState.afterTextDelete = await smokeStep(client, "shortcuts: count text after delete", () => evaluate(client, `document.querySelectorAll('.text-placement').length`));
+  await smokeStep(client, "shortcuts: select image placement", () => evaluate(client, `(() => {
+    const image = [...document.querySelectorAll('.album-placement')].find((node) => !node.classList.contains('text-placement'));
+    image.click();
+    return true;
+  })()`));
+  shortcutState.beforeImages = await smokeStep(client, "shortcuts: count images before paste", () => evaluate(client, `[...document.querySelectorAll('.album-placement')].filter((node) => !node.classList.contains('text-placement')).length`));
+  await smokeStep(client, "shortcuts: copy/paste image", () => evaluate(client, `(() => {
+    window.__smokeKey('c', { ctrlKey: true });
+    window.__smokeKey('v', { ctrlKey: true });
+    return true;
+  })()`));
+  await waitForStep(client, "shortcuts: pasted image appears", `[...document.querySelectorAll('.album-placement')].filter((node) => !node.classList.contains('text-placement')).length === ${shortcutState.beforeImages + 1}`, "Pasted image placement did not appear");
+  shortcutState.afterImagePaste = await smokeStep(client, "shortcuts: count images after paste", () => evaluate(client, `[...document.querySelectorAll('.album-placement')].filter((node) => !node.classList.contains('text-placement')).length`));
+  const beforeLeft = await smokeStep(client, "shortcuts: measure selected image", () => evaluate(client, `Math.round(document.querySelector('.album-placement.selected').getBoundingClientRect().left)`));
+  await smokeStep(client, "shortcuts: nudge selected image", () => evaluate(client, `(() => {
+    window.__smokeKey('ArrowRight');
+    return true;
+  })()`));
+  await waitForStep(client, "shortcuts: nudge applied", `Math.round(document.querySelector('.album-placement.selected').getBoundingClientRect().left) > ${beforeLeft}`, "Arrow key did not move selected placement");
+  const afterLeft = await smokeStep(client, "shortcuts: measure nudged image", () => evaluate(client, `Math.round(document.querySelector('.album-placement.selected').getBoundingClientRect().left)`));
+  shortcutState.nudgeMoved = afterLeft > beforeLeft;
+  await smokeStep(client, "shortcuts: delete pasted image", () => evaluate(client, `(() => {
+    window.__smokeKey('Backspace');
+    return true;
+  })()`));
+  await waitForStep(client, "shortcuts: pasted image deleted", `[...document.querySelectorAll('.album-placement')].filter((node) => !node.classList.contains('text-placement')).length === ${shortcutState.beforeImages}`, "Pasted image placement was not deleted");
+  shortcutState.afterImageDelete = await smokeStep(client, "shortcuts: count images after delete", () => evaluate(client, `[...document.querySelectorAll('.album-placement')].filter((node) => !node.classList.contains('text-placement')).length`));
+  await smokeStep(client, "shortcuts: select all", () => evaluate(client, `(() => {
+    window.__smokeKey('a', { ctrlKey: true });
+    return true;
+  })()`));
+  await waitForStep(client, "shortcuts: all placements selected", `document.querySelectorAll('.album-placement.selected').length === document.querySelectorAll('.album-placement').length`, "Ctrl+A did not select all placements");
+  shortcutState.selectAll = await smokeStep(client, "shortcuts: selected count", () => evaluate(client, `document.querySelectorAll('.album-placement.selected').length`));
+  shortcutState.total = await smokeStep(client, "shortcuts: total placement count", () => evaluate(client, `document.querySelectorAll('.album-placement').length`));
   assert(shortcutState.afterTextPaste === shortcutState.beforeText + 1, "Ctrl+V did not paste a copied text box");
   assert(shortcutState.afterTextDelete === shortcutState.beforeText, "Backspace did not delete the pasted text box");
   assert(shortcutState.afterImagePaste === shortcutState.beforeImages + 1, "Ctrl+V did not paste a copied image placement");

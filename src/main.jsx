@@ -32,7 +32,12 @@ const translations = {
     navLibrary: "Library",
     navGallery: "Gallery",
     navAlbums: "Albums",
+    navTrash: "Trash",
     newItem: "New item",
+    bulkCreateItems: "Bulk create items",
+    createMultipleItems: "Create multiple from images",
+    bulkCreateHelp: "Each selected image will become one new item.",
+    bulkCreateErrors: "Errors",
     manageLists: "Manage lists",
     dataFolder: "Data folder",
     openingArchive: "Opening archive...",
@@ -70,6 +75,44 @@ const translations = {
     tagsComma: "Tags, comma-separated",
     multiTagsHint: "Use commas for multiple tags",
     clearFilters: "Clear filters",
+    selectedCount: "{count} selected",
+    editSelected: "Edit selected",
+    addSelectedToAlbum: "Add to album",
+    moveSelectedToTrash: "Move to trash",
+    clearSelection: "Clear selection",
+    bulkEditItems: "Bulk edit items",
+    fieldModeUnchanged: "Unchanged",
+    fieldModeReplace: "Replace",
+    tagModeAdd: "Add tags",
+    tagModeRemove: "Remove tags",
+    tagModeReplace: "Replace tags",
+    applyBulkEdit: "Apply bulk edit",
+    bulkEditApplied: "Bulk edit applied.",
+    bulkCreateSummary: "Created {created} items. Failed {failed}.",
+    chooseImages: "Choose images",
+    titlePrefix: "Title prefix",
+    titleSuffix: "Title suffix",
+    imageNote: "Image note",
+    imageNotePlaceholder: "front, back, seller photo, needs rescan...",
+    imageNoteSaved: "Image note saved.",
+    technicalDetails: "Technical details",
+    trashTitle: "Trash",
+    trashEmpty: "Trash is empty",
+    restore: "Restore",
+    permanentlyDelete: "Delete permanently",
+    emptyTrash: "Empty trash",
+    movedToTrash: "Moved to trash.",
+    restoredFromTrash: "Restored from trash.",
+    permanentlyDeleted: "Permanently deleted.",
+    addAllImagesToAlbum: "Add all images to album",
+    addSelectedFirstImages: "Add first image from selected",
+    addSelectedAllImages: "Add all images from selected",
+    albumTarget: "Target album page",
+    columns: "Columns",
+    spacing: "Spacing",
+    useCoverImage: "Use cover image",
+    useAllImages: "Use all images",
+    bulkAlbumAdded: "Added {added} placements. Skipped {skipped}.",
     noIssuingEntity: "No issuing entity",
     noType: "No type",
     noYear: "No year",
@@ -88,9 +131,24 @@ const translations = {
     next: "Next",
     closeViewer: "Close viewer",
     addImages: "Add images",
+    importFromPhone: "Import from phone",
+    phoneUpload: "Phone upload",
+    phoneUploadTarget: "Uploads will be added to current item: {title}",
+    phoneUploadHint: "Open this URL on a phone connected to the same Wi-Fi. Windows Firewall may ask for permission the first time.",
+    phoneUploadUrl: "Upload URL",
+    stopPhoneUpload: "Stop upload",
+    uploadedPhotos: "{count} uploaded",
+    waitingForPhone: "Waiting for phone...",
+    noLanAddress: "No LAN address found. Check that this computer is connected to Wi-Fi.",
+    phoneUploadStarted: "Phone upload started.",
+    phoneUploadStopped: "Phone upload stopped.",
+    lastUpload: "Last upload",
     metadata: "Metadata",
     replaceImage: "Replace image",
     removeImage: "Remove image",
+    regenerateThumbnail: "Regenerate thumbnail",
+    regenerateItemThumbnails: "Regenerate item thumbnails",
+    thumbnailsRegenerated: "Thumbnails regenerated.",
     saveChanges: "Save changes",
     albumsTitle: "Albums",
     newAlbum: "New album",
@@ -381,6 +439,64 @@ translations.zh.retry = "\u91cd\u8bd5";
 translations.zh.loadingLibraryItems = "\u6b63\u5728\u52a0\u8f7d\u9986\u85cf\u85cf\u54c1...";
 translations.zh.loadingGalleryItems = "\u6b63\u5728\u52a0\u8f7d\u56fe\u5e93...";
 translations.zh.loadingAlbum = "\u6b63\u5728\u52a0\u8f7d\u518c\u9875...";
+translations.zh.navTrash = "\u56de\u6536\u7ad9";
+translations.zh.bulkCreateItems = "\u6279\u91cf\u521b\u5efa\u85cf\u54c1";
+translations.zh.createMultipleItems = "\u4ece\u56fe\u7247\u6279\u91cf\u521b\u5efa";
+translations.zh.bulkCreateHelp = "\u6bcf\u5f20\u9009\u4e2d\u7684\u56fe\u7247\u90fd\u4f1a\u6210\u4e3a\u4e00\u4ef6\u65b0\u85cf\u54c1\u3002";
+translations.zh.bulkCreateErrors = "\u9519\u8bef";
+translations.zh.selectedCount = "\u5df2\u9009 {count} \u4ef6";
+translations.zh.editSelected = "\u7f16\u8f91\u6240\u9009";
+translations.zh.addSelectedToAlbum = "\u6dfb\u52a0\u5230\u518c\u9875";
+translations.zh.moveSelectedToTrash = "\u79fb\u5230\u56de\u6536\u7ad9";
+translations.zh.clearSelection = "\u6e05\u9664\u9009\u62e9";
+translations.zh.bulkEditItems = "\u6279\u91cf\u7f16\u8f91\u85cf\u54c1";
+translations.zh.fieldModeUnchanged = "\u4e0d\u66f4\u6539";
+translations.zh.fieldModeReplace = "\u66ff\u6362";
+translations.zh.tagModeAdd = "\u6dfb\u52a0\u6807\u7b7e";
+translations.zh.tagModeRemove = "\u79fb\u9664\u6807\u7b7e";
+translations.zh.tagModeReplace = "\u66ff\u6362\u6807\u7b7e";
+translations.zh.applyBulkEdit = "\u5e94\u7528\u6279\u91cf\u7f16\u8f91";
+translations.zh.bulkEditApplied = "\u6279\u91cf\u7f16\u8f91\u5df2\u5e94\u7528\u3002";
+translations.zh.bulkCreateSummary = "\u5df2\u521b\u5efa {created} \u4ef6\uff0c\u5931\u8d25 {failed} \u4ef6\u3002";
+translations.zh.chooseImages = "\u9009\u62e9\u56fe\u7247";
+translations.zh.titlePrefix = "\u6807\u9898\u524d\u7f00";
+translations.zh.titleSuffix = "\u6807\u9898\u540e\u7f00";
+translations.zh.imageNote = "\u56fe\u7247\u5907\u6ce8";
+translations.zh.imageNotePlaceholder = "\u6b63\u9762\u3001\u80cc\u9762\u3001\u5356\u5bb6\u56fe\u3001\u9700\u8981\u91cd\u626b...";
+translations.zh.imageNoteSaved = "\u56fe\u7247\u5907\u6ce8\u5df2\u4fdd\u5b58\u3002";
+translations.zh.technicalDetails = "\u6280\u672f\u8be6\u60c5";
+translations.zh.trashTitle = "\u56de\u6536\u7ad9";
+translations.zh.trashEmpty = "\u56de\u6536\u7ad9\u4e3a\u7a7a";
+translations.zh.restore = "\u6062\u590d";
+translations.zh.permanentlyDelete = "\u6c38\u4e45\u5220\u9664";
+translations.zh.emptyTrash = "\u6e05\u7a7a\u56de\u6536\u7ad9";
+translations.zh.movedToTrash = "\u5df2\u79fb\u5230\u56de\u6536\u7ad9\u3002";
+translations.zh.restoredFromTrash = "\u5df2\u4ece\u56de\u6536\u7ad9\u6062\u590d\u3002";
+translations.zh.permanentlyDeleted = "\u5df2\u6c38\u4e45\u5220\u9664\u3002";
+translations.zh.addAllImagesToAlbum = "\u5c06\u5168\u90e8\u56fe\u7247\u6dfb\u52a0\u5230\u518c\u9875";
+translations.zh.addSelectedFirstImages = "\u6dfb\u52a0\u6240\u9009\u7684\u9996\u5f20\u56fe";
+translations.zh.addSelectedAllImages = "\u6dfb\u52a0\u6240\u9009\u7684\u5168\u90e8\u56fe";
+translations.zh.albumTarget = "\u76ee\u6807\u518c\u9875";
+translations.zh.columns = "\u5217\u6570";
+translations.zh.spacing = "\u95f4\u8ddd";
+translations.zh.useCoverImage = "\u4f7f\u7528\u5c01\u9762\u56fe";
+translations.zh.useAllImages = "\u4f7f\u7528\u5168\u90e8\u56fe\u7247";
+translations.zh.bulkAlbumAdded = "\u5df2\u6dfb\u52a0 {added} \u4e2a\u6446\u653e\u4f4d\uff0c\u8df3\u8fc7 {skipped} \u4e2a\u3002";
+translations.zh.importFromPhone = "\u4ece\u624b\u673a\u5bfc\u5165";
+translations.zh.phoneUpload = "\u624b\u673a\u4e0a\u4f20";
+translations.zh.phoneUploadTarget = "\u4e0a\u4f20\u7684\u7167\u7247\u5c06\u6dfb\u52a0\u5230\u5f53\u524d\u85cf\u54c1\uff1a{title}";
+translations.zh.phoneUploadHint = "\u5728\u540c\u4e00 Wi-Fi \u7684\u624b\u673a\u4e0a\u6253\u5f00\u6b64\u5730\u5740\u3002\u9996\u6b21\u4f7f\u7528\u65f6 Windows \u9632\u706b\u5899\u53ef\u80fd\u4f1a\u8be2\u95ee\u6743\u9650\u3002";
+translations.zh.phoneUploadUrl = "\u4e0a\u4f20\u5730\u5740";
+translations.zh.stopPhoneUpload = "\u505c\u6b62\u4e0a\u4f20";
+translations.zh.uploadedPhotos = "\u5df2\u4e0a\u4f20 {count} \u5f20";
+translations.zh.waitingForPhone = "\u6b63\u5728\u7b49\u5f85\u624b\u673a...";
+translations.zh.noLanAddress = "\u672a\u627e\u5230\u5c40\u57df\u7f51\u5730\u5740\u3002\u8bf7\u786e\u8ba4\u7535\u8111\u5df2\u8fde\u63a5 Wi-Fi\u3002";
+translations.zh.phoneUploadStarted = "\u624b\u673a\u4e0a\u4f20\u5df2\u542f\u52a8\u3002";
+translations.zh.phoneUploadStopped = "\u624b\u673a\u4e0a\u4f20\u5df2\u505c\u6b62\u3002";
+translations.zh.lastUpload = "\u4e0a\u6b21\u4e0a\u4f20";
+translations.zh.regenerateThumbnail = "\u91cd\u5efa\u7f29\u7565\u56fe";
+translations.zh.regenerateItemThumbnails = "\u91cd\u5efa\u672c\u85cf\u54c1\u7f29\u7565\u56fe";
+translations.zh.thumbnailsRegenerated = "\u7f29\u7565\u56fe\u5df2\u91cd\u5efa\u3002";
 translations.zh.physicalSize = "\u5b9e\u9645\u5c3a\u5bf8";
 translations.zh.widthMm = "\u5bbd\u5ea6\uff08\u6beb\u7c73\uff09";
 translations.zh.heightMm = "\u9ad8\u5ea6\uff08\u6beb\u7c73\uff09";
@@ -1025,6 +1141,243 @@ function StartupScreen({ status, error, onRetry }) {
   );
 }
 
+function PhoneUploadDialog({ session, onClose, onStop }) {
+  const { t } = useI18n();
+  const urls = Array.isArray(session.urls) ? session.urls : [];
+  const primaryUrl = urls[0] || "";
+
+  return (
+    <div className="modal-backdrop">
+      <section className="modal phone-upload-dialog" role="dialog" aria-modal="true" aria-labelledby="phone-upload-title">
+        <header className="modal-header">
+          <div>
+            <h2 id="phone-upload-title">{t("phoneUpload")}</h2>
+            <p>{t("phoneUploadTarget", "", { title: session.itemTitle || "" })}</p>
+          </div>
+          <div className="modal-actions">
+            <button type="button" className="danger" onClick={onStop}>{t("stopPhoneUpload")}</button>
+            <button type="button" className="ghost" onClick={onClose}>{t("close")}</button>
+          </div>
+        </header>
+        <div className="phone-upload-body">
+          {session.qrCodeDataUrl ? (
+            <img className="phone-upload-qr" src={session.qrCodeDataUrl} alt={t("phoneUploadUrl")} />
+          ) : null}
+          <div className="phone-upload-info">
+            <label>
+              <span>{t("phoneUploadUrl")}</span>
+              <input readOnly value={primaryUrl} onFocus={(event) => event.target.select()} />
+            </label>
+            {urls.length > 1 && (
+              <div className="phone-upload-url-list">
+                {urls.slice(1).map((url) => (
+                  <input key={url} readOnly value={url} onFocus={(event) => event.target.select()} />
+                ))}
+              </div>
+            )}
+            <p className="hint">{t("phoneUploadHint")}</p>
+            {session.error ? <p className="form-error">{session.error.includes("No private LAN") ? t("noLanAddress") : session.error}</p> : null}
+            <div className="phone-upload-status">
+              <span>{session.running ? t("waitingForPhone") : t("phoneUploadStopped")}</span>
+              <strong>{t("uploadedPhotos", "", { count: session.uploadedCount || 0 })}</strong>
+            </div>
+            {session.lastUpload ? <p className="hint">{t("lastUpload")}: {session.lastUpload}</p> : null}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function BulkEditDialog({ count, countries, types, onClose, onSubmit }) {
+  const { t } = useI18n();
+  const [countryMode, setCountryMode] = useState("unchanged");
+  const [countryId, setCountryId] = useState("");
+  const [typeMode, setTypeMode] = useState("unchanged");
+  const [typeId, setTypeId] = useState("");
+  const [yearMode, setYearMode] = useState("unchanged");
+  const [year, setYear] = useState("");
+  const [conditionMode, setConditionMode] = useState("unchanged");
+  const [condition, setCondition] = useState("");
+  const [sourceMode, setSourceMode] = useState("unchanged");
+  const [source, setSource] = useState("");
+  const [tagMode, setTagMode] = useState("unchanged");
+  const [tags, setTags] = useState("");
+
+  function modeSelect(value, setter) {
+    return (
+      <select value={value} onChange={(event) => setter(event.target.value)}>
+        <option value="unchanged">{t("fieldModeUnchanged")}</option>
+        <option value="replace">{t("fieldModeReplace")}</option>
+      </select>
+    );
+  }
+
+  function submit(event) {
+    event.preventDefault();
+    if (!window.confirm(`Apply changes to ${count} selected items?`)) return;
+    onSubmit({
+      country_id: { mode: countryMode, value: countryId },
+      type_id: { mode: typeMode, value: typeId },
+      year: { mode: yearMode, value: year },
+      condition: { mode: conditionMode, value: condition },
+      source: { mode: sourceMode, value: source },
+      tags: { mode: tagMode, value: tags }
+    });
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <form className="modal bulk-dialog" onSubmit={submit}>
+        <header>
+          <h2>{t("bulkEditItems")}</h2>
+          <button type="button" onClick={onClose}>{t("close")}</button>
+        </header>
+        <p>{t("selectedCount", "", { count })}</p>
+        <div className="bulk-field-grid">
+          <label>{t("issuingEntity")}{modeSelect(countryMode, setCountryMode)}<select disabled={countryMode === "unchanged"} value={countryId} onChange={(event) => setCountryId(event.target.value)}><option value="">{t("none")}</option>{orderedRows(countries).map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
+          <label>{t("type")}{modeSelect(typeMode, setTypeMode)}<select disabled={typeMode === "unchanged"} value={typeId} onChange={(event) => setTypeId(event.target.value)}><option value="">{t("none")}</option>{orderedRows(types).map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
+          <label>{t("year")}{modeSelect(yearMode, setYearMode)}<input disabled={yearMode === "unchanged"} value={year} onChange={(event) => setYear(event.target.value)} /></label>
+          <label>{t("condition")}{modeSelect(conditionMode, setConditionMode)}<input disabled={conditionMode === "unchanged"} value={condition} onChange={(event) => setCondition(event.target.value)} /></label>
+          <label>{t("source")}{modeSelect(sourceMode, setSourceMode)}<input disabled={sourceMode === "unchanged"} value={source} onChange={(event) => setSource(event.target.value)} /></label>
+          <label>{t("tagsComma")}<select value={tagMode} onChange={(event) => setTagMode(event.target.value)}><option value="unchanged">{t("fieldModeUnchanged")}</option><option value="add">{t("tagModeAdd")}</option><option value="remove">{t("tagModeRemove")}</option><option value="replace">{t("tagModeReplace")}</option></select><input disabled={tagMode === "unchanged"} value={tags} onChange={(event) => setTags(event.target.value)} /></label>
+        </div>
+        <footer>
+          <button type="button" className="secondary" onClick={onClose}>{t("cancel")}</button>
+          <button type="submit" className="primary">{t("applyBulkEdit")}</button>
+        </footer>
+      </form>
+    </div>
+  );
+}
+
+function BulkCreateDialog({ countries, types, onClose, onSubmit }) {
+  const { t } = useI18n();
+  const [payload, setPayload] = useState({ country_id: "", type_id: "", year: "", tags: "", source: "", condition: "", titlePrefix: "", titleSuffix: "" });
+  const [result, setResult] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const update = (next) => setPayload((current) => ({ ...current, ...next }));
+  async function submit(event) {
+    event.preventDefault();
+    setSubmitting(true);
+    try {
+      setResult(await onSubmit(payload));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+  return (
+    <div className="modal-backdrop">
+      <form className="modal" onSubmit={submit}>
+        <header>
+          <div>
+            <h2>{t("createMultipleItems")}</h2>
+            <p className="hint">{t("bulkCreateHelp")}</p>
+          </div>
+          <button type="button" onClick={onClose}>{t("close")}</button>
+        </header>
+        <div className="bulk-field-grid">
+          <label>{t("issuingEntity")}<select value={payload.country_id} onChange={(event) => update({ country_id: event.target.value })}><option value="">{t("none")}</option>{orderedRows(countries).map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
+          <label>{t("type")}<select value={payload.type_id} onChange={(event) => update({ type_id: event.target.value })}><option value="">{t("none")}</option>{orderedRows(types).map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
+          <label>{t("year")}<input value={payload.year} onChange={(event) => update({ year: event.target.value })} /></label>
+          <label>{t("tagsComma")}<input value={payload.tags} onChange={(event) => update({ tags: event.target.value })} /></label>
+          <label>{t("source")}<input value={payload.source} onChange={(event) => update({ source: event.target.value })} /></label>
+          <label>{t("condition")}<input value={payload.condition} onChange={(event) => update({ condition: event.target.value })} /></label>
+          <label>{t("titlePrefix")}<input value={payload.titlePrefix} onChange={(event) => update({ titlePrefix: event.target.value })} /></label>
+          <label>{t("titleSuffix")}<input value={payload.titleSuffix} onChange={(event) => update({ titleSuffix: event.target.value })} /></label>
+        </div>
+        {result && !result.canceled && (
+          <div className="bulk-result">
+            <strong>{t("bulkCreateSummary", "", { created: result.created?.length || 0, failed: result.failed?.length || 0 })}</strong>
+            {result.failed?.length ? (
+              <details open>
+                <summary>{t("bulkCreateErrors")}</summary>
+                <ul>
+                  {result.failed.map((entry) => <li key={entry.file}>{entry.file}: {entry.error}</li>)}
+                </ul>
+              </details>
+            ) : null}
+          </div>
+        )}
+        <footer>
+          <button type="button" className="secondary" onClick={onClose}>{t("cancel")}</button>
+          <button type="submit" className="primary" disabled={submitting}>{submitting ? t("loading") : t("chooseImages")}</button>
+        </footer>
+      </form>
+    </div>
+  );
+}
+
+function BulkAlbumDialog({ count, album, selectedItemIds, onClose, onSubmit }) {
+  const { t } = useI18n();
+  const pages = album?.pages || [];
+  const [pageId, setPageId] = useState(pages[0]?.id || "");
+  const [mode, setMode] = useState("cover");
+  const [columns, setColumns] = useState(3);
+  const [spacing, setSpacing] = useState(24);
+  useEffect(() => {
+    if (!pageId && pages[0]?.id) setPageId(pages[0].id);
+  }, [pageId, pages]);
+  return (
+    <div className="modal-backdrop">
+      <form className="modal" onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit({ page_id: pageId, item_ids: selectedItemIds, mode, columns, spacing });
+      }}>
+        <header>
+          <h2>{t("addSelectedToAlbum")}</h2>
+          <button type="button" onClick={onClose}>{t("close")}</button>
+        </header>
+        <p>{t("selectedCount", "", { count })}</p>
+        {pages.length ? (
+          <div className="bulk-field-grid">
+            <label>{t("albumTarget")}<select value={pageId} onChange={(event) => setPageId(event.target.value)}>{pages.map((page) => <option key={page.id} value={page.id}>{page.title || `Page ${page.page_number}`}</option>)}</select></label>
+            <label>{t("type")}<select value={mode} onChange={(event) => setMode(event.target.value)}><option value="cover">{t("useCoverImage")}</option><option value="allImages">{t("useAllImages")}</option></select></label>
+            <label>{t("columns")}<input type="number" min="1" max="8" value={columns} onChange={(event) => setColumns(event.target.value)} /></label>
+            <label>{t("spacing")}<input type="number" min="8" max="120" value={spacing} onChange={(event) => setSpacing(event.target.value)} /></label>
+          </div>
+        ) : (
+          <EmptyState title={t("chooseAlbum")} />
+        )}
+        <footer>
+          <button type="button" className="secondary" onClick={onClose}>{t("cancel")}</button>
+          <button type="submit" className="primary" disabled={!pageId}>{t("addSelectedToAlbum")}</button>
+        </footer>
+      </form>
+    </div>
+  );
+}
+
+function TrashView({ rows, onRestore, onPermanentDelete, onEmpty }) {
+  const { t } = useI18n();
+  return (
+    <section className="workspace">
+      <header className="topbar compact">
+        <div>
+          <h1>{t("trashTitle")}</h1>
+          <p>{rows.length} records</p>
+        </div>
+        <button type="button" className="danger" disabled={!rows.length} onClick={onEmpty}>{t("emptyTrash")}</button>
+      </header>
+      <div className="trash-list">
+        {rows.map((row) => (
+          <article className="trash-row" key={`${row.type}:${row.id}`}>
+            <div>
+              <strong>{row.name}</strong>
+              <span>{row.type} · {row.subtitle || ""} · {row.deleted_at}</span>
+            </div>
+            <div className="row-actions">
+              <button type="button" onClick={() => onRestore(row)}>{t("restore")}</button>
+              <button type="button" className="danger" onClick={() => onPermanentDelete(row)}>{t("permanentlyDelete")}</button>
+            </div>
+          </article>
+        ))}
+      </div>
+      {!rows.length && <EmptyState title={t("trashEmpty")} />}
+    </section>
+  );
+}
+
 function ArchiveApp() {
   const { language, setLanguage, t } = useI18n();
   const libraryPageSize = 100;
@@ -1042,6 +1395,13 @@ function ArchiveApp() {
   const [albumFormOpen, setAlbumFormOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
   const [message, setMessage] = useState("");
+  const [phoneUpload, setPhoneUpload] = useState(null);
+  const [phoneUploadOpen, setPhoneUploadOpen] = useState(false);
+  const [selectedLibraryIds, setSelectedLibraryIds] = useState([]);
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [bulkCreateOpen, setBulkCreateOpen] = useState(false);
+  const [bulkAlbumOpen, setBulkAlbumOpen] = useState(false);
+  const [trashRows, setTrashRows] = useState([]);
   const [itemsVersion, setItemsVersion] = useState(0);
   const [startupStatus, setStartupStatus] = useState("openingArchive");
   const [startupError, setStartupError] = useState("");
@@ -1196,6 +1556,24 @@ function ArchiveApp() {
   }, [message]);
 
   useEffect(() => {
+    if (!phoneUploadOpen || !phoneUpload?.running) return undefined;
+    const interval = window.setInterval(() => {
+      api.getPhoneUploadStatus().then((status) => {
+        setPhoneUpload(status);
+        if (status?.uploadedCount !== phoneUpload.uploadedCount) {
+          setItemsVersion((version) => version + 1);
+          if (selectedItemId === status.itemId) {
+            api.getItem(status.itemId).then(setDetail).catch(() => {});
+          }
+        }
+      }).catch((error) => {
+        setMessage(`Phone upload status failed: ${error.message || error}`);
+      });
+    }, 1200);
+    return () => window.clearInterval(interval);
+  }, [phoneUpload?.running, phoneUpload?.uploadedCount, phoneUploadOpen, selectedItemId]);
+
+  useEffect(() => {
     if (!perfTraceEnabled()) return undefined;
     const frame = requestAnimationFrame(() => {
       perfTrace("library.render.ready", {
@@ -1259,6 +1637,11 @@ function ArchiveApp() {
     api.getAlbum(selectedAlbumId).then(setAlbum);
   }, [selectedAlbumId]);
 
+  useEffect(() => {
+    if (activeView !== "trash") return;
+    api.listTrash().then(setTrashRows);
+  }, [activeView, itemsVersion]);
+
   async function createItem(payload) {
     const created = await api.createItem(payload);
     await refresh();
@@ -1285,7 +1668,7 @@ function ArchiveApp() {
   }
 
   async function deleteItem(itemId) {
-    if (!window.confirm("Delete this item? Images and album placements for this item will be removed.")) return;
+    if (!window.confirm("Move this item to Trash?")) return;
     await api.deleteItem(itemId);
     await refresh();
     setItemsVersion((version) => version + 1);
@@ -1294,14 +1677,80 @@ function ArchiveApp() {
       setDetail(null);
       setActiveView("library");
     }
-    setMessage("Item deleted.");
+    setSelectedLibraryIds((ids) => ids.filter((id) => id !== itemId));
+    setMessage(t("movedToTrash"));
+  }
+
+  async function bulkMoveItemsToTrash(ids) {
+    if (!ids.length) return;
+    if (!window.confirm(`Move ${ids.length} selected items to Trash?`)) return;
+    for (const itemId of ids) {
+      await api.deleteItem(itemId);
+    }
+    await refresh();
+    setItemsVersion((version) => version + 1);
+    setSelectedLibraryIds([]);
+    setMessage(t("movedToTrash"));
+  }
+
+  async function applyBulkEdit(operations) {
+    await api.bulkUpdateItems({ ids: selectedLibraryIds, operations });
+    await refresh();
+    setItemsVersion((version) => version + 1);
+    setBulkEditOpen(false);
+    setSelectedLibraryIds([]);
+    setMessage(t("bulkEditApplied"));
+  }
+
+  async function bulkCreateItems(payload) {
+    const result = await api.bulkCreateItemsFromImages(payload);
+    if (result?.canceled) return;
+    await refresh();
+    setItemsVersion((version) => version + 1);
+    setMessage(t("bulkCreateSummary", "", { created: result.created?.length || 0, failed: result.failed?.length || 0 }));
+    return result;
+  }
+
+  async function bulkAddSelectedToAlbum(payload) {
+    const result = await api.bulkAddItemsToPage(payload);
+    if (result?.album && result.album.id === selectedAlbumId) {
+      setAlbum(result.album);
+    }
+    setBulkAlbumOpen(false);
+    setSelectedLibraryIds([]);
+    setMessage(t("bulkAlbumAdded", "", { added: result?.added || 0, skipped: result?.skipped?.length || 0 }));
   }
 
   async function addImages(itemId) {
-    await api.addImages(itemId);
-    await refresh();
-    setItemsVersion((version) => version + 1);
-    setDetail(await api.getItem(itemId));
+    try {
+      await api.addImages(itemId);
+      await refresh();
+      setItemsVersion((version) => version + 1);
+      setDetail(await api.getItem(itemId));
+    } catch (error) {
+      setMessage(`Image import failed: ${error.message || error}`);
+    }
+  }
+
+  async function startPhoneUpload(itemId) {
+    try {
+      const status = await api.startPhoneUpload({ itemId });
+      setPhoneUpload(status);
+      setPhoneUploadOpen(true);
+      setMessage(t("phoneUploadStarted"));
+    } catch (error) {
+      setMessage(`Phone upload failed: ${error.message || error}`);
+    }
+  }
+
+  async function stopPhoneUpload() {
+    const status = await api.stopPhoneUpload();
+    setPhoneUpload(status);
+    setMessage(t("phoneUploadStopped"));
+    if (selectedItemId) {
+      setDetail(await api.getItem(selectedItemId));
+      setItemsVersion((version) => version + 1);
+    }
   }
 
   async function removeImage(imageId, itemId) {
@@ -1317,6 +1766,61 @@ function ArchiveApp() {
     await refresh();
     setItemsVersion((version) => version + 1);
     setDetail(await api.getItem(itemId));
+  }
+
+  async function updateImageNote(payload) {
+    const updated = await api.updateImageNote(payload);
+    if (updated) {
+      setDetail(updated);
+      setItemsVersion((version) => version + 1);
+    }
+    setMessage(t("imageNoteSaved"));
+  }
+
+  async function refreshTrash() {
+    setTrashRows(await api.listTrash());
+  }
+
+  async function restoreTrash(row) {
+    await api.restoreTrash(row);
+    await refresh();
+    await refreshTrash();
+    setItemsVersion((version) => version + 1);
+    setMessage(t("restoredFromTrash"));
+  }
+
+  async function permanentlyDeleteTrash(row) {
+    if (!window.confirm("Permanently delete this record? This cannot be undone.")) return;
+    await api.permanentlyDeleteTrash(row);
+    await refresh();
+    await refreshTrash();
+    setItemsVersion((version) => version + 1);
+    setMessage(t("permanentlyDeleted"));
+  }
+
+  async function emptyTrash() {
+    if (!window.confirm("Permanently delete everything in Trash? This cannot be undone.")) return;
+    await api.emptyTrash();
+    await refresh();
+    await refreshTrash();
+    setItemsVersion((version) => version + 1);
+    setMessage(t("permanentlyDeleted"));
+  }
+
+  async function regenerateThumbnail(imageId, itemId) {
+    await api.regenerateThumbnail(imageId);
+    await refresh();
+    setItemsVersion((version) => version + 1);
+    setDetail(await api.getItem(itemId));
+    setMessage(t("thumbnailsRegenerated"));
+  }
+
+  async function regenerateItemThumbnails(itemId) {
+    const updated = await api.regenerateItemThumbnails(itemId);
+    await refresh();
+    setItemsVersion((version) => version + 1);
+    setDetail(updated || await api.getItem(itemId));
+    setMessage(t("thumbnailsRegenerated"));
   }
 
   async function reorderImages(itemId, ids) {
@@ -1374,6 +1878,9 @@ function ArchiveApp() {
             <button className={activeView === "albums" ? "active" : ""} onClick={() => setActiveView("albums")}>
               {t("navAlbums")}
             </button>
+            <button className={activeView === "trash" ? "active" : ""} onClick={() => setActiveView("trash")}>
+              {t("navTrash")}
+            </button>
           </nav>
         </div>
         <div className="sidebar-actions">
@@ -1412,6 +1919,11 @@ function ArchiveApp() {
             }}
             onEditItem={editItem}
             onDeleteItem={deleteItem}
+            selectedIds={selectedLibraryIds}
+            setSelectedIds={setSelectedLibraryIds}
+            onBulkEdit={() => setBulkEditOpen(true)}
+            onBulkTrash={() => bulkMoveItemsToTrash(selectedLibraryIds)}
+            onBulkAlbum={() => setBulkAlbumOpen(true)}
           />
         )}
 
@@ -1439,9 +1951,11 @@ function ArchiveApp() {
             types={library.types}
             onBack={() => setActiveView("library")}
             onAddImages={addImages}
+            onStartPhoneUpload={startPhoneUpload}
             onRemoveImage={removeImage}
             onReplaceImage={replaceImage}
             onReorderImages={reorderImages}
+            onUpdateImageNote={updateImageNote}
             onUpdate={async (payload) => {
               await updateItem(payload);
             }}
@@ -1473,6 +1987,14 @@ function ArchiveApp() {
               setAlbum(updated);
               setItemsVersion((version) => version + 1);
               return updated;
+            }}
+            onBulkAddItemsToPage={async (payload) => {
+              const result = await api.bulkAddItemsToPage(payload);
+              if (result?.album) {
+                setAlbum(result.album);
+              }
+              setMessage(t("bulkAlbumAdded", "", { added: result?.added || 0, skipped: result?.skipped?.length || 0 }));
+              return result;
             }}
             onAddTextToPage={async (payload) => {
               const updated = await api.addTextToPage(payload);
@@ -1533,11 +2055,28 @@ function ArchiveApp() {
             onMessage={setMessage}
           />
         )}
+
+        {activeView === "trash" && (
+          <TrashView
+            rows={trashRows}
+            onRestore={restoreTrash}
+            onPermanentDelete={permanentlyDeleteTrash}
+            onEmpty={emptyTrash}
+          />
+        )}
       </main>
       {message && (
         <button type="button" className="toast" onClick={() => setMessage("")}>
           {message}
         </button>
+      )}
+
+      {phoneUploadOpen && phoneUpload && (
+        <PhoneUploadDialog
+          session={phoneUpload}
+          onClose={() => setPhoneUploadOpen(false)}
+          onStop={stopPhoneUpload}
+        />
       )}
 
       {itemFormOpen && (
@@ -1546,6 +2085,10 @@ function ArchiveApp() {
           countries={library.countries}
           types={library.types}
           onClose={() => setItemFormOpen(false)}
+          onBulkCreate={() => {
+            setItemFormOpen(false);
+            setBulkCreateOpen(true);
+          }}
           onSubmit={createItem}
         />
       )}
@@ -1570,6 +2113,34 @@ function ArchiveApp() {
           onMessage={setMessage}
         />
       )}
+      {bulkEditOpen && (
+        <BulkEditDialog
+          count={selectedLibraryIds.length}
+          countries={library.countries}
+          types={library.types}
+          onClose={() => setBulkEditOpen(false)}
+          onSubmit={applyBulkEdit}
+        />
+      )}
+      {bulkCreateOpen && (
+        <BulkCreateDialog
+          countries={library.countries}
+          types={library.types}
+          onClose={() => setBulkCreateOpen(false)}
+          onSubmit={bulkCreateItems}
+        />
+      )}
+      {bulkAlbumOpen && (
+        <BulkAlbumDialog
+          count={selectedLibraryIds.length}
+          albums={library.albums}
+          album={album}
+          selectedAlbumId={selectedAlbumId}
+          selectedItemIds={selectedLibraryIds}
+          onClose={() => setBulkAlbumOpen(false)}
+          onSubmit={bulkAddSelectedToAlbum}
+        />
+      )}
     </div>
   );
 }
@@ -1582,8 +2153,12 @@ function App() {
   );
 }
 
-function LibraryView({ library, items, total, loading, filters, setFilters, onLoadMore, onOpenItem, onToggleFavorite, onEditItem, onDeleteItem }) {
+function LibraryView({ library, items, total, loading, filters, setFilters, onLoadMore, onOpenItem, onToggleFavorite, onEditItem, onDeleteItem, selectedIds = [], setSelectedIds, onBulkEdit, onBulkTrash, onBulkAlbum }) {
   const { t } = useI18n();
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  function toggleSelected(itemId, checked) {
+    setSelectedIds((current) => checked ? [...new Set([...current, itemId])] : current.filter((id) => id !== itemId));
+  }
   return (
     <section className="workspace">
       <header className="topbar library-header">
@@ -1593,9 +2168,25 @@ function LibraryView({ library, items, total, loading, filters, setFilters, onLo
         </div>
         <FilterBar library={library} filters={filters} setFilters={setFilters} />
       </header>
+      {selectedIds.length > 0 && (
+        <div className="bulk-action-bar">
+          <strong>{t("selectedCount", "", { count: selectedIds.length })}</strong>
+          <button type="button" onClick={onBulkEdit}>{t("editSelected")}</button>
+          <button type="button" onClick={onBulkAlbum}>{t("addSelectedToAlbum")}</button>
+          <button type="button" className="danger" onClick={onBulkTrash}>{t("moveSelectedToTrash")}</button>
+          <button type="button" className="ghost" onClick={() => setSelectedIds([])}>{t("clearSelection")}</button>
+        </div>
+      )}
       <div className="item-grid">
         {items.map((item) => (
-          <article className="item-card" key={item.id}>
+          <article className={`item-card ${selectedSet.has(item.id) ? "selected" : ""}`} key={item.id}>
+            <label className="item-select-check" aria-label={`Select ${item.title}`}>
+              <input
+                type="checkbox"
+                checked={selectedSet.has(item.id)}
+                onChange={(event) => toggleSelected(item.id, event.target.checked)}
+              />
+            </label>
             <button
               className={`favorite ${item.favorite ? "active" : ""}`}
               onClick={() => onToggleFavorite(item.id)}
@@ -1789,11 +2380,12 @@ function GalleryView({ items, total, loading, onLoadMore, onOpenItem, onToggleFa
   );
 }
 
-function DetailView({ detail, countries, types, onBack, onAddImages, onRemoveImage, onReplaceImage, onReorderImages, onUpdate, onToggleFavorite, onDeleteItem }) {
+function DetailView({ detail, countries, types, onBack, onAddImages, onStartPhoneUpload, onRemoveImage, onReplaceImage, onReorderImages, onUpdateImageNote, onUpdate, onToggleFavorite, onDeleteItem }) {
   const { t } = useI18n();
   const [activeImage, setActiveImage] = useState(0);
   const [editing, setEditing] = useState(false);
   const [dragImageId, setDragImageId] = useState("");
+  const [imageNoteDraft, setImageNoteDraft] = useState("");
 
   useEffect(() => {
     setActiveImage(0);
@@ -1806,6 +2398,12 @@ function DetailView({ detail, countries, types, onBack, onAddImages, onRemoveIma
     }
   }, [detail, activeImage]);
 
+  const image = detail?.images?.[activeImage] || null;
+
+  useEffect(() => {
+    setImageNoteDraft(image?.note || "");
+  }, [image?.id, image?.note]);
+
   if (!detail) {
     return (
       <section className="workspace">
@@ -1815,8 +2413,12 @@ function DetailView({ detail, countries, types, onBack, onAddImages, onRemoveIma
     );
   }
 
-  const image = detail.images[activeImage];
   const viewerImages = detail.images.map((entry) => ({ ...entry, title: entry.original_filename }));
+
+  async function saveImageNote(targetImage = image, note = imageNoteDraft) {
+    if (!targetImage || String(note || "") === String(targetImage.note || "")) return;
+    await onUpdateImageNote({ imageId: targetImage.id, note });
+  }
 
   async function reorderImageDrop(targetImageId) {
     if (!dragImageId || dragImageId === targetImageId) {
@@ -1862,6 +2464,7 @@ function DetailView({ detail, countries, types, onBack, onAddImages, onRemoveIma
           <button onClick={() => setEditing(true)}>{t("edit")}</button>
           <button className="danger" onClick={() => onDeleteItem(detail.id)}>{t("delete")}</button>
           <button onClick={() => onAddImages(detail.id)}>{t("addImages")}</button>
+          <button className="secondary" onClick={() => onStartPhoneUpload(detail.id)}>{t("importFromPhone")}</button>
         </div>
       </header>
       <div className="detail-layout">
@@ -1886,10 +2489,24 @@ function DetailView({ detail, countries, types, onBack, onAddImages, onRemoveIma
             ))}
           </div>
           {image && (
-            <div className="image-meta">
-              <span>{image.original_filename}</span>
-              <span>{image.width} x {image.height}</span>
-              <span>Aspect {Number(image.aspect_ratio).toFixed(3)}</span>
+            <div className="image-note-panel">
+              <label>
+                {t("imageNote")}
+                <textarea
+                  value={imageNoteDraft}
+                  placeholder={t("imageNotePlaceholder")}
+                  onChange={(event) => setImageNoteDraft(event.target.value)}
+                  onBlur={() => saveImageNote()}
+                />
+              </label>
+              <details className="technical-details">
+                <summary>{t("technicalDetails")}</summary>
+                <div className="image-meta">
+                  <span>{image.original_filename}</span>
+                  <span>{image.width} x {image.height}</span>
+                  <span>Aspect {Number(image.aspect_ratio).toFixed(3)}</span>
+                </div>
+              </details>
             </div>
           )}
           {image && (
@@ -1915,7 +2532,10 @@ function DetailView({ detail, countries, types, onBack, onAddImages, onRemoveIma
                 key={thumb.id}
                 draggable
                 title="Drag to reorder item images"
-                onClick={() => setActiveImage(index)}
+                onClick={async () => {
+                  await saveImageNote();
+                  setActiveImage(index);
+                }}
                 onDragStart={(event) => {
                   setDragImageId(thumb.id);
                   event.dataTransfer.effectAllowed = "move";
@@ -1985,6 +2605,7 @@ function AlbumsView({
   onDeletePage,
   onCopyPage,
   onUpdatePageItem,
+  onBulkAddItemsToPage,
   onAddTextToPage,
   onMessage
 }) {
@@ -2277,6 +2898,7 @@ function AlbumsView({
               await onAddItemToPage(payload);
             }
           }}
+          onBulkAdd={pickerOpen === "background" ? null : onBulkAddItemsToPage}
           onClose={() => setPickerOpen(null)}
         />
       )}
@@ -2848,7 +3470,8 @@ function templateLayout(templateName, items, page) {
   return rows;
 }
 
-function AlbumItemPicker({ countries, entityGroups = [], types, pageId, title = "Add item", onAdd, onClose }) {
+function AlbumItemPicker({ countries, entityGroups = [], types, pageId, title = "Add item", onAdd, onBulkAdd, onClose }) {
+  const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [countryId, setCountryId] = useState("");
   const [entityGroupId, setEntityGroupId] = useState("");
@@ -2862,6 +3485,7 @@ function AlbumItemPicker({ countries, entityGroups = [], types, pageId, title = 
   const [selectedItem, setSelectedItem] = useState(null);
   const [selectedItemDetail, setSelectedItemDetail] = useState(null);
   const [selectedImageId, setSelectedImageId] = useState("");
+  const [selectedItemIds, setSelectedItemIds] = useState([]);
   const searchRef = useRef(null);
   const pageSize = 24;
 
@@ -2914,9 +3538,15 @@ function AlbumItemPicker({ countries, entityGroups = [], types, pageId, title = 
   const visibleItems = results.items;
   const activeItem = visibleItems[highlighted] || visibleItems[0] || null;
   const images = selectedItemDetail?.images || [];
+  const canBulkAdd = Boolean(onBulkAdd);
+  const selectedItemIdSet = useMemo(() => new Set(selectedItemIds), [selectedItemIds]);
 
   function selectItem(item) {
     setSelectedItem(item);
+  }
+
+  function togglePickerItem(itemId, checked) {
+    setSelectedItemIds((current) => checked ? [...new Set([...current, itemId])] : current.filter((id) => id !== itemId));
   }
 
   async function add(closeAfter) {
@@ -2931,6 +3561,24 @@ function AlbumItemPicker({ countries, entityGroups = [], types, pageId, title = 
     if (closeAfter) {
       onClose();
     } else {
+      setSelectedItem(null);
+      setSelectedItemDetail(null);
+      setSelectedImageId("");
+      searchRef.current?.focus();
+    }
+  }
+
+  async function addBulk(mode, closeAfter) {
+    if (!pageId || !onBulkAdd) return;
+    const itemIds = selectedItemIds.length
+      ? selectedItemIds
+      : [(selectedItem || activeItem)?.id].filter(Boolean);
+    if (!itemIds.length) return;
+    await onBulkAdd({ page_id: pageId, item_ids: itemIds, mode });
+    if (closeAfter) {
+      onClose();
+    } else {
+      setSelectedItemIds([]);
       setSelectedItem(null);
       setSelectedItemDetail(null);
       setSelectedImageId("");
@@ -2964,6 +3612,7 @@ function AlbumItemPicker({ countries, entityGroups = [], types, pageId, title = 
           <div>
             <h2>{title}</h2>
             <p>{results.total} matches</p>
+            {canBulkAdd && selectedItemIds.length > 0 ? <p className="hint">{t("selectedCount", "", { count: selectedItemIds.length })}</p> : null}
           </div>
           <button type="button" onClick={onClose}>Close</button>
         </header>
@@ -2995,6 +3644,16 @@ function AlbumItemPicker({ countries, entityGroups = [], types, pageId, title = 
                 onMouseEnter={() => setHighlighted(index)}
                 onClick={() => selectItem(item)}
               >
+                {canBulkAdd && (
+                  <span className="picker-result-check" onClick={(event) => event.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selectedItemIdSet.has(item.id)}
+                      aria-label={`Select ${item.title}`}
+                      onChange={(event) => togglePickerItem(item.id, event.target.checked)}
+                    />
+                  </span>
+                )}
                 <div className="picker-thumb">
                   <ItemImage image={item.cover} alt={item.title} />
                 </div>
@@ -3029,10 +3688,20 @@ function AlbumItemPicker({ countries, entityGroups = [], types, pageId, title = 
                 <div className="picker-actions">
                   <button type="button" onClick={() => add(false)}>Add and keep open</button>
                   <button type="button" onClick={() => add(true)}>Add and close</button>
+                  {canBulkAdd && (
+                    <button type="button" className="secondary" disabled={selectedItemDetail && images.length === 0} onClick={() => addBulk("allImages", false)}>{t("useAllImages")}</button>
+                  )}
                 </div>
               </>
             ) : (
               <p className="quiet">Select an item to choose its image.</p>
+            )}
+            {canBulkAdd && selectedItemIds.length > 0 && (
+              <div className="picker-bulk-actions">
+                <button type="button" className="secondary" onClick={() => addBulk("cover", false)}>{t("addSelectedFirstImages")}</button>
+                <button type="button" className="secondary" onClick={() => addBulk("allImages", false)}>{t("addSelectedAllImages")}</button>
+                <button type="button" className="primary" onClick={() => addBulk("cover", true)}>{t("addSelectedFirstImages")} / {t("close")}</button>
+              </div>
             )}
           </aside>
         </div>
@@ -4717,7 +5386,7 @@ function IssuingEntityCombobox({ countries, value, onChange }) {
   );
 }
 
-function ItemForm({ title, item, countries, types, onClose, onSubmit }) {
+function ItemForm({ title, item, countries, types, onClose, onSubmit, onBulkCreate }) {
   const { t } = useI18n();
   const initialCustomFieldsText = customFieldsToText(item?.customFields);
   const [form, setForm] = useState(() => ({
@@ -4766,6 +5435,9 @@ function ItemForm({ title, item, countries, types, onClose, onSubmit }) {
               {form.favorite ? "\u2605" : "\u2606"}
             </button>
             <button type="submit">{t("save")}</button>
+            {!item && onBulkCreate && (
+              <button type="button" className="secondary" onClick={onBulkCreate}>{t("createMultipleItems")}</button>
+            )}
             <button type="button" onClick={onClose}>{t("close")}</button>
           </div>
         </header>

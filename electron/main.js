@@ -1,15 +1,22 @@
 const { app, BrowserWindow, dialog, ipcMain, nativeImage, net, protocol, shell } = require("electron");
 const fs = require("fs");
+const http = require("http");
+const os = require("os");
 const path = require("path");
 const { pathToFileURL } = require("url");
 const crypto = require("crypto");
 const initSqlJs = require("sql.js");
+const heicConvert = require("heic-convert");
+const QRCode = require("qrcode");
+const sharp = require("sharp");
 
 let db;
 let SQL;
 let paths;
 let databaseReady = false;
 let mediaProtocolRegistered = false;
+let phoneUploadSession = null;
+let phoneUploadQueue = Promise.resolve();
 const mainStartedAt = performance.now();
 const startupTimings = [];
 
@@ -82,7 +89,8 @@ function getPaths() {
     base,
     db: path.join(base, "archive.sqlite"),
     images: path.join(base, "images"),
-    thumbs: path.join(base, "thumbnails")
+    thumbs: path.join(base, "thumbnails"),
+    phoneUploads: path.join(base, "phone-upload-temp")
   };
 }
 
@@ -279,6 +287,8 @@ function execSchema(databaseWasCreated = false) {
       tags_json TEXT DEFAULT '[]',
       custom_fields_json TEXT DEFAULT '{}',
       favorite INTEGER DEFAULT 0,
+      deleted_at TEXT DEFAULT '',
+      deleted_reason TEXT DEFAULT '',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       FOREIGN KEY (country_id) REFERENCES countries(id) ON DELETE SET NULL,
@@ -297,7 +307,10 @@ function execSchema(databaseWasCreated = false) {
       aspect_ratio REAL NOT NULL,
       size_bytes INTEGER NOT NULL,
       mime_type TEXT NOT NULL,
+      note TEXT DEFAULT '',
       sort_order INTEGER DEFAULT 0,
+      deleted_at TEXT DEFAULT '',
+      deleted_reason TEXT DEFAULT '',
       created_at TEXT NOT NULL,
       FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE
     );
@@ -306,6 +319,8 @@ function execSchema(databaseWasCreated = false) {
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
       description TEXT DEFAULT '',
+      deleted_at TEXT DEFAULT '',
+      deleted_reason TEXT DEFAULT '',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -332,6 +347,8 @@ function execSchema(databaseWasCreated = false) {
       grid_size INTEGER DEFAULT 25,
       template_name TEXT DEFAULT 'blank',
       layout_version INTEGER DEFAULT 2,
+      deleted_at TEXT DEFAULT '',
+      deleted_reason TEXT DEFAULT '',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       FOREIGN KEY (album_id) REFERENCES albums(id) ON DELETE CASCADE,
@@ -512,6 +529,27 @@ function execSchema(databaseWasCreated = false) {
       dirty = true;
     }
   });
+  [
+    ["items", "deleted_at", "TEXT DEFAULT ''"],
+    ["items", "deleted_reason", "TEXT DEFAULT ''"],
+    ["images", "deleted_at", "TEXT DEFAULT ''"],
+    ["images", "deleted_reason", "TEXT DEFAULT ''"],
+    ["albums", "deleted_at", "TEXT DEFAULT ''"],
+    ["albums", "deleted_reason", "TEXT DEFAULT ''"],
+    ["album_pages", "deleted_at", "TEXT DEFAULT ''"],
+    ["album_pages", "deleted_reason", "TEXT DEFAULT ''"]
+  ].forEach(([table, name, definition]) => {
+    const columns = all(`PRAGMA table_info(${table})`).map((column) => column.name);
+    if (!columns.includes(name)) {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${definition}`);
+      dirty = true;
+    }
+  });
+  const imageColumns = all("PRAGMA table_info(images)").map((column) => column.name);
+  if (!imageColumns.includes("note")) {
+    db.exec("ALTER TABLE images ADD COLUMN note TEXT DEFAULT ''");
+    dirty = true;
+  }
   dirty = normalizeSortOrder("countries") || dirty;
   dirty = normalizeSortOrder("collection_types") || dirty;
   dirty = normalizeSortOrder("entity_groups") || dirty;
@@ -530,16 +568,20 @@ function createIndexes() {
     ["idx_items_year", "CREATE INDEX idx_items_year ON items(year)"],
     ["idx_items_favorite", "CREATE INDEX idx_items_favorite ON items(favorite)"],
     ["idx_items_updated_at", "CREATE INDEX idx_items_updated_at ON items(updated_at)"],
+    ["idx_items_deleted_at", "CREATE INDEX idx_items_deleted_at ON items(deleted_at)"],
     ["idx_items_title", "CREATE INDEX idx_items_title ON items(title COLLATE NOCASE)"],
     ["idx_items_tags_json", "CREATE INDEX idx_items_tags_json ON items(tags_json)"],
     ["idx_images_item_id", "CREATE INDEX idx_images_item_id ON images(item_id)"],
     ["idx_images_item_sort", "CREATE INDEX idx_images_item_sort ON images(item_id, sort_order, created_at)"],
+    ["idx_images_deleted_at", "CREATE INDEX idx_images_deleted_at ON images(deleted_at)"],
     ["idx_album_page_items_page_id", "CREATE INDEX idx_album_page_items_page_id ON album_page_items(page_id)"],
     ["idx_album_page_items_item_id", "CREATE INDEX idx_album_page_items_item_id ON album_page_items(item_id)"],
     ["idx_album_page_items_image_id", "CREATE INDEX idx_album_page_items_image_id ON album_page_items(image_id)"],
     ["idx_album_page_items_page_sort", "CREATE INDEX idx_album_page_items_page_sort ON album_page_items(page_id, sort_order, created_at)"],
     ["idx_album_text_items_page_sort", "CREATE INDEX idx_album_text_items_page_sort ON album_text_items(page_id, sort_order, created_at)"],
     ["idx_album_pages_background_image_id", "CREATE INDEX idx_album_pages_background_image_id ON album_pages(background_image_id)"],
+    ["idx_albums_deleted_at", "CREATE INDEX idx_albums_deleted_at ON albums(deleted_at)"],
+    ["idx_album_pages_deleted_at", "CREATE INDEX idx_album_pages_deleted_at ON album_pages(deleted_at)"],
     ["idx_album_page_templates_updated_at", "CREATE INDEX idx_album_page_templates_updated_at ON album_page_templates(updated_at)"],
     ["idx_countries_sort_order", "CREATE INDEX idx_countries_sort_order ON countries(sort_order)"],
     ["idx_collection_types_sort_order", "CREATE INDEX idx_collection_types_sort_order ON collection_types(sort_order)"],
@@ -563,6 +605,7 @@ async function initDatabase() {
     ensureDir(paths.base);
     ensureDir(paths.images);
     ensureDir(paths.thumbs);
+    ensureDir(paths.phoneUploads);
   });
 
   SQL = await measureStartup("sqljs.init", () => initSqlJs({
@@ -622,8 +665,10 @@ function mapItem(row) {
   };
 }
 
+const activeSql = (alias) => `COALESCE(${alias}.deleted_at, '') = ''`;
+
 function itemQueryWhere(options = {}, galleryOnly = false) {
-  const clauses = [];
+  const clauses = [activeSql("items")];
   const params = [];
   const search = String(options.search || "").trim();
   const searchText = String(options.searchText || "").trim();
@@ -672,7 +717,7 @@ function itemQueryWhere(options = {}, galleryOnly = false) {
     clauses.push("items.favorite = 1");
   }
   if (galleryOnly) {
-    clauses.push("EXISTS (SELECT 1 FROM images WHERE images.item_id = items.id)");
+    clauses.push(`EXISTS (SELECT 1 FROM images WHERE images.item_id = items.id AND ${activeSql("images")})`);
   }
 
   return {
@@ -736,7 +781,7 @@ function itemPage(options = {}, galleryOnly = false) {
           WHERE entity_group_memberships.entity_id = items.country_id
           ORDER BY entity_groups.sort_order ASC, entity_groups.name ASC
         ) AS entity_group_names,
-        (SELECT COUNT(*) FROM images WHERE images.item_id = items.id) AS image_count,
+        (SELECT COUNT(*) FROM images WHERE images.item_id = items.id AND COALESCE(images.deleted_at, '') = '') AS image_count,
         cover.id AS cover_id,
         cover.image_path AS cover_image_path,
         cover.thumbnail_path AS cover_thumbnail_path,
@@ -749,6 +794,7 @@ function itemPage(options = {}, galleryOnly = false) {
       LEFT JOIN images AS cover ON cover.id = (
         SELECT id FROM images
         WHERE images.item_id = items.id
+          AND COALESCE(images.deleted_at, '') = ''
         ORDER BY sort_order ASC, created_at ASC
         LIMIT 1
       )
@@ -795,7 +841,8 @@ function albumList() {
     `
       SELECT albums.*, COUNT(album_pages.id) AS page_count
       FROM albums
-      LEFT JOIN album_pages ON album_pages.album_id = albums.id
+      LEFT JOIN album_pages ON album_pages.album_id = albums.id AND COALESCE(album_pages.deleted_at, '') = ''
+      WHERE COALESCE(albums.deleted_at, '') = ''
       GROUP BY albums.id
       ORDER BY albums.updated_at DESC
     `
@@ -941,12 +988,44 @@ function normalizeCustomFields(customFields) {
   return {};
 }
 
+function createItemRecord(payload = {}) {
+  const rowId = id();
+  const timestamp = now();
+  bindAndStep(
+    `
+      INSERT INTO items (
+        id, title, country_id, type_id, year, description, condition,
+        purchase_price, source, tags_json, custom_fields_json, favorite,
+        created_at, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    [
+      rowId,
+      String(payload.title || "Untitled item").trim() || "Untitled item",
+      payload.country_id || null,
+      payload.type_id || null,
+      String(payload.year || ""),
+      String(payload.description || ""),
+      String(payload.condition || ""),
+      String(payload.purchase_price || ""),
+      String(payload.source || ""),
+      JSON.stringify(normalizeTags(payload.tags)),
+      JSON.stringify(normalizeCustomFields(payload.customFields)),
+      payload.favorite ? 1 : 0,
+      timestamp,
+      timestamp
+    ]
+  );
+  return rowId;
+}
+
 function linkedItemsFor(column, idValue) {
   return all(
     `
       SELECT id, title
       FROM items
-      WHERE ${column} = ?
+      WHERE ${column} = ? AND COALESCE(deleted_at, '') = ''
       ORDER BY title ASC
     `,
     [idValue]
@@ -1138,7 +1217,115 @@ function imageMime(extension) {
   if (ext === ".webp") return "image/webp";
   if (ext === ".gif") return "image/gif";
   if (ext === ".tif" || ext === ".tiff") return "image/tiff";
+  if (ext === ".heic" || ext === ".heif") return "image/heic";
   return "application/octet-stream";
+}
+
+const imageExtensions = ["jpg", "jpeg", "png", "webp", "gif", "tif", "tiff", "heic", "heif"];
+const phoneUploadMaxBytes = 60 * 1024 * 1024;
+const phoneUploadMaxFiles = 250;
+
+function imageExtension(filePathOrName) {
+  return (path.extname(String(filePathOrName || "")) || "").toLowerCase();
+}
+
+function isHeicExtension(extension) {
+  const ext = String(extension || "").toLowerCase();
+  return ext === ".heic" || ext === ".heif";
+}
+
+function isJpegExtension(extension) {
+  const ext = String(extension || "").toLowerCase();
+  return ext === ".jpg" || ext === ".jpeg";
+}
+
+function isSupportedImageName(filePathOrName) {
+  const ext = imageExtension(filePathOrName).replace(/^\./, "");
+  return imageExtensions.includes(ext);
+}
+
+function sanitizeFilename(name) {
+  const base = path.basename(String(name || "image"));
+  return base.replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").slice(0, 180) || "image";
+}
+
+async function normalizeToJpegBuffer(inputBuffer) {
+  const { data, info } = await sharp(inputBuffer, { failOn: "none" })
+    .rotate()
+    .jpeg({ quality: 95 })
+    .toBuffer({ resolveWithObject: true });
+  const image = nativeImage.createFromBuffer(data);
+  const nativeSize = image.getSize();
+  const width = Number(info.width || nativeSize.width || 0);
+  const height = Number(info.height || nativeSize.height || 0);
+  if (!width || !height || image.isEmpty()) {
+    throw new Error("Normalized image could not be read");
+  }
+  return {
+    buffer: data,
+    image,
+    size: { width, height }
+  };
+}
+
+async function prepareImageForImport(filePath, originalName = path.basename(filePath)) {
+  const extension = imageExtension(originalName || filePath);
+  if (!isSupportedImageName(originalName || filePath)) {
+    throw new Error(`Unsupported image type: ${extension || "unknown"}`);
+  }
+
+  if (isHeicExtension(extension)) {
+    const input = fs.readFileSync(filePath);
+    const converted = Buffer.from(await heicConvert({
+      buffer: input,
+      format: "JPEG",
+      quality: 0.93
+    }));
+    const normalized = await normalizeToJpegBuffer(converted);
+    return {
+      originalFilename: sanitizeFilename(originalName),
+      storedExtension: ".jpg",
+      mimeType: "image/jpeg",
+      sizeBytes: normalized.buffer.length,
+      image: normalized.image,
+      size: normalized.size,
+      buffer: normalized.buffer,
+      convertedFromHeic: true
+    };
+  }
+
+  if (isJpegExtension(extension)) {
+    const input = fs.readFileSync(filePath);
+    const normalized = await normalizeToJpegBuffer(input);
+    return {
+      originalFilename: sanitizeFilename(originalName),
+      storedExtension: ".jpg",
+      mimeType: "image/jpeg",
+      sizeBytes: normalized.buffer.length,
+      image: normalized.image,
+      size: normalized.size,
+      buffer: normalized.buffer,
+      convertedFromHeic: false,
+      orientationNormalized: true
+    };
+  }
+
+  const image = nativeImage.createFromPath(filePath);
+  const size = image.getSize();
+  if (!size.width || !size.height) {
+    throw new Error("Selected file could not be read as an image");
+  }
+  const stats = fs.statSync(filePath);
+  return {
+    originalFilename: sanitizeFilename(originalName),
+    storedExtension: extension || ".img",
+    mimeType: imageMime(extension),
+    sizeBytes: stats.size,
+    image,
+    size,
+    sourcePath: filePath,
+    convertedFromHeic: false
+  };
 }
 
 function createThumbnail(sourceImage, thumbPath, width, height) {
@@ -1146,6 +1333,36 @@ function createThumbnail(sourceImage, thumbPath, width, height) {
   const options = width >= height ? { width: maxSide } : { height: maxSide };
   const thumbnail = sourceImage.resize(options);
   fs.writeFileSync(thumbPath, thumbnail.toPNG());
+}
+
+async function regenerateThumbnailFile(imageRow) {
+  if (!imageRow?.image_path || !imageRow?.thumbnail_path) {
+    throw new Error("Image record is missing file paths");
+  }
+  const sourcePath = path.resolve(imageRow.image_path);
+  const thumbnailPath = path.resolve(imageRow.thumbnail_path);
+  if (!isInside(paths.images, sourcePath) || !fs.existsSync(sourcePath)) {
+    throw new Error("Source image file is missing");
+  }
+  if (!isInside(paths.thumbs, thumbnailPath)) {
+    throw new Error("Thumbnail path is outside the data folder");
+  }
+
+  try {
+    await sharp(sourcePath, { failOn: "none" })
+      .rotate()
+      .resize({ width: 460, height: 460, fit: "inside", withoutEnlargement: true })
+      .png()
+      .toFile(thumbnailPath);
+  } catch (error) {
+    const image = nativeImage.createFromPath(sourcePath);
+    const size = image.getSize();
+    if (!size.width || !size.height || image.isEmpty()) {
+      throw error;
+    }
+    createThumbnail(image, thumbnailPath, size.width, size.height);
+  }
+  return mapImage(get("SELECT * FROM images WHERE id = ?", [imageRow.id]));
 }
 
 function deleteFileIfUnreferenced(filePath, column) {
@@ -1175,6 +1392,60 @@ function cleanupImageFiles(image) {
   };
 }
 
+function normalizeAlbumPageNumbers(albumId) {
+  const pages = all("SELECT id FROM album_pages WHERE album_id = ? AND COALESCE(deleted_at, '') = '' ORDER BY page_number ASC, created_at ASC", [albumId]);
+  pages.forEach((entry, index) => {
+    bindAndStep("UPDATE album_pages SET page_number = ? WHERE id = ?", [index + 1, entry.id]);
+  });
+}
+
+function permanentlyDeleteItem(itemId) {
+  const images = imageFilesForItem(itemId);
+  run("DELETE FROM album_page_items WHERE item_id = ?", [itemId]);
+  run("DELETE FROM images WHERE item_id = ?", [itemId]);
+  run("DELETE FROM items WHERE id = ?", [itemId]);
+  cleanupItemImages(images);
+}
+
+function permanentlyDeleteImage(imageId) {
+  const image = get("SELECT * FROM images WHERE id = ?", [imageId]);
+  if (!image) return;
+  run("UPDATE album_page_items SET image_id = NULL WHERE image_id = ?", [imageId]);
+  run("DELETE FROM images WHERE id = ?", [imageId]);
+  cleanupImageFiles(image);
+  run("UPDATE items SET updated_at = ? WHERE id = ?", [now(), image.item_id]);
+}
+
+function permanentlyDeleteAlbum(albumId) {
+  run(
+    `
+      DELETE FROM album_page_items
+      WHERE page_id IN (SELECT id FROM album_pages WHERE album_id = ?)
+    `,
+    [albumId]
+  );
+  run(
+    `
+      DELETE FROM album_text_items
+      WHERE page_id IN (SELECT id FROM album_pages WHERE album_id = ?)
+    `,
+    [albumId]
+  );
+  run("DELETE FROM album_pages WHERE album_id = ?", [albumId]);
+  run("DELETE FROM albums WHERE id = ?", [albumId]);
+}
+
+function permanentlyDeleteAlbumPage(pageId) {
+  const page = get("SELECT album_id FROM album_pages WHERE id = ?", [pageId]);
+  if (!page) return null;
+  run("DELETE FROM album_page_items WHERE page_id = ?", [pageId]);
+  run("DELETE FROM album_text_items WHERE page_id = ?", [pageId]);
+  run("DELETE FROM album_pages WHERE id = ?", [pageId]);
+  normalizeAlbumPageNumbers(page.album_id);
+  run("UPDATE albums SET updated_at = ? WHERE id = ?", [now(), page.album_id]);
+  return page.album_id;
+}
+
 async function pickSingleImage(title) {
   const result = await dialog.showOpenDialog({
     title,
@@ -1182,7 +1453,7 @@ async function pickSingleImage(title) {
     filters: [
       {
         name: "Images",
-        extensions: ["jpg", "jpeg", "png", "webp", "gif", "tif", "tiff"]
+        extensions: imageExtensions
       }
     ]
   });
@@ -1190,8 +1461,77 @@ async function pickSingleImage(title) {
   return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0];
 }
 
+async function importImageFileToItem(itemId, filePath, options = {}) {
+  const item = get("SELECT id FROM items WHERE id = ? AND COALESCE(deleted_at, '') = ''", [itemId]);
+  if (!item) {
+    throw new Error("Item not found");
+  }
+  const imageId = options.imageId || id();
+  const originalFilename = sanitizeFilename(options.originalName || path.basename(filePath));
+  const prepared = await prepareImageForImport(filePath, originalFilename);
+  const storedFilename = `${imageId}${prepared.storedExtension.toLowerCase()}`;
+  const thumbFilename = `${imageId}.png`;
+  const destination = path.join(paths.images, storedFilename);
+  const thumbnailPath = path.join(paths.thumbs, thumbFilename);
+
+  if (prepared.buffer) {
+    fs.writeFileSync(destination, prepared.buffer);
+  } else if (path.resolve(filePath) !== path.resolve(destination)) {
+    fs.copyFileSync(filePath, destination);
+  }
+  createThumbnail(prepared.image, thumbnailPath, prepared.size.width, prepared.size.height);
+
+  const sortOrder = Number.isFinite(Number(options.sortOrder))
+    ? Number(options.sortOrder)
+    : Number(get("SELECT COUNT(*) AS count FROM images WHERE item_id = ? AND COALESCE(deleted_at, '') = ''", [itemId])?.count || 0);
+
+  console.log("[images:import] stored image", {
+    originalPath: filePath,
+    originalFilename: prepared.originalFilename,
+    copiedImagePath: destination,
+    thumbnailPath,
+    width: prepared.size.width,
+    height: prepared.size.height,
+    convertedFromHeic: prepared.convertedFromHeic,
+    orientationNormalized: Boolean(prepared.orientationNormalized || prepared.convertedFromHeic)
+  });
+
+  run(
+    `
+      INSERT INTO images (
+        id, item_id, original_filename, stored_filename, image_path,
+        thumbnail_path, width, height, aspect_ratio, size_bytes,
+        mime_type, sort_order, created_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    [
+      imageId,
+      itemId,
+      prepared.originalFilename,
+      storedFilename,
+      destination,
+      thumbnailPath,
+      prepared.size.width,
+      prepared.size.height,
+      prepared.size.width / prepared.size.height,
+      prepared.sizeBytes,
+      prepared.mimeType,
+      sortOrder,
+      now()
+    ]
+  );
+
+  const insertedImage = mapImage(get("SELECT * FROM images WHERE id = ?", [imageId]));
+  console.log("[images:import] renderer media urls", {
+    imageSrc: insertedImage.url,
+    thumbnailSrc: insertedImage.thumbnailUrl
+  });
+  return insertedImage;
+}
+
 async function addImages(itemId) {
-  const item = get("SELECT id FROM items WHERE id = ?", [itemId]);
+  const item = get("SELECT id FROM items WHERE id = ? AND COALESCE(deleted_at, '') = ''", [itemId]);
   if (!item) {
     throw new Error("Item not found");
   }
@@ -1202,7 +1542,7 @@ async function addImages(itemId) {
     filters: [
       {
         name: "Images",
-        extensions: ["jpg", "jpeg", "png", "webp", "gif", "tif", "tiff"]
+        extensions: imageExtensions
       }
     ]
   });
@@ -1211,73 +1551,321 @@ async function addImages(itemId) {
     return [];
   }
 
-  const existingCount = get("SELECT COUNT(*) AS count FROM images WHERE item_id = ?", [itemId]).count;
+  const existingCount = get("SELECT COUNT(*) AS count FROM images WHERE item_id = ? AND COALESCE(deleted_at, '') = ''", [itemId]).count;
   const inserted = [];
+  const failures = [];
 
-  result.filePaths.forEach((filePath, index) => {
+  for (const filePath of result.filePaths) {
     console.log("[images:add] selected file", { path: filePath });
-    const image = nativeImage.createFromPath(filePath);
-    const size = image.getSize();
-    if (!size.width || !size.height) {
-      console.warn("[images:add] skipped unreadable image", { path: filePath });
-      return;
+    try {
+      inserted.push(await importImageFileToItem(itemId, filePath, {
+        sortOrder: existingCount + inserted.length,
+        originalName: path.basename(filePath)
+      }));
+    } catch (error) {
+      failures.push({ filePath, message: error.message || String(error) });
+      console.warn("[images:add] skipped unreadable image", { path: filePath, message: error.message });
     }
+  }
 
-    const imageId = id();
-    const extension = path.extname(filePath) || ".img";
-    const storedFilename = `${imageId}${extension.toLowerCase()}`;
-    const thumbFilename = `${imageId}.png`;
-    const destination = path.join(paths.images, storedFilename);
-    const thumbnailPath = path.join(paths.thumbs, thumbFilename);
-    const stats = fs.statSync(filePath);
-
-    fs.copyFileSync(filePath, destination);
-    createThumbnail(image, thumbnailPath, size.width, size.height);
-
-    console.log("[images:add] copied image", {
-      originalPath: filePath,
-      copiedImagePath: destination,
-      thumbnailPath,
-      width: size.width,
-      height: size.height
-    });
-
-    run(
-      `
-        INSERT INTO images (
-          id, item_id, original_filename, stored_filename, image_path,
-          thumbnail_path, width, height, aspect_ratio, size_bytes,
-          mime_type, sort_order, created_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      [
-        imageId,
-        itemId,
-        path.basename(filePath),
-        storedFilename,
-        destination,
-        thumbnailPath,
-        size.width,
-        size.height,
-        size.width / size.height,
-        stats.size,
-        imageMime(extension),
-        existingCount + index,
-        now()
-      ]
-    );
-
-    const insertedImage = mapImage(get("SELECT * FROM images WHERE id = ?", [imageId]));
-    console.log("[images:add] renderer media urls", {
-      imageSrc: insertedImage.url,
-      thumbnailSrc: insertedImage.thumbnailUrl
-    });
-    inserted.push(insertedImage);
-  });
+  if (!inserted.length && failures.length) {
+    throw new Error(`No images were imported. ${failures[0].message}`);
+  }
 
   run("UPDATE items SET updated_at = ? WHERE id = ?", [now(), itemId]);
   return inserted;
+}
+
+function isPrivateIpv4(address) {
+  if (!address || address === "127.0.0.1") return false;
+  const parts = address.split(".").map((part) => Number(part));
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return false;
+  return parts[0] === 10 ||
+    (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
+    (parts[0] === 192 && parts[1] === 168);
+}
+
+function lanIpv4Addresses() {
+  const interfaces = os.networkInterfaces();
+  const addresses = [];
+  Object.values(interfaces).forEach((entries = []) => {
+    entries.forEach((entry) => {
+      if (entry.family === "IPv4" && !entry.internal && isPrivateIpv4(entry.address)) {
+        addresses.push(entry.address);
+      }
+    });
+  });
+  return [...new Set(addresses)];
+}
+
+function phoneUploadStatus() {
+  if (!phoneUploadSession) {
+    return { running: false };
+  }
+  const { server: _server, token: _token, ...safe } = phoneUploadSession;
+  return {
+    ...safe,
+    running: true
+  };
+}
+
+function stopPhoneUploadServer() {
+  if (!phoneUploadSession) {
+    return { running: false };
+  }
+  const session = phoneUploadSession;
+  phoneUploadSession = null;
+  try {
+    session.server.close();
+  } catch (error) {
+    console.warn("[phone-upload] failed to close server", error);
+  }
+  const { server: _server, token: _token, ...safe } = session;
+  return { ...safe, running: false, stopped: true, status: "stopped" };
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  }[char]));
+}
+
+function phoneUploadPageHtml(session) {
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Collection Archive phone upload</title>
+  <style>
+    :root { color-scheme: light; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background:#f5f1ea; color:#1f2a2a; }
+    * { box-sizing: border-box; }
+    body { margin:0; min-height:100vh; display:grid; place-items:center; padding:20px; background:linear-gradient(180deg,#f8f4ec,#ede6d9); }
+    main { width:min(520px,100%); background:#fffdf8; border:1px solid #ded4c3; border-radius:14px; padding:22px; box-shadow:0 20px 50px rgba(31,42,42,.14); }
+    h1 { margin:0 0 4px; font-size:24px; }
+    p { color:#5f6a65; line-height:1.45; }
+    .target { border:1px solid #e5dac9; border-radius:10px; padding:10px 12px; background:#fbf8f2; margin:14px 0; }
+    input[type=file] { width:100%; padding:14px; border:1px dashed #b8aa94; border-radius:10px; background:#fff; }
+    button { width:100%; margin-top:14px; min-height:44px; border:0; border-radius:10px; background:#1f5d57; color:#fff; font-weight:700; font-size:16px; }
+    button:disabled { opacity:.6; }
+    progress { width:100%; height:14px; margin-top:14px; }
+    #status { white-space:pre-wrap; min-height:44px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Collection Archive</h1>
+    <p>Select photos from this phone. They will be added to the desktop item below.</p>
+    <div class="target"><strong>${escapeHtml(session.itemTitle || "Selected item")}</strong></div>
+    <input id="files" type="file" accept="image/*,.heic,.heif" multiple>
+    <button id="upload" type="button">Upload selected photos</button>
+    <progress id="progress" value="0" max="1" hidden></progress>
+    <p id="status">Waiting for photos...</p>
+  </main>
+  <script>
+    const token = ${JSON.stringify(session.token)};
+    const files = document.getElementById("files");
+    const upload = document.getElementById("upload");
+    const progress = document.getElementById("progress");
+    const status = document.getElementById("status");
+    upload.addEventListener("click", async () => {
+      const selected = Array.from(files.files || []);
+      if (!selected.length) {
+        status.textContent = "Choose one or more photos first.";
+        return;
+      }
+      upload.disabled = true;
+      progress.hidden = false;
+      progress.max = selected.length;
+      progress.value = 0;
+      let ok = 0;
+      try {
+        for (const file of selected) {
+          status.textContent = "Uploading " + file.name + "...";
+          const response = await fetch("/upload?token=" + encodeURIComponent(token), {
+            method: "POST",
+            headers: {
+              "Content-Type": file.type || "application/octet-stream",
+              "X-Filename": encodeURIComponent(file.name)
+            },
+            body: file
+          });
+          const result = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(result.error || "Upload failed");
+          }
+          ok += 1;
+          progress.value = ok;
+        }
+        status.textContent = "Done. Uploaded " + ok + " photo" + (ok === 1 ? "." : "s.");
+        files.value = "";
+      } catch (error) {
+        status.textContent = "Upload stopped: " + (error.message || error);
+      } finally {
+        upload.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>`;
+}
+
+function readRequestBody(request, maxBytes) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let total = 0;
+    request.on("data", (chunk) => {
+      total += chunk.length;
+      if (total > maxBytes) {
+        reject(new Error("File is too large"));
+        request.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    request.on("end", () => resolve(Buffer.concat(chunks)));
+    request.on("error", reject);
+  });
+}
+
+function sendJson(response, statusCode, payload) {
+  response.writeHead(statusCode, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store"
+  });
+  response.end(JSON.stringify(payload));
+}
+
+async function startPhoneUploadServer(payload = {}) {
+  const itemId = payload.itemId;
+  const item = get("SELECT id, title FROM items WHERE id = ? AND COALESCE(deleted_at, '') = ''", [itemId]);
+  if (!item) {
+    throw new Error("Choose an item before starting phone upload");
+  }
+  stopPhoneUploadServer();
+
+  const token = crypto.randomBytes(24).toString("base64url");
+  const session = {
+    server: null,
+    id: id(),
+    token,
+    itemId: item.id,
+    itemTitle: item.title,
+    port: 0,
+    urls: [],
+    qrCodeDataUrl: "",
+    uploadedCount: 0,
+    rejectedCount: 0,
+    maxFileSizeMb: Math.round(phoneUploadMaxBytes / 1024 / 1024),
+    maxFiles: phoneUploadMaxFiles,
+    startedAt: now(),
+    status: "running",
+    lastUpload: "",
+    error: ""
+  };
+
+  const server = http.createServer(async (request, response) => {
+    try {
+      const requestUrl = new URL(request.url || "/", `http://${request.headers.host || "localhost"}`);
+      const requestToken = requestUrl.searchParams.get("token") || "";
+      if (requestToken !== session.token) {
+        if (request.method === "GET") {
+          response.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
+          response.end("Invalid or expired upload link.");
+        } else {
+          sendJson(response, 403, { error: "Invalid or expired upload token" });
+        }
+        return;
+      }
+
+      if (request.method === "GET" && requestUrl.pathname === "/") {
+        response.writeHead(200, {
+          "Content-Type": "text/html; charset=utf-8",
+          "Cache-Control": "no-store"
+        });
+        response.end(phoneUploadPageHtml(session));
+        return;
+      }
+
+      if (request.method === "POST" && requestUrl.pathname === "/upload") {
+        if (session.uploadedCount >= phoneUploadMaxFiles) {
+          sendJson(response, 429, { error: "Upload session file limit reached" });
+          return;
+        }
+        const encodedName = request.headers["x-filename"];
+        const originalName = sanitizeFilename(encodedName ? decodeURIComponent(String(encodedName)) : "phone-photo.jpg");
+        if (!isSupportedImageName(originalName)) {
+          session.rejectedCount += 1;
+          sendJson(response, 415, { error: "Unsupported image type" });
+          return;
+        }
+        const buffer = await readRequestBody(request, phoneUploadMaxBytes);
+        if (!buffer.length) {
+          sendJson(response, 400, { error: "No file data received" });
+          return;
+        }
+        const tempPath = path.join(paths.phoneUploads, `${id()}-${originalName}`);
+        fs.writeFileSync(tempPath, buffer);
+        try {
+          const importJob = phoneUploadQueue.then(() => importImageFileToItem(session.itemId, tempPath, {
+            originalName
+          }));
+          phoneUploadQueue = importJob.catch(() => {});
+          const imported = await importJob;
+          session.uploadedCount += 1;
+          session.lastUpload = imported.original_filename || originalName;
+          run("UPDATE items SET updated_at = ? WHERE id = ?", [now(), session.itemId]);
+          sendJson(response, 200, { ok: true, image: { id: imported.id, original_filename: imported.original_filename } });
+        } finally {
+          fs.rmSync(tempPath, { force: true });
+        }
+        return;
+      }
+
+      response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+      response.end("Not found");
+    } catch (error) {
+      session.error = error.message || String(error);
+      console.warn("[phone-upload] request failed", error);
+      if (!response.headersSent) {
+        sendJson(response, 500, { error: session.error });
+      } else {
+        response.end();
+      }
+    }
+  });
+
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "0.0.0.0", () => {
+      server.off("error", reject);
+      resolve();
+    });
+  });
+
+  session.server = server;
+  session.port = server.address().port;
+  const addresses = lanIpv4Addresses();
+  session.urls = addresses.map((address) => `http://${address}:${session.port}/?token=${encodeURIComponent(session.token)}`);
+  if (!session.urls.length) {
+    session.urls = [`http://localhost:${session.port}/?token=${encodeURIComponent(session.token)}`];
+    session.error = "No private LAN IPv4 address was found. Check Wi-Fi/network settings.";
+  }
+  session.qrCodeDataUrl = await QRCode.toDataURL(session.urls[0], { margin: 1, width: 220 }).catch((error) => {
+    console.warn("[phone-upload] QR generation failed", error);
+    return "";
+  });
+  phoneUploadSession = session;
+  console.log("[phone-upload] server started", {
+    itemId: session.itemId,
+    port: session.port,
+    urls: session.urls.map((url) => url.replace(session.token, "[token]"))
+  });
+  return phoneUploadStatus();
 }
 
 function handlePerfIpc(channel, handler) {
@@ -1516,34 +2104,8 @@ ipcMain.handle("type:reassign", (_event, payload) => {
 });
 
 ipcMain.handle("item:create", (_event, payload) => {
-  const rowId = id();
-  const timestamp = now();
-  run(
-    `
-      INSERT INTO items (
-        id, title, country_id, type_id, year, description, condition,
-        purchase_price, source, tags_json, custom_fields_json, favorite,
-        created_at, updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `,
-    [
-      rowId,
-      String(payload.title || "").trim(),
-      payload.country_id || null,
-      payload.type_id || null,
-      String(payload.year || ""),
-      String(payload.description || ""),
-      String(payload.condition || ""),
-      String(payload.purchase_price || ""),
-      String(payload.source || ""),
-      JSON.stringify(normalizeTags(payload.tags)),
-      JSON.stringify(normalizeCustomFields(payload.customFields)),
-      payload.favorite ? 1 : 0,
-      timestamp,
-      timestamp
-    ]
-  );
+  const rowId = createItemRecord(payload);
+  saveDb();
   return get("SELECT id FROM items WHERE id = ?", [rowId]);
 });
 
@@ -1575,6 +2137,90 @@ ipcMain.handle("item:update", (_event, payload) => {
   return getLibrary();
 });
 
+ipcMain.handle("items:bulk-update", (_event, payload = {}) => {
+  const ids = Array.isArray(payload.ids) ? payload.ids.filter(Boolean) : [];
+  const operations = payload.operations || {};
+  if (!ids.length) return { updated: 0 };
+  const timestamp = now();
+
+  db.exec("BEGIN TRANSACTION");
+  try {
+    ids.forEach((itemId) => {
+      const current = get("SELECT * FROM items WHERE id = ? AND COALESCE(deleted_at, '') = ''", [itemId]);
+      if (!current) return;
+      const updates = [];
+      const params = [];
+      const setField = (column, value) => {
+        updates.push(`${column} = ?`);
+        params.push(value);
+      };
+      if (operations.country_id?.mode === "replace") setField("country_id", operations.country_id.value || null);
+      if (operations.type_id?.mode === "replace") setField("type_id", operations.type_id.value || null);
+      if (operations.year?.mode === "replace") setField("year", String(operations.year.value || ""));
+      if (operations.condition?.mode === "replace") setField("condition", String(operations.condition.value || ""));
+      if (operations.source?.mode === "replace") setField("source", String(operations.source.value || ""));
+      if (operations.tags?.mode && operations.tags.mode !== "unchanged") {
+        const currentTags = normalizeTags(parseJson(current.tags_json, []));
+        const nextTags = normalizeTags(operations.tags.value || "");
+        let merged = currentTags;
+        if (operations.tags.mode === "replace") merged = nextTags;
+        if (operations.tags.mode === "add") merged = [...new Set([...currentTags, ...nextTags])];
+        if (operations.tags.mode === "remove") {
+          const removeSet = new Set(nextTags.map((tag) => tag.toLowerCase()));
+          merged = currentTags.filter((tag) => !removeSet.has(tag.toLowerCase()));
+        }
+        setField("tags_json", JSON.stringify(merged));
+      }
+      if (updates.length) {
+        updates.push("updated_at = ?");
+        params.push(timestamp, itemId);
+        bindAndStep(`UPDATE items SET ${updates.join(", ")} WHERE id = ?`, params);
+      }
+    });
+    db.exec("COMMIT");
+    saveDb();
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  return { updated: ids.length };
+});
+
+ipcMain.handle("items:bulk-create-from-images", async (_event, payload = {}) => {
+  const result = await dialog.showOpenDialog({
+    title: "Create items from images",
+    properties: ["openFile", "multiSelections"],
+    filters: [{ name: "Images", extensions: imageExtensions }]
+  });
+  if (result.canceled || result.filePaths.length === 0) {
+    return { canceled: true, created: [], failed: [] };
+  }
+
+  const created = [];
+  const failed = [];
+  for (const filePath of result.filePaths) {
+    const baseTitle = path.basename(filePath, path.extname(filePath));
+    const title = `${String(payload.titlePrefix || "")}${baseTitle}${String(payload.titleSuffix || "")}`.trim() || baseTitle;
+    let itemId = null;
+    try {
+      itemId = createItemRecord({
+        ...payload,
+        title
+      });
+      saveDb();
+      await importImageFileToItem(itemId, filePath, { originalName: path.basename(filePath), sortOrder: 0 });
+      run("UPDATE items SET updated_at = ? WHERE id = ?", [now(), itemId]);
+      created.push({ id: itemId, title });
+    } catch (error) {
+      if (itemId) {
+        permanentlyDeleteItem(itemId);
+      }
+      failed.push({ file: path.basename(filePath), error: error.message || String(error) });
+    }
+  }
+  return { canceled: false, created, failed };
+});
+
 function getItemForRenderer(itemId) {
   const item = get(
     `
@@ -1592,7 +2238,7 @@ function getItemForRenderer(itemId) {
       FROM items
       LEFT JOIN countries ON countries.id = items.country_id
       LEFT JOIN collection_types ON collection_types.id = items.type_id
-      WHERE items.id = ?
+      WHERE items.id = ? AND COALESCE(items.deleted_at, '') = ''
     `,
     [itemId]
   );
@@ -1601,7 +2247,7 @@ function getItemForRenderer(itemId) {
   }
   return {
     ...mapItem(item),
-    images: all("SELECT * FROM images WHERE item_id = ? ORDER BY sort_order ASC, created_at ASC", [itemId]).map(mapImage)
+    images: all("SELECT * FROM images WHERE item_id = ? AND COALESCE(deleted_at, '') = '' ORDER BY sort_order ASC, created_at ASC", [itemId]).map(mapImage)
   };
 }
 
@@ -1610,11 +2256,7 @@ ipcMain.handle("item:get", (_event, itemId) => {
 });
 
 ipcMain.handle("item:delete", (_event, itemId) => {
-  const images = imageFilesForItem(itemId);
-  run("DELETE FROM album_page_items WHERE item_id = ?", [itemId]);
-  run("DELETE FROM images WHERE item_id = ?", [itemId]);
-  run("DELETE FROM items WHERE id = ?", [itemId]);
-  cleanupItemImages(images);
+  run("UPDATE items SET deleted_at = ?, updated_at = ? WHERE id = ?", [now(), now(), itemId]);
   return getLibrary();
 });
 
@@ -1627,6 +2269,9 @@ ipcMain.handle("item:favorite", (_event, itemId) => {
 });
 
 ipcMain.handle("images:add", (_event, itemId) => addImages(itemId));
+ipcMain.handle("phone-upload:start", (_event, payload) => startPhoneUploadServer(payload || {}));
+ipcMain.handle("phone-upload:status", () => phoneUploadStatus());
+ipcMain.handle("phone-upload:stop", () => stopPhoneUploadServer());
 
 ipcMain.handle("images:remove", (_event, imageId) => {
   const image = get("SELECT * FROM images WHERE id = ?", [imageId]);
@@ -1634,8 +2279,7 @@ ipcMain.handle("images:remove", (_event, imageId) => {
     return { removed: false };
   }
 
-  run("DELETE FROM images WHERE id = ?", [imageId]);
-  const cleanup = cleanupImageFiles(image);
+  run("UPDATE images SET deleted_at = ? WHERE id = ?", [now(), imageId]);
   run("UPDATE items SET updated_at = ? WHERE id = ?", [now(), image.item_id]);
 
   console.log("[images:remove] removed image", {
@@ -1643,10 +2287,37 @@ ipcMain.handle("images:remove", (_event, imageId) => {
     itemId: image.item_id,
     imagePath: image.image_path,
     thumbnailPath: image.thumbnail_path,
-    cleanup
+    trashed: true
   });
 
-  return { removed: true, itemId: image.item_id, cleanup };
+  return { removed: true, itemId: image.item_id, trashed: true };
+});
+
+ipcMain.handle("images:regenerate-thumbnail", async (_event, imageId) => {
+  const image = get("SELECT * FROM images WHERE id = ?", [imageId]);
+  if (!image) {
+    throw new Error("Image not found");
+  }
+  const regenerated = await regenerateThumbnailFile(image);
+  console.log("[images:thumbnail] regenerated thumbnail", {
+    imageId,
+    itemId: image.item_id,
+    thumbnailPath: image.thumbnail_path
+  });
+  return regenerated;
+});
+
+ipcMain.handle("images:regenerate-item-thumbnails", async (_event, itemId) => {
+  const images = all("SELECT * FROM images WHERE item_id = ? AND COALESCE(deleted_at, '') = '' ORDER BY sort_order ASC, created_at ASC", [itemId]);
+  const regenerated = [];
+  for (const image of images) {
+    regenerated.push(await regenerateThumbnailFile(image));
+  }
+  console.log("[images:thumbnail] regenerated item thumbnails", {
+    itemId,
+    count: regenerated.length
+  });
+  return getItemForRenderer(itemId);
 });
 
 ipcMain.handle("images:replace", async (_event, imageId) => {
@@ -1662,29 +2333,26 @@ ipcMain.handle("images:replace", async (_event, imageId) => {
 
   console.log("[images:replace] selected file", { path: selectedPath });
 
-  const image = nativeImage.createFromPath(selectedPath);
-  const size = image.getSize();
-  if (!size.width || !size.height) {
-    throw new Error("Selected file could not be read as an image");
-  }
-
-  const extension = (path.extname(selectedPath) || ".img").toLowerCase();
-  const storedFilename = `${existing.id}${extension}`;
+  const prepared = await prepareImageForImport(selectedPath, path.basename(selectedPath));
+  const storedFilename = `${existing.id}${prepared.storedExtension.toLowerCase()}`;
   const destination = path.join(paths.images, storedFilename);
   const thumbnailPath = path.join(paths.thumbs, `${existing.id}.png`);
-  const stats = fs.statSync(selectedPath);
 
-  if (path.resolve(selectedPath) !== path.resolve(destination)) {
+  if (prepared.buffer) {
+    fs.writeFileSync(destination, prepared.buffer);
+  } else if (path.resolve(selectedPath) !== path.resolve(destination)) {
     fs.copyFileSync(selectedPath, destination);
   }
-  createThumbnail(image, thumbnailPath, size.width, size.height);
+  createThumbnail(prepared.image, thumbnailPath, prepared.size.width, prepared.size.height);
 
   console.log("[images:replace] copied replacement", {
     originalPath: selectedPath,
     copiedImagePath: destination,
     thumbnailPath,
-    width: size.width,
-    height: size.height
+    width: prepared.size.width,
+    height: prepared.size.height,
+    convertedFromHeic: prepared.convertedFromHeic,
+    orientationNormalized: Boolean(prepared.orientationNormalized || prepared.convertedFromHeic)
   });
 
   run(
@@ -1695,15 +2363,15 @@ ipcMain.handle("images:replace", async (_event, imageId) => {
       WHERE id = ?
     `,
     [
-      path.basename(selectedPath),
+      prepared.originalFilename,
       storedFilename,
       destination,
       thumbnailPath,
-      size.width,
-      size.height,
-      size.width / size.height,
-      stats.size,
-      imageMime(extension),
+      prepared.size.width,
+      prepared.size.height,
+      prepared.size.width / prepared.size.height,
+      prepared.sizeBytes,
+      prepared.mimeType,
       imageId
     ]
   );
@@ -1720,10 +2388,22 @@ ipcMain.handle("images:replace", async (_event, imageId) => {
   return replacedImage;
 });
 
+ipcMain.handle("images:update-note", (_event, payload = {}) => {
+  const imageId = payload.imageId || payload.id;
+  const note = String(payload.note || "");
+  const image = get("SELECT item_id FROM images WHERE id = ? AND COALESCE(deleted_at, '') = ''", [imageId]);
+  if (!image) {
+    throw new Error("Image not found");
+  }
+  run("UPDATE images SET note = ? WHERE id = ?", [note, imageId]);
+  run("UPDATE items SET updated_at = ? WHERE id = ?", [now(), image.item_id]);
+  return getItemForRenderer(image.item_id);
+});
+
 ipcMain.handle("images:reorder", (_event, payload = {}) => {
   const ids = Array.isArray(payload.ids) ? payload.ids.filter(Boolean) : [];
   if (!payload.itemId || ids.length === 0) return null;
-  const rows = all("SELECT id FROM images WHERE item_id = ? ORDER BY sort_order ASC, created_at ASC", [payload.itemId]);
+  const rows = all("SELECT id FROM images WHERE item_id = ? AND COALESCE(deleted_at, '') = '' ORDER BY sort_order ASC, created_at ASC", [payload.itemId]);
   const existingIds = new Set(rows.map((row) => row.id));
   const orderedIds = ids.filter((imageId) => existingIds.has(imageId));
   rows.forEach((row) => {
@@ -1742,6 +2422,90 @@ ipcMain.handle("images:reorder", (_event, payload = {}) => {
     throw error;
   }
   return getItemForRenderer(payload.itemId);
+});
+
+ipcMain.handle("trash:list", () => {
+  const items = all(
+    `
+      SELECT items.id, items.title AS name, items.deleted_at, 'item' AS type,
+             countries.name AS subtitle
+      FROM items
+      LEFT JOIN countries ON countries.id = items.country_id
+      WHERE COALESCE(items.deleted_at, '') <> ''
+      ORDER BY items.deleted_at DESC
+    `
+  );
+  const images = all(
+    `
+      SELECT images.id, images.original_filename AS name, images.deleted_at, 'image' AS type,
+             items.title AS subtitle, images.item_id
+      FROM images
+      JOIN items ON items.id = images.item_id
+      WHERE COALESCE(images.deleted_at, '') <> ''
+      ORDER BY images.deleted_at DESC
+    `
+  );
+  const albums = all(
+    `
+      SELECT id, title AS name, deleted_at, 'album' AS type, description AS subtitle
+      FROM albums
+      WHERE COALESCE(deleted_at, '') <> ''
+      ORDER BY deleted_at DESC
+    `
+  );
+  const pages = all(
+    `
+      SELECT album_pages.id, album_pages.title AS name, album_pages.deleted_at, 'albumPage' AS type,
+             albums.title AS subtitle, album_pages.album_id
+      FROM album_pages
+      JOIN albums ON albums.id = album_pages.album_id
+      WHERE COALESCE(album_pages.deleted_at, '') <> ''
+      ORDER BY album_pages.deleted_at DESC
+    `
+  );
+  return [...items, ...images, ...albums, ...pages].sort((a, b) => String(b.deleted_at || "").localeCompare(String(a.deleted_at || "")));
+});
+
+ipcMain.handle("trash:restore", (_event, payload = {}) => {
+  const type = payload.type;
+  const rowId = payload.id;
+  if (!type || !rowId) return getLibrary();
+  if (type === "item") {
+    run("UPDATE items SET deleted_at = '', deleted_reason = '', updated_at = ? WHERE id = ?", [now(), rowId]);
+  } else if (type === "image") {
+    const image = get("SELECT item_id FROM images WHERE id = ?", [rowId]);
+    const item = image ? get("SELECT deleted_at FROM items WHERE id = ?", [image.item_id]) : null;
+    if (!image || (item && item.deleted_at)) throw new Error("Restore the parent item before restoring this image.");
+    run("UPDATE images SET deleted_at = '', deleted_reason = '' WHERE id = ?", [rowId]);
+  } else if (type === "album") {
+    run("UPDATE albums SET deleted_at = '', deleted_reason = '', updated_at = ? WHERE id = ?", [now(), rowId]);
+  } else if (type === "albumPage") {
+    const page = get("SELECT album_id FROM album_pages WHERE id = ?", [rowId]);
+    const album = page ? get("SELECT deleted_at FROM albums WHERE id = ?", [page.album_id]) : null;
+    if (!page || (album && album.deleted_at)) throw new Error("Restore the album before restoring this page.");
+    run("UPDATE album_pages SET deleted_at = '', deleted_reason = '', updated_at = ? WHERE id = ?", [now(), rowId]);
+    normalizeAlbumPageNumbers(page.album_id);
+  }
+  return getLibrary();
+});
+
+ipcMain.handle("trash:permanent-delete", (_event, payload = {}) => {
+  const type = payload.type;
+  const rowId = payload.id;
+  if (!type || !rowId) return getLibrary();
+  if (type === "item") permanentlyDeleteItem(rowId);
+  else if (type === "image") permanentlyDeleteImage(rowId);
+  else if (type === "album") permanentlyDeleteAlbum(rowId);
+  else if (type === "albumPage") permanentlyDeleteAlbumPage(rowId);
+  return getLibrary();
+});
+
+ipcMain.handle("trash:empty", () => {
+  all("SELECT id FROM images WHERE COALESCE(deleted_at, '') <> ''").forEach((row) => permanentlyDeleteImage(row.id));
+  all("SELECT id FROM items WHERE COALESCE(deleted_at, '') <> ''").forEach((row) => permanentlyDeleteItem(row.id));
+  all("SELECT id FROM album_pages WHERE COALESCE(deleted_at, '') <> ''").forEach((row) => permanentlyDeleteAlbumPage(row.id));
+  all("SELECT id FROM albums WHERE COALESCE(deleted_at, '') <> ''").forEach((row) => permanentlyDeleteAlbum(row.id));
+  return getLibrary();
 });
 
 ipcMain.handle("album:create", (_event, payload) => {
@@ -1769,22 +2533,7 @@ ipcMain.handle("album:update", (_event, payload) => {
 });
 
 ipcMain.handle("album:delete", (_event, albumId) => {
-  run(
-    `
-      DELETE FROM album_page_items
-      WHERE page_id IN (SELECT id FROM album_pages WHERE album_id = ?)
-    `,
-    [albumId]
-  );
-  run(
-    `
-      DELETE FROM album_text_items
-      WHERE page_id IN (SELECT id FROM album_pages WHERE album_id = ?)
-    `,
-    [albumId]
-  );
-  run("DELETE FROM album_pages WHERE album_id = ?", [albumId]);
-  run("DELETE FROM albums WHERE id = ?", [albumId]);
+  run("UPDATE albums SET deleted_at = ?, updated_at = ? WHERE id = ?", [now(), now(), albumId]);
   return getLibrary();
 });
 
@@ -1792,7 +2541,7 @@ ipcMain.handle("album-page:create", (_event, payload) => {
   const rowId = id();
   const pageNumber =
     payload.page_number ||
-    Number(get("SELECT COUNT(*) AS count FROM album_pages WHERE album_id = ?", [payload.album_id]).count) + 1;
+    Number(get("SELECT COUNT(*) AS count FROM album_pages WHERE album_id = ? AND COALESCE(deleted_at, '') = ''", [payload.album_id]).count) + 1;
   const timestamp = now();
   const orientation = payload.orientation === "landscape" ? "landscape" : "portrait";
   const pageWidth = Number(payload.page_width || (orientation === "landscape" ? 1400 : 1000));
@@ -1882,7 +2631,7 @@ ipcMain.handle("album-page:update", (_event, payload) => {
 ipcMain.handle("album-page:reorder", (_event, payload = {}) => {
   const ids = Array.isArray(payload.ids) ? payload.ids.filter(Boolean) : [];
   if (!payload.albumId || ids.length === 0) return null;
-  const pages = all("SELECT id FROM album_pages WHERE album_id = ? ORDER BY page_number ASC", [payload.albumId]);
+  const pages = all("SELECT id FROM album_pages WHERE album_id = ? AND COALESCE(deleted_at, '') = '' ORDER BY page_number ASC", [payload.albumId]);
   const existingIds = new Set(pages.map((page) => page.id));
   const orderedIds = ids.filter((pageId) => existingIds.has(pageId));
   pages.forEach((page) => {
@@ -1904,14 +2653,14 @@ ipcMain.handle("album-page:reorder", (_event, payload = {}) => {
 });
 
 function copyAlbumPage(sourcePageId, targetAlbumId, options = {}) {
-  const source = get("SELECT * FROM album_pages WHERE id = ?", [sourcePageId]);
+  const source = get("SELECT * FROM album_pages WHERE id = ? AND COALESCE(deleted_at, '') = ''", [sourcePageId]);
   if (!source) throw new Error("Source album page was not found.");
-  const target = get("SELECT id FROM albums WHERE id = ?", [targetAlbumId]);
+  const target = get("SELECT id FROM albums WHERE id = ? AND COALESCE(deleted_at, '') = ''", [targetAlbumId]);
   if (!target) throw new Error("Target album was not found.");
 
   const timestamp = now();
   const newPageId = id();
-  const targetPages = all("SELECT id FROM album_pages WHERE album_id = ? ORDER BY page_number ASC, created_at ASC", [targetAlbumId]);
+  const targetPages = all("SELECT id FROM album_pages WHERE album_id = ? AND COALESCE(deleted_at, '') = '' ORDER BY page_number ASC, created_at ASC", [targetAlbumId]);
   const requestedIndex = options.insertAfterPageId
     ? targetPages.findIndex((page) => page.id === options.insertAfterPageId) + 1
     : targetPages.length;
@@ -2075,10 +2824,8 @@ ipcMain.handle("album-page:copy", (_event, payload = {}) => {
 ipcMain.handle("album-page:delete", (_event, pageId) => {
   const page = get("SELECT album_id FROM album_pages WHERE id = ?", [pageId]);
   if (!page) return null;
-  run("DELETE FROM album_page_items WHERE page_id = ?", [pageId]);
-  run("DELETE FROM album_text_items WHERE page_id = ?", [pageId]);
-  run("DELETE FROM album_pages WHERE id = ?", [pageId]);
-  const pages = all("SELECT id FROM album_pages WHERE album_id = ? ORDER BY page_number ASC", [page.album_id]);
+  run("UPDATE album_pages SET deleted_at = ?, updated_at = ? WHERE id = ?", [now(), now(), pageId]);
+  const pages = all("SELECT id FROM album_pages WHERE album_id = ? AND COALESCE(deleted_at, '') = '' ORDER BY page_number ASC", [page.album_id]);
   pages.forEach((entry, index) => {
     run("UPDATE album_pages SET page_number = ? WHERE id = ?", [index + 1, entry.id]);
   });
@@ -2087,10 +2834,10 @@ ipcMain.handle("album-page:delete", (_event, pageId) => {
 });
 
 function getAlbum(albumId) {
-  const album = get("SELECT * FROM albums WHERE id = ?", [albumId]);
+  const album = get("SELECT * FROM albums WHERE id = ? AND COALESCE(deleted_at, '') = ''", [albumId]);
   if (!album) return null;
 
-  const pages = all("SELECT * FROM album_pages WHERE album_id = ? ORDER BY page_number ASC", [albumId]).map((page) => {
+  const pages = all("SELECT * FROM album_pages WHERE album_id = ? AND COALESCE(deleted_at, '') = '' ORDER BY page_number ASC", [albumId]).map((page) => {
     const pageItems = all(
       `
         SELECT
@@ -2106,7 +2853,7 @@ function getAlbum(albumId) {
           display_image.height AS cover_height,
           display_image.aspect_ratio AS cover_aspect_ratio
         FROM album_page_items
-        JOIN items ON items.id = album_page_items.item_id
+        JOIN items ON items.id = album_page_items.item_id AND COALESCE(items.deleted_at, '') = ''
         LEFT JOIN countries ON countries.id = items.country_id
         LEFT JOIN collection_types ON collection_types.id = items.type_id
         LEFT JOIN images AS display_image ON display_image.id = COALESCE(
@@ -2114,11 +2861,13 @@ function getAlbum(albumId) {
             SELECT id FROM images
             WHERE images.id = album_page_items.image_id
               AND images.item_id = items.id
+              AND COALESCE(images.deleted_at, '') = ''
             LIMIT 1
           ),
           (
             SELECT id FROM images
             WHERE images.item_id = items.id
+              AND COALESCE(images.deleted_at, '') = ''
             ORDER BY sort_order ASC, created_at ASC
             LIMIT 1
           )
@@ -2153,7 +2902,7 @@ function getAlbum(albumId) {
         crop_right: clampCropValue(row.crop_right),
         crop_top: clampCropValue(row.crop_top),
         crop_bottom: clampCropValue(row.crop_bottom),
-        images: all("SELECT * FROM images WHERE item_id = ? ORDER BY sort_order ASC, created_at ASC", [row.item_id]).map(mapImage),
+        images: all("SELECT * FROM images WHERE item_id = ? AND COALESCE(deleted_at, '') = '' ORDER BY sort_order ASC, created_at ASC", [row.item_id]).map(mapImage),
         cover: row.cover_thumbnail_path
           ? {
               id: row.display_image_id,
@@ -2178,7 +2927,7 @@ function getAlbum(albumId) {
     ).map(mapTextRow);
 
     const backgroundImage = page.background_image_id
-      ? get("SELECT * FROM images WHERE id = ?", [page.background_image_id])
+      ? get("SELECT * FROM images WHERE id = ? AND COALESCE(deleted_at, '') = ''", [page.background_image_id])
       : null;
 
     return {
@@ -2205,11 +2954,11 @@ ipcMain.handle("album-page-item:add", (_event, payload) => {
   const sortOrder =
     payload.sort_order ||
     Number(get("SELECT COUNT(*) AS count FROM album_page_items WHERE page_id = ?", [payload.page_id]).count);
-  const page = get("SELECT * FROM album_pages WHERE id = ?", [payload.page_id]);
+  const page = get("SELECT * FROM album_pages WHERE id = ? AND COALESCE(deleted_at, '') = ''", [payload.page_id]);
   const selectedImage = payload.image_id
-    ? get("SELECT id FROM images WHERE id = ? AND item_id = ?", [payload.image_id, payload.item_id])
+    ? get("SELECT id FROM images WHERE id = ? AND item_id = ? AND COALESCE(deleted_at, '') = ''", [payload.image_id, payload.item_id])
     : null;
-  const fallbackImage = get("SELECT * FROM images WHERE item_id = ? ORDER BY sort_order ASC, created_at ASC LIMIT 1", [payload.item_id]);
+  const fallbackImage = get("SELECT * FROM images WHERE item_id = ? AND COALESCE(deleted_at, '') = '' ORDER BY sort_order ASC, created_at ASC LIMIT 1", [payload.item_id]);
   const displayImage = selectedImage ? get("SELECT * FROM images WHERE id = ?", [selectedImage.id]) : fallbackImage;
   const pageWidth = Number(page?.page_width || 1000);
   const grid = Number(page?.grid_size || 25);
@@ -2261,6 +3010,85 @@ ipcMain.handle("album-page-item:add", (_event, payload) => {
   );
   run("UPDATE albums SET updated_at = ? WHERE id = ?", [now(), page.album_id]);
   return getAlbum(page.album_id);
+});
+
+ipcMain.handle("album-page-items:bulk-add", (_event, payload = {}) => {
+  const page = get("SELECT * FROM album_pages WHERE id = ? AND COALESCE(deleted_at, '') = ''", [payload.page_id]);
+  if (!page) throw new Error("Album page not found");
+  const itemIds = Array.isArray(payload.item_ids) ? payload.item_ids.filter(Boolean) : [];
+  const mode = payload.mode === "allImages" ? "allImages" : "cover";
+  const columns = Math.max(1, Math.min(8, Number(payload.columns || 3)));
+  const spacing = Math.max(8, Math.min(120, Number(payload.spacing || 24)));
+  const margin = Math.max(20, Math.min(160, Number(payload.margin || 70)));
+  const pageWidth = Number(page.page_width || 1000);
+  const pageHeight = Number(page.page_height || 1400);
+  const slotWidth = Math.max(80, (pageWidth - margin * 2 - spacing * (columns - 1)) / columns);
+  const rows = [];
+  const skipped = [];
+
+  itemIds.forEach((itemId) => {
+    const item = get("SELECT id FROM items WHERE id = ? AND COALESCE(deleted_at, '') = ''", [itemId]);
+    if (!item) {
+      skipped.push({ itemId, reason: "Item not found" });
+      return;
+    }
+    const images = mode === "allImages"
+      ? all("SELECT * FROM images WHERE item_id = ? AND COALESCE(deleted_at, '') = '' ORDER BY sort_order ASC, created_at ASC", [itemId])
+      : all("SELECT * FROM images WHERE item_id = ? AND COALESCE(deleted_at, '') = '' ORDER BY sort_order ASC, created_at ASC LIMIT 1", [itemId]);
+    if (!images.length) {
+      skipped.push({ itemId, reason: "No images" });
+      return;
+    }
+    images.forEach((image) => rows.push({ itemId, image }));
+  });
+
+  const startOrder = Number(get("SELECT COUNT(*) AS count FROM album_page_items WHERE page_id = ?", [page.id])?.count || 0);
+  const maxZ = Number(get("SELECT MAX(z_index) AS max_z FROM album_page_items WHERE page_id = ?", [page.id])?.max_z ?? -1);
+  const timestamp = now();
+
+  db.exec("BEGIN TRANSACTION");
+  try {
+    rows.forEach((entry, index) => {
+      const ratio = Math.max(0.18, Number(entry.image.aspect_ratio || 1));
+      const imageHeight = slotWidth / ratio;
+      const slotHeight = Math.min(Math.max(140, imageHeight + 56), 320);
+      const column = index % columns;
+      const row = Math.floor(index / columns);
+      const x = margin + column * (slotWidth + spacing);
+      const y = Math.min(pageHeight - slotHeight - margin, margin + row * (slotHeight + spacing));
+      bindAndStep(
+        `
+          INSERT INTO album_page_items (
+            id, page_id, item_id, image_id, x, y, width, height, rotation, z_index, caption,
+            show_caption, show_title, show_metadata, locked, frame_style, border_color, background_color,
+            background_opacity, padding, border_radius, crop_left, crop_right, crop_top, crop_bottom,
+            sort_order, created_at
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, '', 1, 1, 1, 1, 'none', '#b8c8c4', '#ffffff', 0, 4, 2, 0, 0, 0, 0, ?, ?)
+        `,
+        [
+          id(),
+          page.id,
+          entry.itemId,
+          entry.image.id,
+          Math.round(x),
+          Math.round(Math.max(margin, y)),
+          Math.round(slotWidth),
+          Math.round(slotHeight),
+          maxZ + 1 + index,
+          startOrder + index,
+          timestamp
+        ]
+      );
+    });
+    bindAndStep("UPDATE albums SET updated_at = ? WHERE id = ?", [timestamp, page.album_id]);
+    db.exec("COMMIT");
+    saveDb();
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  return { album: getAlbum(page.album_id), added: rows.length, skipped };
 });
 
 ipcMain.handle("album-page-item:update", (_event, payload) => {
@@ -2330,7 +3158,7 @@ ipcMain.handle("album-page-item:update", (_event, payload) => {
   if (!row) return null;
 
   const selectedImage = payload.image_id
-    ? get("SELECT id FROM images WHERE id = ? AND item_id = ?", [payload.image_id, row.item_id])
+    ? get("SELECT id FROM images WHERE id = ? AND item_id = ? AND COALESCE(deleted_at, '') = ''", [payload.image_id, row.item_id])
     : null;
 
   run(
@@ -2376,7 +3204,7 @@ ipcMain.handle("album-page-item:update", (_event, payload) => {
 
 ipcMain.handle("album-text:add", (_event, payload) => {
   const rowId = id();
-  const page = get("SELECT * FROM album_pages WHERE id = ?", [payload.page_id]);
+  const page = get("SELECT * FROM album_pages WHERE id = ? AND COALESCE(deleted_at, '') = ''", [payload.page_id]);
   if (!page) return null;
   const sortOrder =
     payload.sort_order ||
@@ -2742,6 +3570,10 @@ app.whenReady().then(async () => {
       }
     }
   });
+});
+
+app.on("before-quit", () => {
+  stopPhoneUploadServer();
 });
 
 app.on("window-all-closed", () => {
