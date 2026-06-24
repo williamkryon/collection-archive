@@ -1,8 +1,18 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import * as pdfjsLib from "pdfjs-dist";
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import "./styles.css";
 
 const api = window.archiveAPI;
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+if (localStorage.getItem("archiveDebugMedia") === "1" || localStorage.getItem("archiveDebugAttachments") === "1") {
+  console.log("[attachments:pdf] pdfjs runtime", {
+    version: pdfjsLib.version || "unknown",
+    hasUint8ArrayToHex: typeof Uint8Array.prototype.toHex === "function",
+    workerSrc: pdfjsLib.GlobalWorkerOptions.workerSrc
+  });
+}
 const rendererModuleLoadedAt = performance.now();
 
 function perfTraceEnabled() {
@@ -96,6 +106,32 @@ const translations = {
     imageNotePlaceholder: "front, back, seller photo, needs rescan...",
     imageNoteSaved: "Image note saved.",
     technicalDetails: "Technical details",
+    attachments: "Attachments",
+    addAttachment: "Add attachment",
+    openFile: "Open file",
+    view: "View",
+    previewAttachment: "Preview attachment",
+    removeAttachment: "Remove attachment",
+    note: "Note",
+    fileType: "File type",
+    fileSize: "File size",
+    imported: "Imported",
+    noAttachmentsYet: "No attachments yet",
+    previewUnavailable: "Preview unavailable",
+    playbackUnavailable: "Playback unavailable",
+    pdfPreviewUnavailable: "PDF preview unavailable",
+    loadingPdf: "Loading PDF...",
+    previousPage: "Previous page",
+    nextPage: "Next page",
+    pageLabel: "Page",
+    of: "of",
+    fitWidth: "Fit width",
+    pdfZoomIn: "Zoom in",
+    pdfZoomOut: "Zoom out",
+    pdfActualSize: "Actual size",
+    reload: "Reload",
+    attachmentSaved: "Attachment saved.",
+    attachmentRemoved: "Attachment removed.",
     trashTitle: "Trash",
     trashEmpty: "Trash is empty",
     restore: "Restore",
@@ -465,6 +501,32 @@ translations.zh.imageNote = "\u56fe\u7247\u5907\u6ce8";
 translations.zh.imageNotePlaceholder = "\u6b63\u9762\u3001\u80cc\u9762\u3001\u5356\u5bb6\u56fe\u3001\u9700\u8981\u91cd\u626b...";
 translations.zh.imageNoteSaved = "\u56fe\u7247\u5907\u6ce8\u5df2\u4fdd\u5b58\u3002";
 translations.zh.technicalDetails = "\u6280\u672f\u8be6\u60c5";
+translations.zh.attachments = "\u9644\u4ef6";
+translations.zh.addAttachment = "\u6dfb\u52a0\u9644\u4ef6";
+translations.zh.openFile = "\u6253\u5f00\u6587\u4ef6";
+translations.zh.view = "\u67e5\u770b";
+translations.zh.previewAttachment = "\u9884\u89c8\u9644\u4ef6";
+translations.zh.removeAttachment = "\u79fb\u9664\u9644\u4ef6";
+translations.zh.note = "\u5907\u6ce8";
+translations.zh.fileType = "\u6587\u4ef6\u7c7b\u578b";
+translations.zh.fileSize = "\u6587\u4ef6\u5927\u5c0f";
+translations.zh.imported = "\u5bfc\u5165\u65f6\u95f4";
+translations.zh.noAttachmentsYet = "\u8fd8\u6ca1\u6709\u9644\u4ef6";
+translations.zh.previewUnavailable = "\u9884\u89c8\u4e0d\u53ef\u7528";
+translations.zh.playbackUnavailable = "\u64ad\u653e\u4e0d\u53ef\u7528";
+translations.zh.pdfPreviewUnavailable = "PDF \u9884\u89c8\u4e0d\u53ef\u7528";
+translations.zh.loadingPdf = "\u6b63\u5728\u52a0\u8f7d PDF...";
+translations.zh.previousPage = "\u4e0a\u4e00\u9875";
+translations.zh.nextPage = "\u4e0b\u4e00\u9875";
+translations.zh.pageLabel = "\u9875";
+translations.zh.of = "\u5171";
+translations.zh.fitWidth = "\u9002\u5408\u5bbd\u5ea6";
+translations.zh.pdfZoomIn = "\u653e\u5927";
+translations.zh.pdfZoomOut = "\u7f29\u5c0f";
+translations.zh.pdfActualSize = "\u5b9e\u9645\u5927\u5c0f";
+translations.zh.reload = "\u91cd\u65b0\u52a0\u8f7d";
+translations.zh.attachmentSaved = "\u9644\u4ef6\u5df2\u4fdd\u5b58\u3002";
+translations.zh.attachmentRemoved = "\u9644\u4ef6\u5df2\u79fb\u9664\u3002";
 translations.zh.trashTitle = "\u56de\u6536\u7ad9";
 translations.zh.trashEmpty = "\u56de\u6536\u7ad9\u4e3a\u7a7a";
 translations.zh.restore = "\u6062\u590d";
@@ -578,6 +640,19 @@ function orderedRows(rows) {
     const right = String(b.name || b.title || "");
     return left.localeCompare(right, undefined, { sensitivity: "base", numeric: true });
   });
+}
+
+function formatFileSize(bytes) {
+  const value = Number(bytes || 0);
+  if (!Number.isFinite(value) || value <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let size = value;
+  let unit = 0;
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024;
+    unit += 1;
+  }
+  return `${size >= 10 || unit === 0 ? Math.round(size) : size.toFixed(1)} ${units[unit]}`;
 }
 
 const transparentPixel =
@@ -1777,6 +1852,44 @@ function ArchiveApp() {
     setMessage(t("imageNoteSaved"));
   }
 
+  async function addAttachment(itemId) {
+    try {
+      const updated = await api.addAttachment(itemId);
+      if (updated) {
+        setDetail(updated);
+        setItemsVersion((version) => version + 1);
+      }
+    } catch (error) {
+      setMessage(`Attachment import failed: ${error.message || error}`);
+    }
+  }
+
+  async function updateAttachment(payload) {
+    const updated = await api.updateAttachment(payload);
+    if (updated) {
+      setDetail(updated);
+      setItemsVersion((version) => version + 1);
+    }
+    setMessage(t("attachmentSaved"));
+  }
+
+  async function openAttachment(attachmentId) {
+    try {
+      await api.openAttachment(attachmentId);
+    } catch (error) {
+      setMessage(`Open file failed: ${error.message || error}`);
+    }
+  }
+
+  async function removeAttachment(attachmentId) {
+    const updated = await api.removeAttachment(attachmentId);
+    if (updated) {
+      setDetail(updated);
+      setItemsVersion((version) => version + 1);
+    }
+    setMessage(t("attachmentRemoved"));
+  }
+
   async function refreshTrash() {
     setTrashRows(await api.listTrash());
   }
@@ -1956,6 +2069,10 @@ function ArchiveApp() {
             onReplaceImage={replaceImage}
             onReorderImages={reorderImages}
             onUpdateImageNote={updateImageNote}
+            onAddAttachment={addAttachment}
+            onUpdateAttachment={updateAttachment}
+            onOpenAttachment={openAttachment}
+            onRemoveAttachment={removeAttachment}
             onUpdate={async (payload) => {
               await updateItem(payload);
             }}
@@ -2380,7 +2497,7 @@ function GalleryView({ items, total, loading, onLoadMore, onOpenItem, onToggleFa
   );
 }
 
-function DetailView({ detail, countries, types, onBack, onAddImages, onStartPhoneUpload, onRemoveImage, onReplaceImage, onReorderImages, onUpdateImageNote, onUpdate, onToggleFavorite, onDeleteItem }) {
+function DetailView({ detail, countries, types, onBack, onAddImages, onStartPhoneUpload, onRemoveImage, onReplaceImage, onReorderImages, onUpdateImageNote, onAddAttachment, onUpdateAttachment, onOpenAttachment, onRemoveAttachment, onUpdate, onToggleFavorite, onDeleteItem }) {
   const { t } = useI18n();
   const [activeImage, setActiveImage] = useState(0);
   const [editing, setEditing] = useState(false);
@@ -2558,6 +2675,14 @@ function DetailView({ detail, countries, types, onBack, onAddImages, onStartPhon
           {viewerImages.length > 0 && (
             <ImageViewerButton images={viewerImages} activeImage={activeImage} title={detail.title} />
           )}
+          <AttachmentsSection
+            itemId={detail.id}
+            attachments={detail.attachments || []}
+            onAdd={onAddAttachment}
+            onUpdate={onUpdateAttachment}
+            onOpen={onOpenAttachment}
+            onRemove={onRemoveAttachment}
+          />
         </aside>
       </div>
       {editing && (
@@ -2586,6 +2711,467 @@ function ImageViewerButton({ images, activeImage, title }) {
       <button type="button" onClick={() => setOpen(true)}>{t("openViewer")}</button>
       {open && <ImageViewer images={images} initialIndex={activeImage} title={title} onClose={() => setOpen(false)} />}
     </>
+  );
+}
+
+function AttachmentsSection({ itemId, attachments, onAdd, onUpdate, onOpen, onRemove }) {
+  const { t } = useI18n();
+  const [viewerAttachment, setViewerAttachment] = useState(null);
+  return (
+    <section className="attachments-section">
+      <header>
+        <div>
+          <h2>{t("attachments")}</h2>
+          <p>{attachments.length ? `${attachments.length}` : t("noAttachmentsYet")}</p>
+        </div>
+        <button type="button" className="secondary" onClick={() => onAdd(itemId)}>{t("addAttachment")}</button>
+      </header>
+      <div className="attachments-list">
+        {attachments.map((attachment) => (
+          <AttachmentRow
+            key={attachment.id}
+            attachment={attachment}
+            onUpdate={onUpdate}
+            onOpen={onOpen}
+            onView={setViewerAttachment}
+            onRemove={onRemove}
+          />
+        ))}
+      </div>
+      {attachments.length === 0 && <p className="quiet">{t("noAttachmentsYet")}</p>}
+      {viewerAttachment && (
+        <AttachmentViewer
+          attachment={viewerAttachment}
+          onOpen={onOpen}
+          onClose={() => setViewerAttachment(null)}
+        />
+      )}
+    </section>
+  );
+}
+
+function canPreviewAttachment(attachment) {
+  return ["pdf", "video", "audio"].includes(attachment?.file_type) && Boolean(attachment?.url);
+}
+
+function AttachmentRow({ attachment, onUpdate, onOpen, onView, onRemove }) {
+  const { t } = useI18n();
+  const [title, setTitle] = useState(attachment.title || "");
+  const [note, setNote] = useState(attachment.note || "");
+
+  useEffect(() => {
+    setTitle(attachment.title || "");
+    setNote(attachment.note || "");
+  }, [attachment.id, attachment.note, attachment.title]);
+
+  function save() {
+    if (title === (attachment.title || "") && note === (attachment.note || "")) return;
+    onUpdate({ id: attachment.id, title, note });
+  }
+
+  const displayTitle = title.trim() || attachment.original_filename;
+  const imported = attachment.created_at ? new Date(attachment.created_at).toLocaleString() : "-";
+
+  return (
+    <article className="attachment-card">
+      <div className="attachment-main">
+        <label>
+          {t("title")}
+          <input value={title} placeholder={attachment.original_filename} onChange={(event) => setTitle(event.target.value)} onBlur={save} />
+        </label>
+        <div className="attachment-meta">
+          <span>{t("fileType")}: {attachment.file_type || "other"}</span>
+          <span>{t("fileSize")}: {formatFileSize(attachment.file_size)}</span>
+          <span>{t("imported")}: {imported}</span>
+        </div>
+        <label>
+          {t("note")}
+          <textarea value={note} onChange={(event) => setNote(event.target.value)} onBlur={save} />
+        </label>
+      </div>
+      <AttachmentPreview attachment={attachment} title={displayTitle} />
+      <div className="attachment-actions">
+        {canPreviewAttachment(attachment) && (
+          <button type="button" className="secondary" onClick={() => onView(attachment)}>{t("view")}</button>
+        )}
+        <button type="button" onClick={() => onOpen(attachment.id)}>{t("openFile")}</button>
+        <button
+          type="button"
+          className="danger"
+          onClick={() => {
+            if (!window.confirm(`${t("removeAttachment")}?`)) return;
+            onRemove(attachment.id);
+          }}
+        >
+          {t("removeAttachment")}
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function AttachmentPreview({ attachment, title }) {
+  const { t } = useI18n();
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [attachment.id, attachment.url]);
+  if (!attachment.url) {
+    return <div className="attachment-preview unavailable">{t("previewUnavailable")}</div>;
+  }
+  if (failed) {
+    return <div className="attachment-preview unavailable">{t("playbackUnavailable")}</div>;
+  }
+  if (attachment.file_type === "pdf") {
+    return <PdfAttachmentCanvas attachment={attachment} title={title} compact />;
+  }
+  if (attachment.file_type === "video") {
+    return <video className="attachment-preview" controls preload="metadata" src={attachment.url} onError={() => setFailed(true)} />;
+  }
+  if (attachment.file_type === "audio") {
+    return <audio className="attachment-audio-preview" controls preload="metadata" src={attachment.url} onError={() => setFailed(true)} />;
+  }
+  return <div className="attachment-preview unavailable">{t("previewUnavailable")}</div>;
+}
+
+function AttachmentViewer({ attachment, onOpen, onClose }) {
+  const { t } = useI18n();
+  const [failed, setFailed] = useState(false);
+  const title = attachment.title || attachment.original_filename || t("previewAttachment");
+
+  useEffect(() => {
+    function handleKeyDown(event) {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="viewer-backdrop attachment-viewer-backdrop">
+      <section className="attachment-viewer" role="dialog" aria-modal="true" aria-label={t("previewAttachment")}>
+        <header>
+          <div>
+            <h2>{title}</h2>
+            <p>{attachment.file_type || "other"} · {formatFileSize(attachment.file_size)}</p>
+          </div>
+          <div className="viewer-actions">
+            <button type="button" className="secondary" onClick={() => onOpen(attachment.id)}>{t("openFile")}</button>
+            <button type="button" onClick={onClose}>{t("closeViewer")}</button>
+          </div>
+        </header>
+        <div className="attachment-viewer-body">
+          {!attachment.url || failed ? (
+            <div className="attachment-viewer-unavailable">{failed ? t("playbackUnavailable") : t("previewUnavailable")}</div>
+          ) : attachment.file_type === "pdf" ? (
+            <PdfAttachmentCanvas attachment={attachment} title={title} />
+          ) : attachment.file_type === "video" ? (
+            <video controls autoPlay={false} preload="metadata" src={attachment.url} onError={() => setFailed(true)} />
+          ) : attachment.file_type === "audio" ? (
+            <div className="attachment-audio-viewer">
+              <strong>{title}</strong>
+              <audio controls preload="metadata" src={attachment.url} onError={() => setFailed(true)} />
+            </div>
+          ) : (
+            <div className="attachment-viewer-unavailable">{t("previewUnavailable")}</div>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function pdfAttachmentDebugEnabled() {
+  try {
+    return Boolean(import.meta.env.DEV || localStorage.getItem("archiveDebugMedia") === "1" || localStorage.getItem("archiveDebugAttachments") === "1");
+  } catch {
+    return false;
+  }
+}
+
+function pdfByteDebugShape(value) {
+  if (value == null) return { type: String(value) };
+  const constructorName = value?.constructor?.name || typeof value;
+  const length = Number(value?.byteLength || value?.length || value?.data?.length || 0);
+  return {
+    constructorName,
+    type: value?.type,
+    isArray: Array.isArray(value),
+    isArrayBuffer: value instanceof ArrayBuffer,
+    isUint8Array: value instanceof Uint8Array,
+    hasBuffer: Boolean(value?.buffer),
+    hasDataArray: Array.isArray(value?.data),
+    length
+  };
+}
+
+function toPdfByteArray(value) {
+  let bytes = null;
+  if (value instanceof ArrayBuffer) {
+    bytes = new Uint8Array(value);
+  } else if (value instanceof Uint8Array) {
+    bytes = new Uint8Array(value);
+  } else if (Array.isArray(value)) {
+    bytes = new Uint8Array(value);
+  } else if (Array.isArray(value?.data)) {
+    bytes = new Uint8Array(value.data);
+  } else if (value?.buffer instanceof ArrayBuffer) {
+    const byteOffset = Number(value.byteOffset || 0);
+    const byteLength = Number(value.byteLength || value.buffer.byteLength || 0);
+    bytes = new Uint8Array(value.buffer, byteOffset, byteLength);
+  } else if (typeof value === "object" && Number.isFinite(Number(value?.length))) {
+    const length = Number(value.length);
+    const list = new Array(length);
+    for (let index = 0; index < length; index += 1) {
+      list[index] = Number(value[index] || 0);
+    }
+    bytes = new Uint8Array(list);
+  }
+
+  if (!bytes || bytes.byteLength === 0) return null;
+  return new Uint8Array(bytes);
+}
+
+function describePdfError(error, stage) {
+  const rawMessage = error?.message || String(error || "");
+  const message = rawMessage.replace(/\s+/g, " ").trim();
+  if (/missing/i.test(message) && /url/i.test(message)) return "Missing PDF URL";
+  if (/missing/i.test(message) && /file/i.test(message)) return "Missing attachment file";
+  if (/not found/i.test(message)) return "Missing attachment file";
+  if (/not a pdf/i.test(message)) return "Attachment is not a PDF";
+  if (/worker/i.test(message)) return "PDF.js worker failed";
+  if (/invalid pdf|invalidpdf|invalid pdf structure/i.test(message)) return "Invalid PDF structure";
+  if (/password/i.test(message)) return "Password-protected PDF";
+  if (/decode|decoded/i.test(message)) return "PDF byte data could not be decoded";
+  if (/bytes|arraybuffer|uint8array|read/i.test(message) || stage === "read-bytes") {
+    return `Failed to read PDF bytes${message ? `: ${message}` : ""}`;
+  }
+  if (stage === "load-pdf") return `PDF.js failed to load PDF${message ? `: ${message}` : ""}`;
+  if (stage === "render-page") return `PDF.js failed to render page${message ? `: ${message}` : ""}`;
+  return message || "PDF preview unavailable";
+}
+
+function PdfAttachmentCanvas({ attachment, title, compact = false }) {
+  const { t } = useI18n();
+  const containerRef = useRef(null);
+  const canvasRef = useRef(null);
+  const renderTaskRef = useRef(null);
+  const renderSeqRef = useRef(0);
+  const pdfRef = useRef(null);
+  const [pdf, setPdf] = useState(null);
+  const [pageCount, setPageCount] = useState(0);
+  const [pageNumber, setPageNumber] = useState(1);
+  const [zoom, setZoom] = useState(1);
+  const [mode, setMode] = useState("fit-width");
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+  const [loading, setLoading] = useState(true);
+  const [rendering, setRendering] = useState(false);
+  const [error, setError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    const node = containerRef.current;
+    if (!node) return undefined;
+    function measure() {
+      setContainerSize({
+        width: Math.max(160, node.clientWidth || 0),
+        height: Math.max(120, node.clientHeight || 0)
+      });
+    }
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadingTaskRef = { current: null };
+    setLoading(true);
+    setError("");
+    setPdf(null);
+    setPageCount(0);
+    setPageNumber(1);
+
+    async function loadPdf() {
+      let stage = "read-bytes";
+      try {
+        if (!attachment.id) throw new Error("Missing attachment id");
+        if (!api?.readAttachmentBytes) throw new Error("Attachment byte reader is unavailable");
+        const result = await api.readAttachmentBytes(attachment.id);
+        if (pdfAttachmentDebugEnabled()) {
+          console.log("[attachments:pdf] byte payload", {
+            attachmentId: attachment.id,
+            originalFilename: attachment.original_filename,
+            resultKeys: result ? Object.keys(result) : [],
+            byteShape: pdfByteDebugShape(result?.bytes)
+          });
+        }
+        const bytes = toPdfByteArray(result?.bytes);
+        if (!bytes || bytes.byteLength === 0) throw new Error("PDF byte data could not be decoded");
+        if (pdfAttachmentDebugEnabled()) {
+          console.log("[attachments:pdf] byte array decoded", {
+            attachmentId: attachment.id,
+            constructorName: bytes.constructor?.name,
+            length: bytes.byteLength,
+            header: Array.from(bytes.slice(0, 8))
+          });
+        }
+        if (cancelled) return;
+        stage = "load-pdf";
+        const task = pdfjsLib.getDocument({ data: bytes });
+        loadingTaskRef.current = task;
+        const loadedPdf = await task.promise;
+        if (cancelled) {
+          await loadedPdf.destroy();
+          return;
+        }
+        pdfRef.current = loadedPdf;
+        setPdf(loadedPdf);
+        setPageCount(loadedPdf.numPages || 0);
+      } catch (loadError) {
+        if (!cancelled) {
+          const detail = describePdfError(loadError, stage);
+          if (pdfAttachmentDebugEnabled()) {
+            console.error("[attachments:pdf] preview failed", {
+              attachmentId: attachment.id,
+              originalFilename: attachment.original_filename,
+              stage,
+              workerSrc: pdfjsLib.GlobalWorkerOptions.workerSrc,
+              message: loadError?.message || String(loadError),
+              name: loadError?.name,
+              stack: loadError?.stack
+            });
+          }
+          setError(detail);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    loadPdf();
+    return () => {
+      cancelled = true;
+      renderSeqRef.current += 1;
+      if (renderTaskRef.current) {
+        renderTaskRef.current.cancel();
+        renderTaskRef.current = null;
+      }
+      if (loadingTaskRef.current?.destroy) {
+        loadingTaskRef.current.destroy();
+      }
+      if (pdfRef.current) {
+        pdfRef.current.destroy();
+        pdfRef.current = null;
+      }
+    };
+  }, [attachment.id, attachment.original_filename, reloadKey]);
+
+  useEffect(() => {
+    if (!pdf || !canvasRef.current || !containerSize.width) return undefined;
+    let cancelled = false;
+    const sequence = renderSeqRef.current + 1;
+    renderSeqRef.current = sequence;
+
+    async function renderPage() {
+      setRendering(true);
+      setError("");
+      if (renderTaskRef.current) {
+        renderTaskRef.current.cancel();
+        renderTaskRef.current = null;
+      }
+      try {
+        const page = await pdf.getPage(pageNumber);
+        if (cancelled || renderSeqRef.current !== sequence) return;
+        const baseViewport = page.getViewport({ scale: 1 });
+        const padding = compact ? 18 : 34;
+        const fitWidthScale = (containerSize.width - padding) / baseViewport.width;
+        const fitHeightScale = (containerSize.height - padding) / baseViewport.height;
+        const fitScale = Math.max(0.1, compact ? Math.min(fitWidthScale, fitHeightScale) : fitWidthScale);
+        const cssScale = mode === "fit-width" ? fitScale : zoom;
+        const pixelRatio = window.devicePixelRatio || 1;
+        const viewport = page.getViewport({ scale: cssScale * pixelRatio });
+        const canvas = canvasRef.current;
+        const context = canvas?.getContext("2d");
+        if (!canvas || !context) return;
+        canvas.width = Math.max(1, Math.floor(viewport.width));
+        canvas.height = Math.max(1, Math.floor(viewport.height));
+        canvas.style.width = `${Math.max(1, Math.floor(baseViewport.width * cssScale))}px`;
+        canvas.style.height = `${Math.max(1, Math.floor(baseViewport.height * cssScale))}px`;
+        context.setTransform(1, 0, 0, 1, 0, 0);
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        const task = page.render({ canvasContext: context, viewport });
+        renderTaskRef.current = task;
+        await task.promise;
+      } catch (renderError) {
+        if (renderError?.name !== "RenderingCancelledException" && !cancelled) {
+          const detail = describePdfError(renderError, "render-page");
+          if (pdfAttachmentDebugEnabled()) {
+            console.error("[attachments:pdf] render failed", {
+              attachmentId: attachment.id,
+              originalFilename: attachment.original_filename,
+              pageNumber,
+              message: renderError?.message || String(renderError),
+              name: renderError?.name,
+              stack: renderError?.stack
+            });
+          }
+          setError(detail);
+        }
+      } finally {
+        if (!cancelled && renderSeqRef.current === sequence) {
+          renderTaskRef.current = null;
+          setRendering(false);
+        }
+      }
+    }
+
+    renderPage();
+    return () => {
+      cancelled = true;
+      if (renderTaskRef.current) {
+        renderTaskRef.current.cancel();
+        renderTaskRef.current = null;
+      }
+    };
+  }, [compact, containerSize.height, containerSize.width, mode, pageNumber, pdf, zoom]);
+
+  function reload() {
+    setReloadKey((current) => current + 1);
+  }
+
+  function zoomBy(delta) {
+    setMode("custom");
+    setZoom((current) => Math.max(0.25, Math.min(4, Math.round((current + delta) * 100) / 100)));
+  }
+
+  return (
+    <div className={`pdf-attachment ${compact ? "compact" : "large"}`} ref={containerRef}>
+      {!compact && (
+        <div className="pdf-toolbar">
+          <button type="button" disabled={pageNumber <= 1 || loading} onClick={() => setPageNumber((current) => Math.max(1, current - 1))}>{t("previousPage")}</button>
+          {!error && pageCount > 0 ? <span>{t("pageLabel")} {pageNumber} {t("of")} {pageCount}</span> : <span>{t("pageLabel")} -</span>}
+          <button type="button" disabled={pageNumber >= pageCount || loading} onClick={() => setPageNumber((current) => Math.min(pageCount, current + 1))}>{t("nextPage")}</button>
+          <button type="button" disabled={loading} onClick={() => zoomBy(-0.15)}>{t("pdfZoomOut")}</button>
+          <button type="button" disabled={loading} onClick={() => zoomBy(0.15)}>{t("pdfZoomIn")}</button>
+          <button type="button" disabled={loading} onClick={() => setMode("fit-width")}>{t("fitWidth")}</button>
+          <button type="button" disabled={loading} onClick={() => { setMode("custom"); setZoom(1); }}>{t("pdfActualSize")}</button>
+          <button type="button" onClick={reload}>{t("reload")}</button>
+        </div>
+      )}
+      <div className="pdf-canvas-wrap" aria-label={title}>
+        {(loading || rendering) && <div className="pdf-status">{loading ? t("loadingPdf") : t("loading")}</div>}
+        {error ? (
+          <div className="pdf-error">
+            <strong>{t("pdfPreviewUnavailable")}</strong>
+            <span>{error}</span>
+            <button type="button" onClick={reload}>{t("reload")}</button>
+          </div>
+        ) : (
+          <canvas ref={canvasRef} />
+        )}
+      </div>
+      {compact && pageCount > 1 && !error && <span className="pdf-compact-count">{t("pageLabel")} 1 {t("of")} {pageCount}</span>}
+    </div>
   );
 }
 

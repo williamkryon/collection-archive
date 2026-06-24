@@ -3,6 +3,7 @@ const fs = require("fs");
 const http = require("http");
 const os = require("os");
 const path = require("path");
+const { Readable } = require("stream");
 const { pathToFileURL } = require("url");
 const crypto = require("crypto");
 const initSqlJs = require("sql.js");
@@ -90,6 +91,7 @@ function getPaths() {
     db: path.join(base, "archive.sqlite"),
     images: path.join(base, "images"),
     thumbs: path.join(base, "thumbnails"),
+    attachments: path.join(base, "attachments"),
     phoneUploads: path.join(base, "phone-upload-temp")
   };
 }
@@ -103,7 +105,11 @@ function mediaUrl(kind, filePath) {
   if (!filePath) return null;
   if (String(filePath).startsWith("archive://")) return filePath;
 
-  const folder = kind === "thumbnails" ? paths.thumbs : paths.images;
+  const folder = kind === "thumbnails"
+    ? paths.thumbs
+    : kind === "attachments"
+      ? paths.attachments
+      : paths.images;
   const rawPath = String(filePath);
   let resolved = path.isAbsolute(rawPath) ? path.resolve(rawPath) : path.resolve(folder, path.basename(rawPath));
 
@@ -135,7 +141,13 @@ function mediaFileForRequest(requestUrl) {
 
   const [kind, encodedFilename] = segments;
   const filename = path.basename(decodeURIComponent(encodedFilename));
-  const folder = kind === "images" ? paths.images : kind === "thumbnails" ? paths.thumbs : null;
+  const folder = kind === "images"
+    ? paths.images
+    : kind === "thumbnails"
+      ? paths.thumbs
+      : kind === "attachments"
+        ? paths.attachments
+        : null;
 
   if (!folder) {
     throw new Error(`Unsupported archive media kind: ${kind}`);
@@ -155,6 +167,10 @@ function registerMediaProtocol() {
   protocol.handle("archive", async (request) => {
     try {
       const filePath = mediaFileForRequest(request.url);
+      const url = new URL(request.url);
+      if (url.pathname.split("/").filter(Boolean)[0] === "attachments") {
+        return attachmentFileResponse(filePath, request);
+      }
       return net.fetch(pathToFileURL(filePath).toString());
     } catch (error) {
       console.error("[media] protocol error", { url: request.url, message: error.message });
@@ -225,6 +241,7 @@ function execSchema(databaseWasCreated = false) {
     "entity_group_memberships",
     "items",
     "images",
+    "item_attachments",
     "albums",
     "album_pages",
     "album_page_items",
@@ -312,6 +329,22 @@ function execSchema(databaseWasCreated = false) {
       deleted_at TEXT DEFAULT '',
       deleted_reason TEXT DEFAULT '',
       created_at TEXT NOT NULL,
+      FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS item_attachments (
+      id TEXT PRIMARY KEY,
+      item_id TEXT NOT NULL,
+      title TEXT DEFAULT '',
+      note TEXT DEFAULT '',
+      original_filename TEXT NOT NULL,
+      stored_filename TEXT NOT NULL,
+      relative_path TEXT NOT NULL,
+      mime_type TEXT DEFAULT '',
+      file_type TEXT DEFAULT 'other',
+      file_size INTEGER DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
       FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE
     );
 
@@ -574,6 +607,8 @@ function createIndexes() {
     ["idx_images_item_id", "CREATE INDEX idx_images_item_id ON images(item_id)"],
     ["idx_images_item_sort", "CREATE INDEX idx_images_item_sort ON images(item_id, sort_order, created_at)"],
     ["idx_images_deleted_at", "CREATE INDEX idx_images_deleted_at ON images(deleted_at)"],
+    ["idx_item_attachments_item_id", "CREATE INDEX idx_item_attachments_item_id ON item_attachments(item_id)"],
+    ["idx_item_attachments_created_at", "CREATE INDEX idx_item_attachments_created_at ON item_attachments(created_at)"],
     ["idx_album_page_items_page_id", "CREATE INDEX idx_album_page_items_page_id ON album_page_items(page_id)"],
     ["idx_album_page_items_item_id", "CREATE INDEX idx_album_page_items_item_id ON album_page_items(item_id)"],
     ["idx_album_page_items_image_id", "CREATE INDEX idx_album_page_items_image_id ON album_page_items(image_id)"],
@@ -605,6 +640,7 @@ async function initDatabase() {
     ensureDir(paths.base);
     ensureDir(paths.images);
     ensureDir(paths.thumbs);
+    ensureDir(paths.attachments);
     ensureDir(paths.phoneUploads);
   });
 
@@ -640,6 +676,14 @@ function mapImage(row) {
     ...row,
     url: mediaUrl("images", row.image_path),
     thumbnailUrl: mediaUrl("thumbnails", row.thumbnail_path)
+  };
+}
+
+function mapAttachment(row) {
+  return {
+    ...row,
+    file_size: Number(row.file_size || 0),
+    url: mediaUrl("attachments", row.relative_path || row.stored_filename)
   };
 }
 
@@ -1392,6 +1436,122 @@ function cleanupImageFiles(image) {
   };
 }
 
+const dangerousAttachmentExtensions = new Set([".exe", ".bat", ".cmd", ".ps1", ".msi", ".scr"]);
+const attachmentMimeTypes = {
+  ".pdf": "application/pdf",
+  ".mp4": "video/mp4",
+  ".webm": "video/webm",
+  ".mov": "video/quicktime",
+  ".mp3": "audio/mpeg",
+  ".wav": "audio/wav",
+  ".ogg": "audio/ogg",
+  ".m4a": "audio/mp4",
+  ".html": "text/html",
+  ".htm": "text/html",
+  ".txt": "text/plain",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ".zip": "application/zip"
+};
+
+function attachmentFileType(extension) {
+  const ext = extension.toLowerCase();
+  if (ext === ".pdf") return "pdf";
+  if ([".mp4", ".webm", ".mov"].includes(ext)) return "video";
+  if ([".mp3", ".wav", ".ogg", ".m4a"].includes(ext)) return "audio";
+  if ([".html", ".htm"].includes(ext)) return "html";
+  return "other";
+}
+
+function attachmentMimeType(filePath) {
+  return attachmentMimeTypes[path.extname(filePath).toLowerCase()] || "application/octet-stream";
+}
+
+function attachmentFileResponse(filePath, request) {
+  const stat = fs.statSync(filePath);
+  const size = stat.size;
+  const contentType = attachmentMimeType(filePath);
+  const baseHeaders = {
+    "Accept-Ranges": "bytes",
+    "Content-Type": contentType,
+    "Cache-Control": "no-store"
+  };
+  const range = request.headers.get("range");
+  const method = String(request.method || "GET").toUpperCase();
+
+  if (!range) {
+    return new Response(method === "HEAD" ? null : Readable.toWeb(fs.createReadStream(filePath)), {
+      status: 200,
+      headers: {
+        ...baseHeaders,
+        "Content-Length": String(size)
+      }
+    });
+  }
+
+  const match = /^bytes=(\d*)-(\d*)$/i.exec(range.trim());
+  if (!match) {
+    return new Response(null, {
+      status: 416,
+      headers: {
+        ...baseHeaders,
+        "Content-Range": `bytes */${size}`,
+        "Content-Length": "0"
+      }
+    });
+  }
+
+  let start;
+  let end;
+  if (match[1] === "" && match[2] !== "") {
+    const suffixLength = Number(match[2]);
+    start = Math.max(0, size - suffixLength);
+    end = size - 1;
+  } else {
+    start = Number(match[1]);
+    end = match[2] === "" ? size - 1 : Number(match[2]);
+  }
+
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end < start || start >= size) {
+    return new Response(null, {
+      status: 416,
+      headers: {
+        ...baseHeaders,
+        "Content-Range": `bytes */${size}`,
+        "Content-Length": "0"
+      }
+    });
+  }
+
+  end = Math.min(end, size - 1);
+  const length = end - start + 1;
+  return new Response(method === "HEAD" ? null : Readable.toWeb(fs.createReadStream(filePath, { start, end })), {
+    status: 206,
+    headers: {
+      ...baseHeaders,
+      "Content-Length": String(length),
+      "Content-Range": `bytes ${start}-${end}/${size}`
+    }
+  });
+}
+
+function attachmentFilePath(row) {
+  const raw = row?.relative_path || row?.stored_filename || "";
+  const filePath = path.resolve(paths.attachments, path.basename(raw));
+  if (!isInside(paths.attachments, filePath)) {
+    throw new Error("Attachment path is outside the archive data folder.");
+  }
+  return filePath;
+}
+
+function deleteAttachmentFile(row) {
+  if (!row) return false;
+  const filePath = attachmentFilePath(row);
+  if (!fs.existsSync(filePath)) return false;
+  fs.unlinkSync(filePath);
+  return true;
+}
+
 function normalizeAlbumPageNumbers(albumId) {
   const pages = all("SELECT id FROM album_pages WHERE album_id = ? AND COALESCE(deleted_at, '') = '' ORDER BY page_number ASC, created_at ASC", [albumId]);
   pages.forEach((entry, index) => {
@@ -1401,10 +1561,19 @@ function normalizeAlbumPageNumbers(albumId) {
 
 function permanentlyDeleteItem(itemId) {
   const images = imageFilesForItem(itemId);
+  const attachments = all("SELECT * FROM item_attachments WHERE item_id = ?", [itemId]);
   run("DELETE FROM album_page_items WHERE item_id = ?", [itemId]);
   run("DELETE FROM images WHERE item_id = ?", [itemId]);
+  run("DELETE FROM item_attachments WHERE item_id = ?", [itemId]);
   run("DELETE FROM items WHERE id = ?", [itemId]);
   cleanupItemImages(images);
+  attachments.forEach((attachment) => {
+    try {
+      deleteAttachmentFile(attachment);
+    } catch (error) {
+      console.warn("[attachments:cleanup] failed", { id: attachment.id, message: error.message });
+    }
+  });
 }
 
 function permanentlyDeleteImage(imageId) {
@@ -2247,7 +2416,8 @@ function getItemForRenderer(itemId) {
   }
   return {
     ...mapItem(item),
-    images: all("SELECT * FROM images WHERE item_id = ? AND COALESCE(deleted_at, '') = '' ORDER BY sort_order ASC, created_at ASC", [itemId]).map(mapImage)
+    images: all("SELECT * FROM images WHERE item_id = ? AND COALESCE(deleted_at, '') = '' ORDER BY sort_order ASC, created_at ASC", [itemId]).map(mapImage),
+    attachments: all("SELECT * FROM item_attachments WHERE item_id = ? ORDER BY created_at ASC", [itemId]).map(mapAttachment)
   };
 }
 
@@ -2266,6 +2436,135 @@ ipcMain.handle("item:favorite", (_event, itemId) => {
     [now(), itemId]
   );
   return getLibrary();
+});
+
+ipcMain.handle("attachments:add", async (_event, itemId) => {
+  const item = get("SELECT id FROM items WHERE id = ? AND COALESCE(deleted_at, '') = ''", [itemId]);
+  if (!item) {
+    throw new Error("Item not found");
+  }
+
+  const result = await dialog.showOpenDialog({
+    title: "Add attachment",
+    properties: ["openFile", "multiSelections"],
+    filters: [
+      { name: "Attachments", extensions: ["pdf", "mp4", "webm", "mov", "mp3", "wav", "ogg", "m4a", "html", "htm", "txt", "docx", "xlsx", "zip"] },
+      { name: "All files", extensions: ["*"] }
+    ]
+  });
+  if (result.canceled || result.filePaths.length === 0) {
+    return getItemForRenderer(itemId);
+  }
+
+  result.filePaths.forEach((filePath) => {
+    const extension = path.extname(filePath).toLowerCase();
+    if (dangerousAttachmentExtensions.has(extension)) {
+      throw new Error(`Unsupported attachment type: ${extension}`);
+    }
+  });
+
+  const timestamp = now();
+  result.filePaths.forEach((filePath) => {
+    const extension = path.extname(filePath).toLowerCase();
+    const attachmentId = id();
+    const originalFilename = path.basename(filePath);
+    const storedFilename = `${attachmentId}${extension || ".bin"}`;
+    const destination = path.join(paths.attachments, storedFilename);
+    fs.copyFileSync(filePath, destination);
+    const stat = fs.statSync(destination);
+    bindAndStep(
+      `
+        INSERT INTO item_attachments (
+          id, item_id, title, note, original_filename, stored_filename, relative_path,
+          mime_type, file_type, file_size, created_at, updated_at
+        )
+        VALUES (?, ?, '', '', ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        attachmentId,
+        itemId,
+        originalFilename,
+        storedFilename,
+        storedFilename,
+        attachmentMimeTypes[extension] || "application/octet-stream",
+        attachmentFileType(extension),
+        stat.size,
+        timestamp,
+        timestamp
+      ]
+    );
+  });
+  run("UPDATE items SET updated_at = ? WHERE id = ?", [now(), itemId]);
+  return getItemForRenderer(itemId);
+});
+
+ipcMain.handle("attachments:update", (_event, payload = {}) => {
+  const attachment = get("SELECT * FROM item_attachments WHERE id = ?", [payload.id]);
+  if (!attachment) {
+    throw new Error("Attachment not found");
+  }
+  run(
+    "UPDATE item_attachments SET title = ?, note = ?, updated_at = ? WHERE id = ?",
+    [String(payload.title || ""), String(payload.note || ""), now(), payload.id]
+  );
+  run("UPDATE items SET updated_at = ? WHERE id = ?", [now(), attachment.item_id]);
+  return getItemForRenderer(attachment.item_id);
+});
+
+ipcMain.handle("attachments:open", async (_event, attachmentId) => {
+  const attachment = get("SELECT * FROM item_attachments WHERE id = ?", [attachmentId]);
+  if (!attachment) {
+    throw new Error("Attachment not found");
+  }
+  const filePath = attachmentFilePath(attachment);
+  if (!fs.existsSync(filePath)) {
+    throw new Error("Attachment file is missing");
+  }
+  const error = await shell.openPath(filePath);
+  if (error) throw new Error(error);
+  return { opened: true };
+});
+
+ipcMain.handle("attachments:read-bytes", (_event, attachmentId) => {
+  const attachment = get("SELECT * FROM item_attachments WHERE id = ?", [attachmentId]);
+  if (!attachment) {
+    throw new Error("Attachment not found");
+  }
+  if (attachment.file_type !== "pdf" && attachment.mime_type !== "application/pdf") {
+    throw new Error("Attachment is not a PDF");
+  }
+  const filePath = attachmentFilePath(attachment);
+  if (!fs.existsSync(filePath)) {
+    throw new Error("Attachment file is missing");
+  }
+  const stat = fs.statSync(filePath);
+  if (!stat.isFile()) {
+    throw new Error("Attachment path is not a file");
+  }
+  const bytes = fs.readFileSync(filePath);
+  return {
+    id: attachment.id,
+    mimeType: attachment.mime_type || attachmentMimeType(filePath),
+    fileType: attachment.file_type || attachmentFileType(path.extname(filePath)),
+    fileSize: stat.size,
+    originalFilename: attachment.original_filename || "",
+    bytes: Array.from(bytes)
+  };
+});
+
+ipcMain.handle("attachments:remove", (_event, attachmentId) => {
+  const attachment = get("SELECT * FROM item_attachments WHERE id = ?", [attachmentId]);
+  if (!attachment) {
+    return null;
+  }
+  run("DELETE FROM item_attachments WHERE id = ?", [attachmentId]);
+  try {
+    deleteAttachmentFile(attachment);
+  } catch (error) {
+    console.warn("[attachments:remove] failed to delete file", { id: attachmentId, message: error.message });
+  }
+  run("UPDATE items SET updated_at = ? WHERE id = ?", [now(), attachment.item_id]);
+  return getItemForRenderer(attachment.item_id);
 });
 
 ipcMain.handle("images:add", (_event, itemId) => addImages(itemId));
