@@ -360,6 +360,10 @@ function execSchema(databaseWasCreated = false) {
       background_opacity REAL DEFAULT 0,
       padding REAL DEFAULT 4,
       border_radius REAL DEFAULT 2,
+      crop_left REAL DEFAULT 0,
+      crop_right REAL DEFAULT 0,
+      crop_top REAL DEFAULT 0,
+      crop_bottom REAL DEFAULT 0,
       sort_order INTEGER DEFAULT 0,
       created_at TEXT NOT NULL,
       FOREIGN KEY (page_id) REFERENCES album_pages(id) ON DELETE CASCADE,
@@ -480,7 +484,11 @@ function execSchema(databaseWasCreated = false) {
     ["background_color", "TEXT DEFAULT '#ffffff'"],
     ["background_opacity", "REAL DEFAULT 0"],
     ["padding", "REAL DEFAULT 4"],
-    ["border_radius", "REAL DEFAULT 2"]
+    ["border_radius", "REAL DEFAULT 2"],
+    ["crop_left", "REAL DEFAULT 0"],
+    ["crop_right", "REAL DEFAULT 0"],
+    ["crop_top", "REAL DEFAULT 0"],
+    ["crop_bottom", "REAL DEFAULT 0"]
   ].forEach(([name, definition]) => {
     if (!pageItemColumns.includes(name)) {
       db.exec(`ALTER TABLE album_page_items ADD COLUMN ${name} ${definition}`);
@@ -951,6 +959,12 @@ function imageFilesForItem(itemId) {
 
 function cleanupItemImages(images) {
   images.forEach((image) => cleanupImageFiles(image));
+}
+
+function clampCropValue(value) {
+  const numeric = Number(value || 0);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.min(0.5, Math.max(0, numeric));
 }
 
 function textStylePayload(source = {}) {
@@ -1951,9 +1965,10 @@ function copyAlbumPage(sourcePageId, targetAlbumId, options = {}) {
           INSERT INTO album_page_items (
             id, page_id, item_id, image_id, x, y, width, height, rotation, z_index, caption,
             show_caption, show_title, show_metadata, locked, frame_style, border_color, background_color,
-            background_opacity, padding, border_radius, sort_order, created_at
+            background_opacity, padding, border_radius, crop_left, crop_right, crop_top, crop_bottom,
+            sort_order, created_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         [
           id(),
@@ -1977,6 +1992,10 @@ function copyAlbumPage(sourcePageId, targetAlbumId, options = {}) {
           Number(entry.background_opacity ?? 0),
           Number(entry.padding ?? 4),
           Number(entry.border_radius ?? 2),
+          clampCropValue(entry.crop_left),
+          clampCropValue(entry.crop_right),
+          clampCropValue(entry.crop_top),
+          clampCropValue(entry.crop_bottom),
           Number(entry.sort_order || 0),
           timestamp
         ]
@@ -2130,6 +2149,10 @@ function getAlbum(albumId) {
         background_opacity: Number(row.background_opacity ?? 0),
         padding: Number(row.padding ?? 4),
         border_radius: Number(row.border_radius ?? 2),
+        crop_left: clampCropValue(row.crop_left),
+        crop_right: clampCropValue(row.crop_right),
+        crop_top: clampCropValue(row.crop_top),
+        crop_bottom: clampCropValue(row.crop_bottom),
         images: all("SELECT * FROM images WHERE item_id = ? ORDER BY sort_order ASC, created_at ASC", [row.item_id]).map(mapImage),
         cover: row.cover_thumbnail_path
           ? {
@@ -2201,9 +2224,10 @@ ipcMain.handle("album-page-item:add", (_event, payload) => {
       INSERT INTO album_page_items (
         id, page_id, item_id, image_id, x, y, width, height, rotation, z_index, caption,
         show_caption, show_title, show_metadata, locked, frame_style, border_color, background_color,
-        background_opacity, padding, border_radius, sort_order, created_at
+        background_opacity, padding, border_radius, crop_left, crop_right, crop_top, crop_bottom,
+        sort_order, created_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     [
       rowId,
@@ -2227,6 +2251,10 @@ ipcMain.handle("album-page-item:add", (_event, payload) => {
       Number(payload.background_opacity ?? 0),
       Number(payload.padding ?? 4),
       Number(payload.border_radius ?? 2),
+      clampCropValue(payload.crop_left),
+      clampCropValue(payload.crop_right),
+      clampCropValue(payload.crop_top),
+      clampCropValue(payload.crop_bottom),
       sortOrder,
       now()
     ]
@@ -2311,7 +2339,8 @@ ipcMain.handle("album-page-item:update", (_event, payload) => {
       SET image_id = ?, x = ?, y = ?, width = ?, height = ?, rotation = ?, z_index = ?,
           caption = ?, show_caption = ?, show_title = ?, show_metadata = ?, locked = ?,
           frame_style = ?, border_color = ?, background_color = ?, background_opacity = ?,
-          padding = ?, border_radius = ?, sort_order = ?
+          padding = ?, border_radius = ?, crop_left = ?, crop_right = ?, crop_top = ?, crop_bottom = ?,
+          sort_order = ?
       WHERE id = ?
     `,
     [
@@ -2333,6 +2362,10 @@ ipcMain.handle("album-page-item:update", (_event, payload) => {
       Number(payload.background_opacity ?? 0),
       Number(payload.padding ?? 4),
       Number(payload.border_radius ?? 2),
+      clampCropValue(payload.crop_left),
+      clampCropValue(payload.crop_right),
+      clampCropValue(payload.crop_top),
+      clampCropValue(payload.crop_bottom),
       Number(payload.sort_order || 0),
       payload.id
     ]
@@ -2562,7 +2595,7 @@ async function loadExportWindow(html, width, height) {
   const diagnostics = await win.webContents.executeJavaScript(`
     (async () => {
       const images = Array.from(document.images);
-      const results = await Promise.all(images.map((image) => {
+      const htmlImageResults = await Promise.all(images.map((image) => {
         if (image.complete && image.naturalWidth > 0) {
           return { src: image.currentSrc || image.src, ok: true, width: image.naturalWidth, height: image.naturalHeight };
         }
@@ -2571,6 +2604,16 @@ async function loadExportWindow(html, width, height) {
           image.addEventListener("error", () => resolve({ src: image.currentSrc || image.src, ok: false, width: 0, height: 0 }), { once: true });
         });
       }));
+      const svgImageResults = await Promise.all(Array.from(document.querySelectorAll("svg image")).map((image) => {
+        const src = image.href?.baseVal || image.getAttribute("href") || "";
+        return new Promise((resolve) => {
+          const probe = new Image();
+          probe.onload = () => resolve({ src, ok: true, width: probe.naturalWidth, height: probe.naturalHeight });
+          probe.onerror = () => resolve({ src, ok: false, width: 0, height: 0 });
+          probe.src = src;
+        });
+      }));
+      const results = [...htmlImageResults, ...svgImageResults];
       if (document.fonts && document.fonts.ready) await document.fonts.ready;
       const failed = results.filter((entry) => !entry.ok);
       if (failed.length) {

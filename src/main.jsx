@@ -171,6 +171,17 @@ const translations = {
     left: "Left",
     center: "Center",
     right: "Right",
+    physicalSize: "Physical size",
+    widthMm: "Width (mm)",
+    heightMm: "Height (mm)",
+    applySize: "Apply size",
+    crop: "Crop",
+    cropLeft: "Left",
+    cropRight: "Right",
+    cropTop: "Top",
+    cropBottom: "Bottom",
+    resetCrop: "Reset crop",
+    cropHelp: "Manual non-destructive crop for this placement only.",
     systemFont: "System",
     serifFont: "Serif",
     sansSerifFont: "Sans Serif",
@@ -370,6 +381,17 @@ translations.zh.retry = "\u91cd\u8bd5";
 translations.zh.loadingLibraryItems = "\u6b63\u5728\u52a0\u8f7d\u9986\u85cf\u85cf\u54c1...";
 translations.zh.loadingGalleryItems = "\u6b63\u5728\u52a0\u8f7d\u56fe\u5e93...";
 translations.zh.loadingAlbum = "\u6b63\u5728\u52a0\u8f7d\u518c\u9875...";
+translations.zh.physicalSize = "\u5b9e\u9645\u5c3a\u5bf8";
+translations.zh.widthMm = "\u5bbd\u5ea6\uff08\u6beb\u7c73\uff09";
+translations.zh.heightMm = "\u9ad8\u5ea6\uff08\u6beb\u7c73\uff09";
+translations.zh.applySize = "\u5e94\u7528\u5c3a\u5bf8";
+translations.zh.crop = "\u88c1\u5207";
+translations.zh.cropLeft = "\u5de6";
+translations.zh.cropRight = "\u53f3";
+translations.zh.cropTop = "\u4e0a";
+translations.zh.cropBottom = "\u4e0b";
+translations.zh.resetCrop = "\u91cd\u7f6e\u88c1\u5207";
+translations.zh.cropHelp = "\u4ec5\u5bf9\u6b64\u6446\u653e\u4f4d\u8fdb\u884c\u624b\u52a8\u975e\u7834\u574f\u88c1\u5207\u3002";
 
 function interpolate(text, values = {}) {
   return String(text).replace(/\{(\w+)\}/g, (match, key) => values[key] ?? match);
@@ -2270,11 +2292,11 @@ const PAGE_BACKGROUNDS = {
 };
 
 const PAPER_PRESETS = {
-  "a4-portrait": { label: "A4 portrait", width: 1000, height: 1414, orientation: "portrait" },
-  "a4-landscape": { label: "A4 landscape", width: 1414, height: 1000, orientation: "landscape" },
-  "letter-portrait": { label: "Letter portrait", width: 1000, height: 1294, orientation: "portrait" },
-  "letter-landscape": { label: "Letter landscape", width: 1294, height: 1000, orientation: "landscape" },
-  square: { label: "Square", width: 1000, height: 1000, orientation: "portrait" },
+  "a4-portrait": { label: "A4 portrait", width: 1000, height: 1414, widthMm: 210, heightMm: 297, orientation: "portrait" },
+  "a4-landscape": { label: "A4 landscape", width: 1414, height: 1000, widthMm: 297, heightMm: 210, orientation: "landscape" },
+  "letter-portrait": { label: "Letter portrait", width: 1000, height: 1294, widthMm: 215.9, heightMm: 279.4, orientation: "portrait" },
+  "letter-landscape": { label: "Letter landscape", width: 1294, height: 1000, widthMm: 279.4, heightMm: 215.9, orientation: "landscape" },
+  square: { label: "Square", width: 1000, height: 1000, widthMm: 210, heightMm: 210, orientation: "portrait" },
   custom: { label: "Custom", width: null, height: null, orientation: "portrait" }
 };
 
@@ -2348,6 +2370,99 @@ function pagePaperPreset(page) {
   return matched?.[0] || "custom";
 }
 
+function pagePhysicalSizeMm(page) {
+  const preset = PAPER_PRESETS[pagePaperPreset(page)];
+  if (preset?.widthMm && preset?.heightMm) {
+    return { widthMm: preset.widthMm, heightMm: preset.heightMm };
+  }
+  const { width, height } = logicalPageSize(page);
+  const fallbackMmPerUnit = 210 / 1000;
+  return {
+    widthMm: width * fallbackMmPerUnit,
+    heightMm: height * fallbackMmPerUnit
+  };
+}
+
+function pageMmToPx(page, value, axis = "x") {
+  const { width, height } = logicalPageSize(page);
+  const { widthMm, heightMm } = pagePhysicalSizeMm(page);
+  const pageUnits = axis === "y" ? height : width;
+  const physicalMm = axis === "y" ? heightMm : widthMm;
+  return Number(value || 0) * pageUnits / Math.max(1, physicalMm);
+}
+
+function pagePxToMm(page, value, axis = "x") {
+  const { width, height } = logicalPageSize(page);
+  const { widthMm, heightMm } = pagePhysicalSizeMm(page);
+  const pageUnits = axis === "y" ? height : width;
+  const physicalMm = axis === "y" ? heightMm : widthMm;
+  return Number(value || 0) * physicalMm / Math.max(1, pageUnits);
+}
+
+function placementPxToMm(page, entry) {
+  return {
+    widthMm: pagePxToMm(page, Number(entry?.width || 0), "x"),
+    heightMm: pagePxToMm(page, Number(entry?.height || 0), "y")
+  };
+}
+
+function placementMmToPx(page, widthMm, heightMm) {
+  return {
+    width: pageMmToPx(page, widthMm, "x"),
+    height: pageMmToPx(page, heightMm, "y")
+  };
+}
+
+function cropValue(value) {
+  const numeric = Number(value || 0);
+  if (!Number.isFinite(numeric)) return 0;
+  return clamp(numeric, 0, 0.5);
+}
+
+function cropValues(entry) {
+  let left = cropValue(entry?.crop_left);
+  let right = cropValue(entry?.crop_right);
+  let top = cropValue(entry?.crop_top);
+  let bottom = cropValue(entry?.crop_bottom);
+  if (left + right > 0.9) {
+    const scale = 0.9 / (left + right);
+    left *= scale;
+    right *= scale;
+  }
+  if (top + bottom > 0.9) {
+    const scale = 0.9 / (top + bottom);
+    top *= scale;
+    bottom *= scale;
+  }
+  return { left, right, top, bottom };
+}
+
+function cropPayload(entry) {
+  const crop = cropValues(entry);
+  return {
+    crop_left: crop.left,
+    crop_right: crop.right,
+    crop_top: crop.top,
+    crop_bottom: crop.bottom
+  };
+}
+
+function cropViewBox(entry) {
+  const width = Math.max(1, Number(entry?.cover?.width || entry?.cover_width || 0));
+  const height = Math.max(1, Number(entry?.cover?.height || entry?.cover_height || 0));
+  const crop = cropValues(entry);
+  const x = crop.left * width;
+  const y = crop.top * height;
+  const visibleWidth = Math.max(1, width * (1 - crop.left - crop.right));
+  const visibleHeight = Math.max(1, height * (1 - crop.top - crop.bottom));
+  return { x, y, width: visibleWidth, height: visibleHeight, imageWidth: width, imageHeight: height };
+}
+
+function visibleCropAspectRatio(entry) {
+  const viewBox = cropViewBox(entry);
+  return viewBox.width / Math.max(1, viewBox.height);
+}
+
 function normalizedFrameStyle(entry) {
   return ["none", "thin", "light", "shadow"].includes(entry?.frame_style) ? entry.frame_style : "none";
 }
@@ -2385,7 +2500,8 @@ function copyFrameFields(entry) {
     background_color: entry.background_color || "#ffffff",
     background_opacity: Number(entry.background_opacity ?? 0),
     padding: Number(entry.padding ?? 4),
-    border_radius: Number(entry.border_radius ?? 2)
+    border_radius: Number(entry.border_radius ?? 2),
+    ...cropPayload(entry)
   };
 }
 
@@ -2482,6 +2598,25 @@ function resolvePlacementExportImage(entry) {
   };
 }
 
+function PlacementImage({ entry, src, alt, context }) {
+  const viewBox = cropViewBox(entry);
+  const hasImageSize = Number(entry?.cover?.width || 0) > 0 && Number(entry?.cover?.height || 0) > 0;
+  if (!src || !hasImageSize) {
+    return src ? <MediaImage src={src} alt={alt} context={context} /> : <div className="image-placeholder">No image</div>;
+  }
+  return (
+    <svg
+      className="placement-crop-svg"
+      viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`}
+      preserveAspectRatio="xMidYMid meet"
+      role="img"
+      aria-label={alt}
+    >
+      <image href={src} width={viewBox.imageWidth} height={viewBox.imageHeight} preserveAspectRatio="none" />
+    </svg>
+  );
+}
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -2523,6 +2658,28 @@ function exportFrameCss(entry) {
   });
 }
 
+function renderExportCroppedImage(entry, image) {
+  if (!image?.url) return `<div class="export-placeholder">No image</div>`;
+  const width = Number(image.width || entry.cover?.width || 0);
+  const height = Number(image.height || entry.cover?.height || 0);
+  if (width <= 0 || height <= 0) {
+    return `<img src="${escapeHtml(image.url)}" alt="${escapeHtml(entry.title || image.original_filename || "Album image")}" />`;
+  }
+  const viewBox = cropViewBox({
+    ...entry,
+    cover: {
+      ...(entry.cover || {}),
+      width,
+      height
+    }
+  });
+  return `
+    <svg class="export-crop-svg" viewBox="${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${escapeHtml(entry.title || image.original_filename || "Album image")}">
+      <image href="${escapeHtml(image.url)}" width="${viewBox.imageWidth}" height="${viewBox.imageHeight}" preserveAspectRatio="none"></image>
+    </svg>
+  `;
+}
+
 function renderExportPlacement(entry) {
   const baseStyle = {
     left: Number(entry.x || 0),
@@ -2544,9 +2701,7 @@ function renderExportPlacement(entry) {
   }
 
   const image = resolvePlacementExportImage(entry);
-  const imageHtml = image?.url
-    ? `<img src="${escapeHtml(image.url)}" alt="${escapeHtml(entry.title || image.original_filename || "Album image")}" />`
-    : `<div class="export-placeholder">No image</div>`;
+  const imageHtml = renderExportCroppedImage(entry, image);
   const textParts = [];
   if (entry.show_title) textParts.push(`<strong>${escapeHtml(entry.title || "")}</strong>`);
   if (entry.show_caption && entry.caption) textParts.push(`<span>${escapeHtml(entry.caption)}</span>`);
@@ -2629,7 +2784,7 @@ function buildAlbumExportHtml(pages, albumTitle, options = {}) {
     .export-placement { position: absolute; display: grid; transform-origin: center; overflow: hidden; min-width: 0; min-height: 0; }
     .export-image-placement { grid-template-rows: minmax(0, 1fr) auto; gap: 8px; }
     .export-image-box { display: grid; min-width: 0; min-height: 0; width: 100%; height: 100%; place-items: center; overflow: hidden; }
-    .export-image-box img { display: block; width: 100%; height: 100%; object-fit: contain; }
+    .export-image-box img, .export-crop-svg { display: block; width: 100%; height: 100%; object-fit: contain; }
     .export-placeholder { display: grid; width: 100%; height: 100%; place-items: center; color: #667477; background: #eef3f2; }
     .export-placement-text { display: grid; gap: 2px; max-height: 72px; overflow: hidden; color: #263234; font-size: 14px; line-height: 1.25; }
     .export-placement-text strong, .export-placement-text span { min-width: 0; overflow-wrap: anywhere; }
@@ -3010,12 +3165,16 @@ function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePag
     interactionCleanupRef.current = cleanup;
   }
 
+  function latestDraftEntry(entry) {
+    return draftItemsRef.current.find((item) => item.id === entry.id) || entry;
+  }
+
   function scheduleTextCommit(entry, textContent, delay = 450) {
     const existing = textCommitTimersRef.current.get(entry.id);
     if (existing) window.clearTimeout(existing);
     const timer = window.setTimeout(() => {
       textCommitTimersRef.current.delete(entry.id);
-      commitEntry({ ...entry, text_content: textContent }, false);
+      commitEntry({ ...latestDraftEntry(entry), text_content: textContent }, false);
     }, delay);
     textCommitTimersRef.current.set(entry.id, timer);
   }
@@ -3026,8 +3185,9 @@ function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePag
       window.clearTimeout(existing);
       textCommitTimersRef.current.delete(entry.id);
     }
-    if (textContent !== (entry.text_content || "")) {
-      commitEntry({ ...entry, text_content: textContent }, true);
+    const currentEntry = latestDraftEntry(entry);
+    if (existing || textContent !== (currentEntry.text_content || "")) {
+      commitEntry({ ...currentEntry, text_content: textContent }, true);
     }
   }
 
@@ -3783,7 +3943,7 @@ function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePag
                   ) : (
                     <>
                       <button className="placement-image-button" type="button" onClick={() => openViewer(entry)}>
-                        {entry.cover ? <MediaImage src={entry.cover.thumbnailUrl} alt={entry.title} context={`Album placement: ${entry.title}`} /> : <div className="image-placeholder">No image</div>}
+                        <PlacementImage entry={entry} src={entry.cover?.thumbnailUrl || entry.cover?.url} alt={entry.title} context={`Album placement: ${entry.title}`} />
                       </button>
                       {!cleanPreview && (entry.show_title || entry.show_caption || entry.show_metadata) && (
                         <div className="placement-text">
@@ -3836,6 +3996,7 @@ function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePag
             ) : selectedEntry ? (
               <PlacementInspector
                 entry={selectedEntry}
+                page={page}
                 saveStatus={saveStatus}
                 onUpdate={(nextEntry) => commitEntry(nextEntry, true)}
                 onLayer={updateLayer}
@@ -3931,17 +4092,77 @@ function FrameStyleControls({ entry, onChange, compact = false }) {
   );
 }
 
-function PlacementInspector({ entry, saveStatus, onUpdate, onLayer, onDuplicate, onRemove }) {
+function PlacementInspector({ entry, page, saveStatus, onUpdate, onLayer, onDuplicate, onRemove }) {
   const { t } = useI18n();
   const [caption, setCaption] = useState(entry.caption || "");
   const [textContent, setTextContent] = useState(entry.text_content || "");
+  const [sizeMm, setSizeMm] = useState(() => {
+    const initialMm = placementPxToMm(page, entry);
+    return {
+      width: Number(initialMm.widthMm.toFixed(2)),
+      height: Number(initialMm.heightMm.toFixed(2))
+    };
+  });
+  const [cropDraft, setCropDraft] = useState(() => {
+    const crop = cropValues(entry);
+    return {
+      left: Number((crop.left * 100).toFixed(1)),
+      right: Number((crop.right * 100).toFixed(1)),
+      top: Number((crop.top * 100).toFixed(1)),
+      bottom: Number((crop.bottom * 100).toFixed(1))
+    };
+  });
 
   useEffect(() => {
     setCaption(entry.caption || "");
     setTextContent(entry.text_content || "");
-  }, [entry.id, entry.caption, entry.text_content]);
+    const nextMm = placementPxToMm(page, entry);
+    setSizeMm({
+      width: Number(nextMm.widthMm.toFixed(2)),
+      height: Number(nextMm.heightMm.toFixed(2))
+    });
+    const nextCrop = cropValues(entry);
+    setCropDraft({
+      left: Number((nextCrop.left * 100).toFixed(1)),
+      right: Number((nextCrop.right * 100).toFixed(1)),
+      top: Number((nextCrop.top * 100).toFixed(1)),
+      bottom: Number((nextCrop.bottom * 100).toFixed(1))
+    });
+  }, [entry.id, entry.caption, entry.text_content, entry.width, entry.height, entry.crop_left, entry.crop_right, entry.crop_top, entry.crop_bottom, page.page_width, page.page_height, page.paper_preset]);
 
   const isText = entry.element_type === "text";
+
+  function applyPhysicalSize() {
+    const widthMm = Math.max(0.1, Number(sizeMm.width || 0));
+    let heightMm = Math.max(0.1, Number(sizeMm.height || 0));
+    const nextSize = placementMmToPx(page, widthMm, heightMm);
+    if (entry.locked) {
+      const aspect = visibleCropAspectRatio(entry);
+      nextSize.height = nextSize.width / Math.max(0.05, aspect);
+      heightMm = pagePxToMm(page, nextSize.height, "y");
+      setSizeMm({ width: Number(widthMm.toFixed(2)), height: Number(heightMm.toFixed(2)) });
+    }
+    onUpdate({ ...entry, width: nextSize.width, height: nextSize.height });
+  }
+
+  function updateCrop(key, value) {
+    setCropDraft((current) => {
+      const next = {
+        ...current,
+        [key]: Number(value || 0)
+      };
+      window.queueMicrotask(() => {
+        onUpdate({
+          ...entry,
+          crop_left: cropValue(next.left / 100),
+          crop_right: cropValue(next.right / 100),
+          crop_top: cropValue(next.top / 100),
+          crop_bottom: cropValue(next.bottom / 100)
+        });
+      });
+      return next;
+    });
+  }
 
   return (
     <div className="placement-inspector">
@@ -4006,8 +4227,31 @@ function PlacementInspector({ entry, saveStatus, onUpdate, onLayer, onDuplicate,
             <CheckRow checked={Boolean(entry.show_title)} label="Show title" onChange={(checked) => onUpdate({ ...entry, show_title: checked })} />
             <CheckRow checked={Boolean(entry.show_caption)} label="Show caption" onChange={(checked) => onUpdate({ ...entry, show_caption: checked })} />
             <CheckRow checked={Boolean(entry.show_metadata)} label="Show item info" title="Show or hide issuing entity, type, and year for this placement." onChange={(checked) => onUpdate({ ...entry, show_metadata: checked })} />
-            <CheckRow checked={Boolean(entry.locked)} label="Lock ratio" onChange={(checked) => onUpdate({ ...entry, locked: checked })} />
           </section>
+        )}
+        {!isText && (
+          <>
+            <section className="inspector-section">
+              <h3>{t("physicalSize")}</h3>
+              <div className="style-field-grid">
+                <label>{t("widthMm")}<input type="number" min="0.1" step="0.1" value={sizeMm.width} onChange={(event) => setSizeMm((current) => ({ ...current, width: event.target.value }))} /></label>
+                <label>{t("heightMm")}<input type="number" min="0.1" step="0.1" value={sizeMm.height} onChange={(event) => setSizeMm((current) => ({ ...current, height: event.target.value }))} /></label>
+              </div>
+              <CheckRow checked={Boolean(entry.locked)} label="Lock ratio" onChange={(checked) => onUpdate({ ...entry, locked: checked })} />
+              <button type="button" className="secondary" onClick={applyPhysicalSize}>{t("applySize")}</button>
+            </section>
+            <section className="inspector-section">
+              <h3>{t("crop")}</h3>
+              <small className="helper-text">{t("cropHelp")}</small>
+              <div className="style-field-grid crop-field-grid">
+                <label>{t("cropLeft")} %<input type="number" min="0" max="50" step="0.5" value={cropDraft.left} onChange={(event) => updateCrop("left", event.target.value)} /></label>
+                <label>{t("cropRight")} %<input type="number" min="0" max="50" step="0.5" value={cropDraft.right} onChange={(event) => updateCrop("right", event.target.value)} /></label>
+                <label>{t("cropTop")} %<input type="number" min="0" max="50" step="0.5" value={cropDraft.top} onChange={(event) => updateCrop("top", event.target.value)} /></label>
+                <label>{t("cropBottom")} %<input type="number" min="0" max="50" step="0.5" value={cropDraft.bottom} onChange={(event) => updateCrop("bottom", event.target.value)} /></label>
+              </div>
+              <button type="button" className="ghost" onClick={() => onUpdate({ ...entry, crop_left: 0, crop_right: 0, crop_top: 0, crop_bottom: 0 })}>{t("resetCrop")}</button>
+            </section>
+          </>
         )}
         {!isText && (
           <section className="inspector-section">

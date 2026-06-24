@@ -14,6 +14,7 @@ const archiveData = path.join(tempRoot, "collection-archive-data");
 const artifactsDir = path.join(root, "test-artifacts");
 const portBase = 9320 + Math.floor(Math.random() * 300);
 let activeChild = null;
+let currentSmokeStep = "startup";
 const pngBytes = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/l7+PfwAAAABJRU5ErkJggg==",
   "base64"
@@ -194,15 +195,15 @@ class CdpClient {
     });
   }
 
-  async send(method, params = {}) {
+  async send(method, params = {}, timeoutMs = 60000) {
     await this.opened;
     const id = this.nextId++;
     this.socket.send(JSON.stringify({ id, method, params }));
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error(`${method} timed out${params.expression ? `\n${params.expression}` : ""}`));
-      }, 60000);
+        reject(new Error(`${method} timed out during "${currentSmokeStep}"${params.expression ? `\n${params.expression}` : ""}`));
+      }, timeoutMs);
       this.pending.set(id, { resolve, reject, method, expression: params.expression, timeout });
     });
   }
@@ -234,6 +235,18 @@ async function evaluate(client, expression) {
   return JSON.parse(result.result.value);
 }
 
+async function evaluateQuick(client, expression, timeoutMs = 5000) {
+  const result = await client.send("Runtime.evaluate", {
+    expression,
+    awaitPromise: true,
+    returnByValue: true
+  }, timeoutMs);
+  if (result.exceptionDetails) {
+    throw new Error(result.exceptionDetails.text || "Runtime evaluation failed");
+  }
+  return result.result?.value;
+}
+
 async function waitFor(client, expression, message) {
   const deadline = Date.now() + 20000;
   while (Date.now() < deadline) {
@@ -241,6 +254,148 @@ async function waitFor(client, expression, message) {
     await sleep(200);
   }
   throw new Error(message);
+}
+
+async function smokeDiagnostics(client) {
+  try {
+    const raw = await evaluateQuick(
+      client,
+      `JSON.stringify((() => {
+        const text = (selector) => document.querySelector(selector)?.textContent?.trim() || "";
+        const count = (selector) => document.querySelectorAll(selector).length;
+        const active = document.activeElement;
+        return {
+          url: location.href,
+          bodyClass: document.body?.className || "",
+          appReady: Boolean(document.querySelector(".app")),
+          startup: Boolean(document.querySelector(".startup-screen")),
+          route: text("nav button.active") || text(".app-nav button.active"),
+          albumMode: text(".mode-toggle .active") || text(".segmented .active"),
+          selectedPage: document.querySelector(".album-page-select")?.value || "",
+          canvas: Boolean(document.querySelector(".album-canvas")),
+          editableCanvas: Boolean(document.querySelector(".album-edit-canvas")),
+          placements: count(".album-placement"),
+          textPlacements: count(".text-placement"),
+          selectedPlacements: count(".album-placement.selected"),
+          textEditors: count(".album-text-editor"),
+          inspector: Boolean(document.querySelector(".placement-inspector")),
+          pageSettings: Boolean(document.querySelector(".page-settings-panel")),
+          language: document.querySelector(".language-select select")?.value || "",
+          activeElement: active ? {
+            tag: active.tagName,
+            className: active.className,
+            text: (active.textContent || active.value || "").slice(0, 80)
+          } : null,
+          pendingToast: text(".toast")
+        };
+      })())`,
+      5000
+    );
+    return JSON.parse(raw || "{}");
+  } catch (error) {
+    return { diagnosticError: error.message };
+  }
+}
+
+async function smokeStep(client, label, action) {
+  currentSmokeStep = label;
+  console.log(`[smoke] ${label}`);
+  try {
+    return await action();
+  } catch (error) {
+    const diagnostics = await smokeDiagnostics(client);
+    error.message = `${label}: ${error.message}\nDOM state: ${JSON.stringify(diagnostics)}`;
+    throw error;
+  }
+}
+
+async function waitForStep(client, label, expression, message) {
+  return smokeStep(client, label, () => waitFor(client, expression, message));
+}
+
+async function waitForAsyncExpression(client, label, expression, message, timeoutMs = 20000) {
+  return smokeStep(client, label, async () => {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (await evaluate(client, `(async () => Boolean(await (${expression})))()`)) return;
+      await sleep(200);
+    }
+    throw new Error(message);
+  });
+}
+
+async function editSmokeTextBox(client, expected, label) {
+  await smokeStep(client, `${label}: open textarea editor`, () =>
+    evaluate(
+      client,
+      `(() => {
+        const textBox = [...document.querySelectorAll('.text-placement')]
+          .find((node) => node.textContent.includes('Smoke text box') || node.textContent.includes('After'))
+          || document.querySelector('.text-placement');
+        if (!textBox) throw new Error('No text placement found');
+        textBox.scrollIntoView({ block: 'center', inline: 'center' });
+        const content = textBox.querySelector('.album-text-content');
+        if (!content) throw new Error('No text content element found');
+        const rect = textBox.getBoundingClientRect();
+        content.dispatchEvent(new MouseEvent('dblclick', {
+          bubbles: true,
+          clientX: rect.left + Math.min(12, Math.max(4, rect.width / 2)),
+          clientY: rect.top + Math.min(12, Math.max(4, rect.height / 2))
+        }));
+        return {
+          text: textBox.textContent.trim(),
+          beforeTextCount: document.querySelectorAll('.text-placement').length
+        };
+      })()`
+    )
+  );
+
+  await waitForStep(
+    client,
+    `${label}: textarea edit mode active`,
+    "document.querySelector('.album-text-editor') && document.activeElement === document.querySelector('.album-text-editor')",
+    `${label}: text box did not enter textarea edit mode`
+  );
+
+  const editResult = await smokeStep(client, `${label}: type text and blur`, () =>
+    evaluate(
+      client,
+      `(() => {
+        const editor = document.querySelector('.album-text-editor');
+        if (!editor) throw new Error('No active text editor');
+        const beforeTextCount = document.querySelectorAll('.text-placement').length;
+        const enteredEditable = document.activeElement === editor;
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true, bubbles: true }));
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(editor, ${JSON.stringify(expected)});
+        editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: ${JSON.stringify(expected)} }));
+        editor.blur();
+        return {
+          enteredEditable,
+          beforeTextCount
+        };
+      })()`
+    )
+  );
+
+  await waitForAsyncExpression(
+    client,
+    `${label}: text save completed`,
+    `window.archiveAPI.getAlbum('album-smoke').then((album) => album.pages[0].items.some((entry) => entry.element_type === 'text' && entry.text_content === ${JSON.stringify(expected)}))`,
+    `${label}: text did not persist`
+  );
+
+  return smokeStep(client, `${label}: verify DOM after edit`, () =>
+    evaluate(
+      client,
+      `(() => ({
+        enteredEditable: ${JSON.stringify(editResult.enteredEditable)},
+        beforeTextCount: ${JSON.stringify(editResult.beforeTextCount)},
+        afterTextCount: document.querySelectorAll('.text-placement').length,
+        textVisible: [...document.querySelectorAll('.text-placement .album-text-content')].some((node) => node.textContent.includes(${JSON.stringify(expected)})),
+        selectedText: document.querySelectorAll('.text-placement.selected').length
+      }))()`
+    )
+  );
 }
 
 function assertNoRuntimeTypeErrors(client, context) {
@@ -408,7 +563,7 @@ async function main() {
   const exportSmoke = await evaluate(
     client,
     `(async () => {
-      const html = '<!doctype html><html class="png-export"><head><style>@page{size:120px 180px;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;overflow:hidden;width:120px;height:180px}.page{position:relative;width:120px;height:180px;overflow:hidden;background:#f7f0dd;color:#1f5d57;font:700 14px Arial}.bg{position:absolute;inset:0;opacity:.45;z-index:0}.bg img{display:block;width:100%;height:100%;object-fit:contain}.placement{position:absolute;left:40px;top:52px;width:42px;height:72px;z-index:1}.placement img{display:block;width:100%;height:100%;object-fit:contain}.large{position:absolute;left:2px;top:2px;width:24px;height:18px;opacity:.01;z-index:1}.large img{display:block;width:100%;height:100%;object-fit:cover}.text{position:absolute;left:8px;right:8px;bottom:10px;z-index:2;text-align:center}</style></head><body class="png-export"><section class="page" data-export-page><div class="bg"><img src="archive://local/images/album-smoke-image-1.png" alt=""></div><div class="placement"><img src="archive://local/images/album-smoke-image-2.png" alt=""></div><div class="large"><img src="archive://local/images/album-smoke-large-export.png" alt=""></div><div class="text">Export smoke</div></section></body></html>';
+      const html = '<!doctype html><html class="png-export"><head><style>@page{size:120px 180px;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;overflow:hidden;width:120px;height:180px}.page{position:relative;width:120px;height:180px;overflow:hidden;background:#f7f0dd;color:#1f5d57;font:700 14px Arial}.bg{position:absolute;inset:0;opacity:.45;z-index:0}.bg img{display:block;width:100%;height:100%;object-fit:contain}.placement{position:absolute;left:40px;top:52px;width:42px;height:72px;z-index:1}.placement img,.crop svg{display:block;width:100%;height:100%;object-fit:contain}.crop{position:absolute;left:84px;top:42px;width:24px;height:42px;z-index:1}.large{position:absolute;left:2px;top:2px;width:24px;height:18px;opacity:.01;z-index:1}.large img{display:block;width:100%;height:100%;object-fit:cover}.text{position:absolute;left:8px;right:8px;bottom:10px;z-index:2;text-align:center}</style></head><body class="png-export"><section class="page" data-export-page><div class="bg"><img src="archive://local/images/album-smoke-image-1.png" alt=""></div><div class="placement"><img src="archive://local/images/album-smoke-image-2.png" alt=""></div><div class="crop"><svg viewBox="20 10 60 80" preserveAspectRatio="xMidYMid meet"><image href="archive://local/images/album-smoke-image-2.png" width="100" height="100" preserveAspectRatio="none"></image></svg></div><div class="large"><img src="archive://local/images/album-smoke-large-export.png" alt=""></div><div class="text">Export smoke</div></section></body></html>';
       const png = await window.archiveAPI.exportAlbumPagePng({ html, width: 120, height: 180, filePath: ${JSON.stringify(exportSmokePng)}, defaultFilename: 'export-smoke-page.png' });
       const pdfOriginal = await window.archiveAPI.exportAlbumPdf({ html, width: 120, height: 180, quality: 'original', filePath: ${JSON.stringify(exportSmokePdfOriginal)}, defaultFilename: 'export-smoke-album-original.pdf' });
       const pdfLow = await window.archiveAPI.exportAlbumPdf({ html, width: 120, height: 180, quality: 'low', filePath: ${JSON.stringify(exportSmokePdfLow)}, defaultFilename: 'export-smoke-album-low.pdf' });
@@ -420,9 +575,9 @@ async function main() {
   assert(!exportSmoke.pdfLow.canceled && fs.existsSync(exportSmokePdfLow) && fs.statSync(exportSmokePdfLow).size > 20, `Low-quality PDF export smoke failed: ${JSON.stringify(exportSmoke)}`);
   const exportPngSize = pngDimensions(exportSmokePng);
   assert(exportPngSize.width === 120 && exportPngSize.height === 180, `PNG export dimensions are not full logical page size: ${JSON.stringify(exportPngSize)}`);
-  assert(exportSmoke.png.diagnostics.imageCount >= 3, `PNG export did not wait for background and placement images: ${JSON.stringify(exportSmoke.png.diagnostics)}`);
-  assert(exportSmoke.pdfOriginal.diagnostics.imageCount >= 3, `Original PDF export did not wait for images: ${JSON.stringify(exportSmoke.pdfOriginal.diagnostics)}`);
-  assert(exportSmoke.pdfLow.diagnostics.imageCount >= 3, `Low-quality PDF export did not wait for images: ${JSON.stringify(exportSmoke.pdfLow.diagnostics)}`);
+  assert(exportSmoke.png.diagnostics.imageCount >= 4, `PNG export did not wait for background, placement, and SVG crop images: ${JSON.stringify(exportSmoke.png.diagnostics)}`);
+  assert(exportSmoke.pdfOriginal.diagnostics.imageCount >= 4, `Original PDF export did not wait for images: ${JSON.stringify(exportSmoke.pdfOriginal.diagnostics)}`);
+  assert(exportSmoke.pdfLow.diagnostics.imageCount >= 4, `Low-quality PDF export did not wait for images: ${JSON.stringify(exportSmoke.pdfLow.diagnostics)}`);
   assert(exportSmoke.pdfOriginal.diagnostics.pdfQuality.quality === "original", `PDF export did not use original quality: ${JSON.stringify(exportSmoke.pdfOriginal.diagnostics.pdfQuality)}`);
   assert(exportSmoke.pdfLow.diagnostics.pdfQuality.quality === "low", `PDF export did not use selected quality: ${JSON.stringify(exportSmoke.pdfLow.diagnostics.pdfQuality)}`);
   assert(exportSmoke.pdfLow.diagnostics.pdfQuality.rewrittenImages >= 3, `PDF export did not rewrite local images for lower quality: ${JSON.stringify(exportSmoke.pdfLow.diagnostics.pdfQuality)}`);
@@ -1562,6 +1717,90 @@ async function main() {
   assert(editState.layerTitles.includes("Put selected placement behind all other placements"), "To back tooltip missing");
   assert(editState.itemInfoLabel, "Show item info label/tooltip missing");
   assert(editState.pageSettingsHidden, "Selection inspector should replace Page settings when a placement is selected");
+
+  const sizeCropState = await evaluate(
+    client,
+    `(async () => {
+      const getLabels = () => [...document.querySelectorAll('.placement-inspector label')];
+      const imagePlacement = [...document.querySelectorAll('.album-placement')]
+        .find((node) => !node.classList.contains('text-placement'));
+      const placementId = imagePlacement.dataset.placementId;
+      imagePlacement.click();
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const setNumber = (labelText, value, sectionTitle = '') => {
+        let labels = getLabels();
+        if (sectionTitle) {
+          const section = [...document.querySelectorAll('.placement-inspector .inspector-section')]
+            .find((entry) => entry.querySelector('h3')?.textContent.includes(sectionTitle));
+          labels = section ? [...section.querySelectorAll('label')] : [];
+        }
+        const label = labels.find((entry) => entry.textContent.includes(labelText));
+        if (!label) throw new Error('Missing label ' + labelText);
+        const input = label.querySelector('input');
+        if (!input) throw new Error('Missing input for ' + labelText);
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, String(value));
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      const lock = getLabels().find((entry) => entry.textContent.includes('Lock ratio'))?.querySelector('input');
+      if (lock?.checked) lock.click();
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      setNumber('Width (mm)', 22, 'Physical size');
+      setNumber('Height (mm)', 33, 'Physical size');
+      [...document.querySelectorAll('.placement-inspector button')]
+        .find((button) => button.textContent.trim() === 'Apply size').click();
+      await new Promise((resolve) => setTimeout(resolve, 650));
+      setNumber('Left', 10, 'Crop');
+      setNumber('Right', 5, 'Crop');
+      setNumber('Top', 7.5, 'Crop');
+      setNumber('Bottom', 2.5, 'Crop');
+      await new Promise((resolve) => setTimeout(resolve, 650));
+      const albumAfterCrop = await window.archiveAPI.getAlbum('album-smoke');
+      const pageAfterCrop = albumAfterCrop.pages.find((page) => page.id === 'page-one');
+      const croppedEntry = pageAfterCrop.items.find((entry) => entry.id === placementId);
+      [...document.querySelectorAll('.placement-inspector button')]
+        .find((button) => button.textContent.trim() === 'Reset crop').click();
+      await new Promise((resolve) => setTimeout(resolve, 650));
+      const albumAfterReset = await window.archiveAPI.getAlbum('album-smoke');
+      const resetEntry = albumAfterReset.pages.find((page) => page.id === 'page-one').items.find((entry) => entry.id === croppedEntry.id);
+      setNumber('Left', 10, 'Crop');
+      setNumber('Right', 5, 'Crop');
+      setNumber('Top', 7.5, 'Crop');
+      setNumber('Bottom', 2.5, 'Crop');
+      await new Promise((resolve) => setTimeout(resolve, 650));
+      const albumAfterReapply = await window.archiveAPI.getAlbum('album-smoke');
+      const finalEntry = albumAfterReapply.pages.find((page) => page.id === 'page-one').items.find((entry) => entry.id === croppedEntry.id);
+      const duplicated = await window.archiveAPI.copyAlbumPage({ pageId: 'page-one', targetAlbumId: 'album-smoke', insertAfterPageId: 'page-one' });
+      const copiedPageId = duplicated.copiedPageId;
+      const copiedEntry = duplicated.album.pages.find((page) => page.id === copiedPageId).items
+        .find((entry) => entry.element_type === 'image' && entry.image_id === finalEntry.image_id);
+      await window.archiveAPI.deleteAlbumPage(copiedPageId);
+      return {
+        expectedWidth: 22 * 1000 / 210,
+        expectedHeight: 33 * 1414 / 297,
+        width: finalEntry.width,
+        height: finalEntry.height,
+        locked: finalEntry.locked,
+        crop: [finalEntry.crop_left, finalEntry.crop_right, finalEntry.crop_top, finalEntry.crop_bottom],
+        resetCrop: [resetEntry.crop_left, resetEntry.crop_right, resetEntry.crop_top, resetEntry.crop_bottom],
+        copiedCrop: [copiedEntry.crop_left, copiedEntry.crop_right, copiedEntry.crop_top, copiedEntry.crop_bottom],
+        copiedWidth: copiedEntry.width,
+        copiedHeight: copiedEntry.height,
+        hasCropSvg: Boolean(document.querySelector('.placement-crop-svg')),
+        labels: {
+          size: [...document.querySelectorAll('.placement-inspector h3')].some((entry) => entry.textContent.includes('Physical size')),
+          crop: [...document.querySelectorAll('.placement-inspector h3')].some((entry) => entry.textContent.includes('Crop'))
+        }
+      };
+    })()`
+  );
+  assert(Math.abs(sizeCropState.width - sizeCropState.expectedWidth) < 1 && Math.abs(sizeCropState.height - sizeCropState.expectedHeight) < 1, `Millimeter placement sizing did not persist accurately: ${JSON.stringify(sizeCropState)}`);
+  assert(sizeCropState.locked === false, `Lock ratio should remain controllable from size controls: ${JSON.stringify(sizeCropState)}`);
+  assert(JSON.stringify(sizeCropState.crop.map((value) => Math.round(Number(value) * 1000) / 1000)) === JSON.stringify([0.1, 0.05, 0.075, 0.025]), `Crop values did not persist: ${JSON.stringify(sizeCropState)}`);
+  assert(sizeCropState.resetCrop.every((value) => Number(value) === 0), `Reset crop did not restore full image: ${JSON.stringify(sizeCropState)}`);
+  assert(JSON.stringify(sizeCropState.copiedCrop.map((value) => Math.round(Number(value) * 1000) / 1000)) === JSON.stringify([0.1, 0.05, 0.075, 0.025]), `Duplicated page did not preserve crop values: ${JSON.stringify(sizeCropState)}`);
+  assert(Math.abs(sizeCropState.copiedWidth - sizeCropState.width) < 0.01 && Math.abs(sizeCropState.copiedHeight - sizeCropState.height) < 0.01, `Duplicated page did not preserve physical placement size: ${JSON.stringify(sizeCropState)}`);
+  assert(sizeCropState.hasCropSvg && sizeCropState.labels.size && sizeCropState.labels.crop, `Crop/size UI did not render: ${JSON.stringify(sizeCropState)}`);
   await evaluate(
     client,
     `(() => {
@@ -1615,66 +1854,123 @@ async function main() {
   assert(textBoxState.designedTextVisible, "Text box content did not render in edit/designed canvas");
   assert(textBoxState.handleWidth >= 18, `Resize handle is still too small: ${textBoxState.handleWidth}`);
 
-  const textBoxUsability = await evaluate(
-    client,
-    `(async () => {
-      const editText = async (expected) => {
-        const textBox = [...document.querySelectorAll('.text-placement')].find((node) => node.textContent.includes('Smoke text box') || node.textContent.includes('After'));
-        const content = textBox.querySelector('.album-text-content');
-        content.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: textBox.getBoundingClientRect().left + 12, clientY: textBox.getBoundingClientRect().top + 12 }));
-        await new Promise((resolve) => setTimeout(resolve, 120));
-        const editor = textBox.querySelector('.album-text-editor');
-        const beforeTextCount = document.querySelectorAll('.text-placement').length;
-        const enteredEditable = Boolean(editor) && document.activeElement === editor;
-        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true, bubbles: true }));
-        editor.value = expected;
-        editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: expected }));
-        editor.blur();
-        await new Promise((resolve) => setTimeout(resolve, 450));
+  await smokeStep(client, "text usability: drag text box", () =>
+    evaluate(
+      client,
+      `(() => {
+        const textBox = document.querySelector('.text-placement');
+        if (!textBox) throw new Error('No text placement found');
+        const rect = textBox.getBoundingClientRect();
+        textBox.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: rect.left + 3, clientY: rect.top + 3, button: 0 }));
+        window.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: rect.left + 28, clientY: rect.top + 28, button: 0 }));
+        window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: rect.left + 28, clientY: rect.top + 28, button: 0 }));
         return {
-          enteredEditable,
-          beforeTextCount,
-          afterTextCount: document.querySelectorAll('.text-placement').length
+          selected: document.querySelectorAll('.text-placement.selected').length,
+          textPlacements: document.querySelectorAll('.text-placement').length
         };
-      };
-      const textBox = document.querySelector('.text-placement');
-      const rect = textBox.getBoundingClientRect();
-      textBox.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: rect.left + 3, clientY: rect.top + 3, button: 0 }));
-      window.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: rect.left + 28, clientY: rect.top + 28, button: 0 }));
-      window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: rect.left + 28, clientY: rect.top + 28, button: 0 }));
-      await new Promise((resolve) => setTimeout(resolve, 350));
-      const afterDrag = await editText('After drag edit');
-      const selector = document.querySelector('.album-page-select');
-      selector.value = 'page-two';
-      selector.dispatchEvent(new Event('change', { bubbles: true }));
-      await new Promise((resolve) => setTimeout(resolve, 250));
-      selector.value = 'page-one';
-      selector.dispatchEvent(new Event('change', { bubbles: true }));
-      await new Promise((resolve) => setTimeout(resolve, 350));
-      const afterPageSwitch = await editText('After page switch edit');
-      [...document.querySelectorAll("button")].find((button) => button.textContent.trim() === "Preview").click();
-      await new Promise((resolve) => setTimeout(resolve, 250));
-      [...document.querySelectorAll("button")].find((button) => button.textContent.trim() === "Edit").click();
-      await new Promise((resolve) => setTimeout(resolve, 350));
-      const afterModeSwitch = await editText('After mode switch edit');
-      document.querySelector('.language-select select').value = 'zh';
-      document.querySelector('.language-select select').dispatchEvent(new Event('change', { bubbles: true }));
-      await new Promise((resolve) => setTimeout(resolve, 250));
-      document.querySelector('.language-select select').value = 'en';
-      document.querySelector('.language-select select').dispatchEvent(new Event('change', { bubbles: true }));
-      await new Promise((resolve) => setTimeout(resolve, 350));
-      const afterLanguageSwitch = await editText('After language switch edit');
-      const album = await window.archiveAPI.getAlbum('album-smoke');
-      const textEntry = album.pages[0].items.find((entry) => entry.element_type === 'text' && entry.text_content === 'After language switch edit');
-      return {
-        afterDrag,
-        afterPageSwitch,
-        afterModeSwitch,
-        afterLanguageSwitch,
-        persisted: textEntry?.text_content
-      };
-    })()`
+      })()`
+    )
   );
+  await sleep(350);
+  const afterDrag = await editSmokeTextBox(client, "After drag edit", "text usability after drag");
+
+  await smokeStep(client, "text usability: switch to page two", () =>
+    evaluate(
+      client,
+      `(() => {
+        const selector = document.querySelector('.album-page-select');
+        if (!selector) throw new Error('No album page selector');
+        selector.value = 'page-two';
+        selector.dispatchEvent(new Event('change', { bubbles: true }));
+        return selector.value;
+      })()`
+    )
+  );
+  await waitForStep(client, "text usability: page two loaded", "document.querySelector('.album-page-select')?.value === 'page-two'", "Page two did not become selected");
+  await smokeStep(client, "text usability: switch back to page one", () =>
+    evaluate(
+      client,
+      `(() => {
+        const selector = document.querySelector('.album-page-select');
+        selector.value = 'page-one';
+        selector.dispatchEvent(new Event('change', { bubbles: true }));
+        return selector.value;
+      })()`
+    )
+  );
+  await waitForStep(client, "text usability: page one text ready", "document.querySelector('.album-page-select')?.value === 'page-one' && document.querySelector('.text-placement')", "Page one text placement did not return after page switch");
+  const afterPageSwitch = await editSmokeTextBox(client, "After page switch edit", "text usability after page switch");
+
+  await smokeStep(client, "text usability: switch to Preview", () =>
+    evaluate(
+      client,
+      `(() => {
+        const preview = [...document.querySelectorAll("button")].find((button) => button.textContent.trim() === "Preview");
+        if (!preview) throw new Error('Preview button not found');
+        preview.click();
+        return true;
+      })()`
+    )
+  );
+  await waitForStep(client, "text usability: Preview loaded", "document.querySelector('.image-only-preview') || document.querySelector('.album-preview-page')", "Preview mode did not load");
+  await smokeStep(client, "text usability: switch back to Edit", () =>
+    evaluate(
+      client,
+      `(() => {
+        const edit = [...document.querySelectorAll("button")].find((button) => button.textContent.trim() === "Edit");
+        if (!edit) throw new Error('Edit button not found');
+        edit.click();
+        return true;
+      })()`
+    )
+  );
+  await waitForStep(client, "text usability: Edit text ready", "document.querySelector('.album-canvas') && document.querySelector('.text-placement') && [...document.querySelectorAll('button')].some((button) => button.textContent.trim() === 'Add text')", "Edit mode text placement did not return");
+  const afterModeSwitch = await editSmokeTextBox(client, "After mode switch edit", "text usability after Preview/Edit switch");
+
+  await smokeStep(client, "text usability: switch language to Chinese", () =>
+    evaluate(
+      client,
+      `(() => {
+        const select = document.querySelector('.language-select select');
+        if (!select) throw new Error('Language selector not found');
+        select.value = 'zh';
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        return select.value;
+      })()`
+    )
+  );
+  await waitForStep(client, "text usability: Chinese language applied", "document.querySelector('.language-select select')?.value === 'zh'", "Chinese language selection did not apply");
+  await smokeStep(client, "text usability: switch language to English", () =>
+    evaluate(
+      client,
+      `(() => {
+        const select = document.querySelector('.language-select select');
+        select.value = 'en';
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        return select.value;
+      })()`
+    )
+  );
+  await waitForStep(client, "text usability: English language applied", "document.querySelector('.language-select select')?.value === 'en' && document.querySelector('.text-placement')", "English language selection did not restore editable text placement");
+  const afterLanguageSwitch = await editSmokeTextBox(client, "After language switch edit", "text usability after language switch");
+
+  const textUsabilityPersisted = await smokeStep(client, "text usability: final persistence check", () =>
+    evaluate(
+      client,
+      `(async () => {
+        const album = await window.archiveAPI.getAlbum('album-smoke');
+        const textEntry = album.pages[0].items.find((entry) => entry.element_type === 'text' && entry.text_content === 'After language switch edit');
+        return textEntry?.text_content || null;
+      })()`
+    )
+  );
+  const textBoxUsability = {
+    afterDrag,
+    afterPageSwitch,
+    afterModeSwitch,
+    afterLanguageSwitch,
+    persisted: textUsabilityPersisted
+  };
   assert(textBoxUsability.afterDrag.enteredEditable && textBoxUsability.afterDrag.afterTextCount === textBoxUsability.afterDrag.beforeTextCount, `Text edit after drag failed or shortcut leaked: ${JSON.stringify(textBoxUsability)}`);
   assert(textBoxUsability.afterPageSwitch.enteredEditable, `Text edit after page switch failed: ${JSON.stringify(textBoxUsability)}`);
   assert(textBoxUsability.afterModeSwitch.enteredEditable, `Text edit after Preview/Edit switch failed: ${JSON.stringify(textBoxUsability)}`);
