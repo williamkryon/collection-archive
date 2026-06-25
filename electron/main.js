@@ -337,12 +337,16 @@ function execSchema(databaseWasCreated = false) {
       item_id TEXT NOT NULL,
       title TEXT DEFAULT '',
       note TEXT DEFAULT '',
-      original_filename TEXT NOT NULL,
-      stored_filename TEXT NOT NULL,
-      relative_path TEXT NOT NULL,
+      original_filename TEXT DEFAULT '',
+      stored_filename TEXT DEFAULT '',
+      relative_path TEXT DEFAULT '',
       mime_type TEXT DEFAULT '',
       file_type TEXT DEFAULT 'other',
       file_size INTEGER DEFAULT 0,
+      source_url TEXT DEFAULT '',
+      captured_at TEXT DEFAULT '',
+      capture_error TEXT DEFAULT '',
+      attachment_kind TEXT DEFAULT 'file',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE
@@ -583,6 +587,18 @@ function execSchema(databaseWasCreated = false) {
     db.exec("ALTER TABLE images ADD COLUMN note TEXT DEFAULT ''");
     dirty = true;
   }
+  const attachmentColumns = all("PRAGMA table_info(item_attachments)").map((column) => column.name);
+  [
+    ["source_url", "TEXT DEFAULT ''"],
+    ["captured_at", "TEXT DEFAULT ''"],
+    ["capture_error", "TEXT DEFAULT ''"],
+    ["attachment_kind", "TEXT DEFAULT 'file'"]
+  ].forEach(([name, definition]) => {
+    if (!attachmentColumns.includes(name)) {
+      db.exec(`ALTER TABLE item_attachments ADD COLUMN ${name} ${definition}`);
+      dirty = true;
+    }
+  });
   dirty = normalizeSortOrder("countries") || dirty;
   dirty = normalizeSortOrder("collection_types") || dirty;
   dirty = normalizeSortOrder("entity_groups") || dirty;
@@ -1238,7 +1254,6 @@ function createWindow() {
       nodeIntegration: false
     }
   });
-
   if (process.env.ARCHIVE_CLEAR_RENDERER_CACHE === "1") {
     win.webContents.session.clearCache().catch((error) => {
       console.warn("[app] failed to clear renderer cache", error);
@@ -1546,10 +1561,91 @@ function attachmentFilePath(row) {
 
 function deleteAttachmentFile(row) {
   if (!row) return false;
+  if (!row.relative_path && !row.stored_filename) return false;
   const filePath = attachmentFilePath(row);
   if (!fs.existsSync(filePath)) return false;
   fs.unlinkSync(filePath);
   return true;
+}
+
+function validateHttpUrl(input) {
+  let parsed;
+  try {
+    parsed = new URL(String(input || "").trim());
+  } catch {
+    throw new Error("Enter a valid http or https URL.");
+  }
+  if (!["http:", "https:"].includes(parsed.protocol)) {
+    throw new Error("Only http and https URLs can be saved as webpage attachments.");
+  }
+  parsed.hash = parsed.hash || "";
+  return parsed.toString();
+}
+
+function defaultWebpageTitle(url) {
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname.replace(/^www\./i, "") || url;
+  } catch {
+    return url;
+  }
+}
+
+async function waitForWebContentsLoad(webContents, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error("Timed out while loading webpage."));
+    }, timeoutMs);
+    function cleanup() {
+      clearTimeout(timeout);
+      webContents.off("did-finish-load", onFinish);
+      webContents.off("did-fail-load", onFail);
+    }
+    function onFinish() {
+      cleanup();
+      resolve();
+    }
+    function onFail(_event, errorCode, errorDescription, validatedURL, isMainFrame) {
+      if (!isMainFrame) return;
+      cleanup();
+      reject(new Error(`Webpage load failed: ${errorDescription || errorCode}`));
+    }
+    webContents.once("did-finish-load", onFinish);
+    webContents.on("did-fail-load", onFail);
+  });
+}
+
+async function captureWebpagePdf(sourceUrl) {
+  const win = new BrowserWindow({
+    show: false,
+    width: 1240,
+    height: 1754,
+    useContentSize: true,
+    backgroundColor: "#ffffff",
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
+    }
+  });
+  win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  const loadPromise = waitForWebContentsLoad(win.webContents, 20000);
+  try {
+    await win.loadURL(sourceUrl);
+    await loadPromise.catch((error) => {
+      throw error;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    return await win.webContents.printToPDF({
+      printBackground: true,
+      pageSize: "A4"
+    });
+  } finally {
+    if (!win.isDestroyed()) {
+      win.destroy();
+    }
+  }
 }
 
 function normalizeAlbumPageNumbers(albumId) {
@@ -2069,6 +2165,7 @@ ipcMain.handle("app:startup-timings", () => ({
   totalMs: Math.round((performance.now() - mainStartedAt) * 10) / 10,
   timings: startupTimings
 }));
+
 handlePerfIpc("items:query", (_event, payload) => itemPage(payload || {}, false));
 handlePerfIpc("items:count", (_event, payload) => countItems(payload || {}, false));
 handlePerfIpc("gallery:query", (_event, payload) => itemPage(payload || {}, true));
@@ -2476,9 +2573,9 @@ ipcMain.handle("attachments:add", async (_event, itemId) => {
       `
         INSERT INTO item_attachments (
           id, item_id, title, note, original_filename, stored_filename, relative_path,
-          mime_type, file_type, file_size, created_at, updated_at
+          mime_type, file_type, file_size, source_url, captured_at, capture_error, attachment_kind, created_at, updated_at
         )
-        VALUES (?, ?, '', '', ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, '', '', ?, ?, ?, ?, ?, ?, '', '', '', 'file', ?, ?)
       `,
       [
         attachmentId,
@@ -2495,6 +2592,71 @@ ipcMain.handle("attachments:add", async (_event, itemId) => {
     );
   });
   run("UPDATE items SET updated_at = ? WHERE id = ?", [now(), itemId]);
+  return getItemForRenderer(itemId);
+});
+
+ipcMain.handle("attachments:add-webpage", async (_event, payload = {}) => {
+  const itemId = payload.itemId;
+  const item = get("SELECT id FROM items WHERE id = ? AND COALESCE(deleted_at, '') = ''", [itemId]);
+  if (!item) {
+    throw new Error("Item not found");
+  }
+  const sourceUrl = validateHttpUrl(payload.sourceUrl);
+  const mode = payload.mode === "pdf" ? "pdf" : "url";
+  const timestamp = now();
+  const attachmentId = id();
+  const title = String(payload.title || "").trim() || defaultWebpageTitle(sourceUrl);
+  const note = String(payload.note || "");
+
+  if (mode === "url") {
+    bindAndStep(
+      `
+        INSERT INTO item_attachments (
+          id, item_id, title, note, original_filename, stored_filename, relative_path,
+          mime_type, file_type, file_size, source_url, captured_at, capture_error, attachment_kind, created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, '', '', '', '', 'url', 0, ?, '', '', 'url', ?, ?)
+      `,
+      [attachmentId, itemId, title, note, sourceUrl, timestamp, timestamp]
+    );
+    run("UPDATE items SET updated_at = ? WHERE id = ?", [timestamp, itemId]);
+    return getItemForRenderer(itemId);
+  }
+
+  let pdfBytes;
+  try {
+    pdfBytes = await captureWebpagePdf(sourceUrl);
+  } catch (error) {
+    throw new Error(`Webpage PDF capture failed: ${error.message || error}`);
+  }
+  const storedFilename = `${attachmentId}.pdf`;
+  const destination = path.join(paths.attachments, storedFilename);
+  fs.writeFileSync(destination, pdfBytes);
+  const stat = fs.statSync(destination);
+  bindAndStep(
+    `
+      INSERT INTO item_attachments (
+        id, item_id, title, note, original_filename, stored_filename, relative_path,
+        mime_type, file_type, file_size, source_url, captured_at, capture_error, attachment_kind, created_at, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'application/pdf', 'pdf', ?, ?, ?, '', 'webpage_pdf', ?, ?)
+    `,
+    [
+      attachmentId,
+      itemId,
+      title,
+      note,
+      `${title || "webpage"}.pdf`,
+      storedFilename,
+      storedFilename,
+      stat.size,
+      sourceUrl,
+      timestamp,
+      timestamp,
+      timestamp
+    ]
+  );
+  run("UPDATE items SET updated_at = ? WHERE id = ?", [timestamp, itemId]);
   return getItemForRenderer(itemId);
 });
 
@@ -2516,11 +2678,26 @@ ipcMain.handle("attachments:open", async (_event, attachmentId) => {
   if (!attachment) {
     throw new Error("Attachment not found");
   }
+  if (attachment.attachment_kind === "url" && attachment.source_url) {
+    const error = await shell.openExternal(validateHttpUrl(attachment.source_url));
+    if (error) throw new Error(error);
+    return { opened: true };
+  }
   const filePath = attachmentFilePath(attachment);
   if (!fs.existsSync(filePath)) {
     throw new Error("Attachment file is missing");
   }
   const error = await shell.openPath(filePath);
+  if (error) throw new Error(error);
+  return { opened: true };
+});
+
+ipcMain.handle("attachments:open-source", async (_event, attachmentId) => {
+  const attachment = get("SELECT * FROM item_attachments WHERE id = ?", [attachmentId]);
+  if (!attachment || !attachment.source_url) {
+    throw new Error("Attachment source URL not found");
+  }
+  const error = await shell.openExternal(validateHttpUrl(attachment.source_url));
   if (error) throw new Error(error);
   return { opened: true };
 });

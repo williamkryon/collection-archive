@@ -1,19 +1,31 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import * as pdfjsLib from "pdfjs-dist";
-import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import "./styles.css";
 
 const api = window.archiveAPI;
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
-if (localStorage.getItem("archiveDebugMedia") === "1" || localStorage.getItem("archiveDebugAttachments") === "1") {
-  console.log("[attachments:pdf] pdfjs runtime", {
-    version: pdfjsLib.version || "unknown",
-    hasUint8ArrayToHex: typeof Uint8Array.prototype.toHex === "function",
-    workerSrc: pdfjsLib.GlobalWorkerOptions.workerSrc
-  });
-}
+let pdfJsPromise = null;
 const rendererModuleLoadedAt = performance.now();
+
+async function loadPdfJs() {
+  if (!pdfJsPromise) {
+    pdfJsPromise = Promise.all([
+      import("pdfjs-dist"),
+      import("pdfjs-dist/build/pdf.worker.min.mjs?url")
+    ]).then(([pdfjsLib, workerModule]) => {
+      const workerSrc = workerModule.default || workerModule;
+      pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
+      if (localStorage.getItem("archiveDebugMedia") === "1") {
+        console.log("[attachments:pdf] pdfjs runtime", {
+          version: pdfjsLib.version || "unknown",
+          hasUint8ArrayToHex: typeof Uint8Array.prototype.toHex === "function",
+          workerSrc
+        });
+      }
+      return pdfjsLib;
+    });
+  }
+  return pdfJsPromise;
+}
 
 function perfTraceEnabled() {
   return Boolean(window.__archivePerfTrace || localStorage.getItem("archivePerfTrace") === "1");
@@ -108,6 +120,23 @@ const translations = {
     technicalDetails: "Technical details",
     attachments: "Attachments",
     addAttachment: "Add attachment",
+    localFile: "Local file",
+    webpageUrl: "Webpage URL",
+    addWebpageAttachment: "Add webpage attachment",
+    attachmentDialogHelp: "Attach a local file or save a webpage reference.",
+    localAttachmentHelp: "Add PDFs, audio, video, documents, archives, or other reference files.",
+    executableBlockedHint: "Executable and script files are blocked.",
+    chooseFile: "Choose file",
+    sourceUrl: "Source URL",
+    openUrl: "Open URL",
+    capturedAt: "Captured",
+    attachmentMode: "Mode",
+    saveUrl: "Save URL",
+    saveUrlOnly: "Save URL only",
+    saveAsPdfSnapshot: "Save as PDF snapshot",
+    webpageAttachmentHelp: "Save a link, or capture the current webpage as a PDF snapshot.",
+    capturePdf: "Capture PDF",
+    captureWebpagePdf: "Capture webpage PDF",
     openFile: "Open file",
     view: "View",
     previewAttachment: "Preview attachment",
@@ -503,6 +532,23 @@ translations.zh.imageNoteSaved = "\u56fe\u7247\u5907\u6ce8\u5df2\u4fdd\u5b58\u30
 translations.zh.technicalDetails = "\u6280\u672f\u8be6\u60c5";
 translations.zh.attachments = "\u9644\u4ef6";
 translations.zh.addAttachment = "\u6dfb\u52a0\u9644\u4ef6";
+translations.zh.localFile = "\u672c\u5730\u6587\u4ef6";
+translations.zh.webpageUrl = "\u7f51\u9875 URL";
+translations.zh.addWebpageAttachment = "\u6dfb\u52a0\u7f51\u9875\u9644\u4ef6";
+translations.zh.attachmentDialogHelp = "\u6dfb\u52a0\u672c\u5730\u6587\u4ef6\uff0c\u6216\u4fdd\u5b58\u7f51\u9875\u5f15\u7528\u3002";
+translations.zh.localAttachmentHelp = "\u6dfb\u52a0 PDF\u3001\u97f3\u9891\u3001\u89c6\u9891\u3001\u6587\u6863\u3001\u538b\u7f29\u5305\u6216\u5176\u4ed6\u53c2\u8003\u6587\u4ef6\u3002";
+translations.zh.executableBlockedHint = "\u53ef\u6267\u884c\u6587\u4ef6\u548c\u811a\u672c\u6587\u4ef6\u4f1a\u88ab\u963b\u6b62\u3002";
+translations.zh.chooseFile = "\u9009\u62e9\u6587\u4ef6";
+translations.zh.sourceUrl = "\u6765\u6e90 URL";
+translations.zh.openUrl = "\u6253\u5f00 URL";
+translations.zh.capturedAt = "\u6293\u53d6\u65f6\u95f4";
+translations.zh.attachmentMode = "\u6a21\u5f0f";
+translations.zh.saveUrl = "\u4fdd\u5b58 URL";
+translations.zh.saveUrlOnly = "\u4ec5\u4fdd\u5b58 URL";
+translations.zh.saveAsPdfSnapshot = "\u4fdd\u5b58\u4e3a PDF \u5feb\u7167";
+translations.zh.webpageAttachmentHelp = "\u4fdd\u5b58\u94fe\u63a5\uff0c\u6216\u5c06\u5f53\u524d\u7f51\u9875\u6293\u53d6\u4e3a PDF \u5feb\u7167\u3002";
+translations.zh.capturePdf = "\u6293\u53d6 PDF";
+translations.zh.captureWebpagePdf = "\u6293\u53d6\u7f51\u9875 PDF";
 translations.zh.openFile = "\u6253\u5f00\u6587\u4ef6";
 translations.zh.view = "\u67e5\u770b";
 translations.zh.previewAttachment = "\u9884\u89c8\u9644\u4ef6";
@@ -701,6 +747,90 @@ const MAX_ZOOM = 8;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function isEditableTarget(target) {
+  if (!target) return false;
+  const element = target.nodeType === Node.TEXT_NODE ? target.parentElement : target;
+  if (!element) return false;
+  const editable = element.closest?.("input, textarea, select, [contenteditable='true']");
+  const tagName = editable?.tagName || element.tagName;
+  return Boolean(
+    ["INPUT", "TEXTAREA", "SELECT"].includes(tagName) ||
+      editable?.isContentEditable ||
+      element.isContentEditable
+  );
+}
+
+function isEditableEvent(event) {
+  if (!event) return false;
+  if (event.__archiveEditableTarget) return true;
+  const path = typeof event.composedPath === "function" ? event.composedPath() : [];
+  return path.some((entry) => entry && entry.nodeType === 1 && isEditableTarget(entry)) || isEditableTarget(event.target);
+}
+
+function inputDebugEnabled() {
+  try {
+    return localStorage.getItem("archiveDebugInput") === "1";
+  } catch {
+    return false;
+  }
+}
+
+function describeInputTarget(target) {
+  if (!target || target.nodeType !== 1) return null;
+  return {
+    tagName: target.tagName,
+    type: target.getAttribute?.("type") || "",
+    id: target.id || "",
+    className: typeof target.className === "string" ? target.className : "",
+    name: target.getAttribute?.("name") || "",
+    label: target.getAttribute?.("data-input-debug") || ""
+  };
+}
+
+function currentInputDebugState() {
+  const active = document.activeElement;
+  return {
+    context: window.__archiveInputContext || {},
+    detailContext: window.__archiveDetailInputContext || {},
+    activeElement: describeInputTarget(active),
+    overlays: {
+      modal: Boolean(document.querySelector(".modal-backdrop, .nested-modal")),
+      picker: Boolean(document.querySelector(".picker-backdrop")),
+      viewer: Boolean(document.querySelector(".viewer-backdrop, .attachment-viewer-backdrop")),
+      toast: Boolean(document.querySelector(".toast"))
+    }
+  };
+}
+
+function logInputDebug(source, event, extra = {}) {
+  if (!inputDebugEnabled()) return;
+  console.log("[input-debug]", {
+    source,
+    type: event?.type || "",
+    key: event?.key || "",
+    code: event?.code || "",
+    inputType: event?.inputType || "",
+    target: describeInputTarget(event?.target),
+    isEditableTarget: isEditableEvent(event),
+    defaultPrevented: Boolean(event?.defaultPrevented),
+    cancelBubble: Boolean(event?.cancelBubble),
+    ...currentInputDebugState(),
+    ...extra
+  });
+}
+
+function shouldIgnoreAppShortcut(event, source) {
+  const ignore = isEditableEvent(event);
+  if (inputDebugEnabled()) {
+    logInputDebug(source, event, { shortcutAction: ignore ? "skip-editable" : "handle" });
+  }
+  return ignore;
+}
+
+function cancelAppInteractions() {
+  window.dispatchEvent(new CustomEvent("archive:cancel-interactions"));
 }
 
 function ZoomControls({ mode, zoom, onZoomIn, onZoomOut, onReset, onFit, onActualSize }) {
@@ -1137,6 +1267,7 @@ function ImageViewer({ images, initialIndex, title, onClose }) {
 
   useEffect(() => {
     function handleKeyDown(event) {
+      if (shouldIgnoreAppShortcut(event, "ImageViewer.keydown")) return;
       if (event.key === "Escape") {
         event.preventDefault();
         onClose();
@@ -1453,6 +1584,113 @@ function TrashView({ rows, onRestore, onPermanentDelete, onEmpty }) {
   );
 }
 
+function useInputDiagnostics(context) {
+  const contextRef = useRef(context);
+
+  useEffect(() => {
+    contextRef.current = context;
+    window.__archiveInputContext = context;
+  }, [context]);
+
+  useEffect(() => {
+    let eventId = 0;
+    const meta = new WeakMap();
+    const lastValues = new WeakMap();
+    const keyboardEvents = ["keydown", "keyup", "beforeinput", "input", "pointerdown", "click"];
+    const focusEvents = ["focusin", "focusout"];
+
+    function valueInfo(target) {
+      if (!target || !("value" in target)) return {};
+      const previous = lastValues.get(target);
+      const current = target.value;
+      const changed = previous !== undefined && previous !== current;
+      lastValues.set(target, current);
+      return {
+        valueLength: String(current || "").length,
+        valueChanged: changed
+      };
+    }
+
+    function capture(event) {
+      const editable = isEditableEvent(event);
+      if (editable) {
+        event.__archiveEditableTarget = true;
+      }
+      if (event.type === "focusin" && editable) {
+        cancelAppInteractions();
+      }
+      if (!inputDebugEnabled()) return;
+      const id = ++eventId;
+      meta.set(event, { id, bubbled: false });
+      logInputDebug("document-capture", event, {
+        eventId: id,
+        phase: "capture",
+        editableMarked: Boolean(event.__archiveEditableTarget),
+        defaultPreventedBefore: Boolean(event.defaultPrevented),
+        ...valueInfo(event.target)
+      });
+      window.setTimeout(() => {
+        const record = meta.get(event);
+        if (!record || record.bubbled) return;
+        logInputDebug("document-after-capture", event, {
+          eventId: record.id,
+          phase: "after-capture",
+          propagationStoppedBeforeDocumentBubble: true,
+          defaultPreventedAfter: Boolean(event.defaultPrevented)
+        });
+      }, 0);
+    }
+
+    function bubble(event) {
+      const record = meta.get(event);
+      if (record) record.bubbled = true;
+      if (!inputDebugEnabled()) return;
+      logInputDebug("document-bubble", event, {
+        eventId: record?.id || null,
+        phase: "bubble",
+        defaultPreventedAfter: Boolean(event.defaultPrevented),
+        ...valueInfo(event.target)
+      });
+    }
+
+    function windowCapture(event) {
+      const editable = isEditableEvent(event);
+      if (editable) {
+        event.__archiveEditableTarget = true;
+      }
+      if (!inputDebugEnabled()) return;
+      logInputDebug("window-capture", event, {
+        phase: "capture",
+        editableMarked: Boolean(event.__archiveEditableTarget),
+        defaultPreventedBefore: Boolean(event.defaultPrevented)
+      });
+    }
+
+    function windowBubble(event) {
+      if (!inputDebugEnabled()) return;
+      logInputDebug("window-bubble", event, {
+        phase: "bubble",
+        defaultPreventedAfter: Boolean(event.defaultPrevented)
+      });
+    }
+
+    [...keyboardEvents, ...focusEvents].forEach((eventName) => {
+      window.addEventListener(eventName, windowCapture, true);
+      window.addEventListener(eventName, windowBubble, false);
+      document.addEventListener(eventName, capture, true);
+      document.addEventListener(eventName, bubble, false);
+    });
+    return () => {
+      [...keyboardEvents, ...focusEvents].forEach((eventName) => {
+        window.removeEventListener(eventName, windowCapture, true);
+        window.removeEventListener(eventName, windowBubble, false);
+        document.removeEventListener(eventName, capture, true);
+        document.removeEventListener(eventName, bubble, false);
+      });
+    };
+  }, []);
+}
+
 function ArchiveApp() {
   const { language, setLanguage, t } = useI18n();
   const libraryPageSize = 100;
@@ -1495,6 +1733,48 @@ function ArchiveApp() {
   const libraryRequestRef = useRef(0);
   const galleryRequestRef = useRef(0);
   const startupReadyLoggedRef = useRef(false);
+  const inputDebugContext = useMemo(() => ({
+    activeView,
+    selectedItemId,
+    selectedDetailId: detail?.id || null,
+    selectedAlbumId,
+    selectedLibraryIds,
+    modalState: {
+      itemFormOpen,
+      editingItemId: editingItem?.id || null,
+      countryFormOpen,
+      typeFormOpen,
+      albumFormOpen,
+      manageOpen,
+      bulkEditOpen,
+      bulkCreateOpen,
+      bulkAlbumOpen,
+      phoneUploadOpen
+    },
+    detailState: detail ? {
+      imageCount: detail.images?.length || 0,
+      attachmentCount: detail.attachments?.length || 0
+    } : null,
+    trashCount: trashRows.length
+  }), [
+    activeView,
+    albumFormOpen,
+    bulkAlbumOpen,
+    bulkCreateOpen,
+    bulkEditOpen,
+    countryFormOpen,
+    detail,
+    editingItem,
+    itemFormOpen,
+    manageOpen,
+    phoneUploadOpen,
+    selectedAlbumId,
+    selectedItemId,
+    selectedLibraryIds,
+    trashRows.length,
+    typeFormOpen
+  ]);
+  useInputDiagnostics(inputDebugContext);
 
   async function refresh(options = {}) {
     const started = performance.now();
@@ -1717,6 +1997,33 @@ function ArchiveApp() {
     api.listTrash().then(setTrashRows);
   }, [activeView, itemsVersion]);
 
+  useEffect(() => {
+    cancelAppInteractions();
+  }, [activeView, selectedItemId, selectedAlbumId]);
+
+  function resetTransientInteractionState(reason, options = {}) {
+    cancelAppInteractions();
+    if (options.clearLibrarySelection !== false) {
+      setSelectedLibraryIds([]);
+    }
+    setBulkEditOpen(false);
+    setBulkAlbumOpen(false);
+    if (options.closeBulkCreate) {
+      setBulkCreateOpen(false);
+    }
+    const active = document.activeElement;
+    if (active && active !== document.body && (!active.isConnected || !isEditableTarget(active))) {
+      active.blur?.();
+    }
+    if (inputDebugEnabled()) {
+      console.log("[input-debug]", {
+        source: "resetTransientInteractionState",
+        reason,
+        ...currentInputDebugState()
+      });
+    }
+  }
+
   async function createItem(payload) {
     const created = await api.createItem(payload);
     await refresh();
@@ -1744,6 +2051,7 @@ function ArchiveApp() {
 
   async function deleteItem(itemId) {
     if (!window.confirm("Move this item to Trash?")) return;
+    resetTransientInteractionState("deleteItem.start");
     await api.deleteItem(itemId);
     await refresh();
     setItemsVersion((version) => version + 1);
@@ -1753,12 +2061,14 @@ function ArchiveApp() {
       setActiveView("library");
     }
     setSelectedLibraryIds((ids) => ids.filter((id) => id !== itemId));
+    resetTransientInteractionState("deleteItem.end", { clearLibrarySelection: false });
     setMessage(t("movedToTrash"));
   }
 
   async function bulkMoveItemsToTrash(ids) {
     if (!ids.length) return;
     if (!window.confirm(`Move ${ids.length} selected items to Trash?`)) return;
+    resetTransientInteractionState("bulkMoveItemsToTrash.start");
     for (const itemId of ids) {
       await api.deleteItem(itemId);
     }
@@ -1864,6 +2174,20 @@ function ArchiveApp() {
     }
   }
 
+  async function addWebpageAttachment(payload) {
+    try {
+      const updated = await api.addWebpageAttachment(payload);
+      if (updated) {
+        setDetail(updated);
+        setItemsVersion((version) => version + 1);
+      }
+      setMessage(t("attachmentSaved"));
+    } catch (error) {
+      setMessage(`Webpage attachment failed: ${error.message || error}`);
+      throw error;
+    }
+  }
+
   async function updateAttachment(payload) {
     const updated = await api.updateAttachment(payload);
     if (updated) {
@@ -1878,6 +2202,14 @@ function ArchiveApp() {
       await api.openAttachment(attachmentId);
     } catch (error) {
       setMessage(`Open file failed: ${error.message || error}`);
+    }
+  }
+
+  async function openAttachmentSource(attachmentId) {
+    try {
+      await api.openAttachmentSource(attachmentId);
+    } catch (error) {
+      setMessage(`Open URL failed: ${error.message || error}`);
     }
   }
 
@@ -1899,11 +2231,16 @@ function ArchiveApp() {
     await refresh();
     await refreshTrash();
     setItemsVersion((version) => version + 1);
+    resetTransientInteractionState("restoreTrash.end");
+    if (row?.type === "item" && selectedItemId === row.id) {
+      setDetail(await api.getItem(row.id).catch(() => null));
+    }
     setMessage(t("restoredFromTrash"));
   }
 
   async function permanentlyDeleteTrash(row) {
     if (!window.confirm("Permanently delete this record? This cannot be undone.")) return;
+    resetTransientInteractionState("permanentlyDeleteTrash.start");
     await api.permanentlyDeleteTrash(row);
     await refresh();
     await refreshTrash();
@@ -1913,6 +2250,7 @@ function ArchiveApp() {
 
   async function emptyTrash() {
     if (!window.confirm("Permanently delete everything in Trash? This cannot be undone.")) return;
+    resetTransientInteractionState("emptyTrash.start");
     await api.emptyTrash();
     await refresh();
     await refreshTrash();
@@ -2070,8 +2408,10 @@ function ArchiveApp() {
             onReorderImages={reorderImages}
             onUpdateImageNote={updateImageNote}
             onAddAttachment={addAttachment}
+            onAddWebpageAttachment={addWebpageAttachment}
             onUpdateAttachment={updateAttachment}
             onOpenAttachment={openAttachment}
+            onOpenAttachmentSource={openAttachmentSource}
             onRemoveAttachment={removeAttachment}
             onUpdate={async (payload) => {
               await updateItem(payload);
@@ -2376,6 +2716,7 @@ function FilterBar({ library, filters, setFilters }) {
       <div className="filter-search-row">
         <div className="search-filter">
           <input
+            data-input-debug="Library search"
             value={filters.search}
             onChange={(event) => update({ search: event.target.value })}
             placeholder={t("searchPlaceholder")}
@@ -2421,9 +2762,9 @@ function FilterBar({ library, filters, setFilters }) {
             </option>
           ))}
         </select>
-        <input value={filters.year} onChange={(event) => update({ year: event.target.value })} placeholder={t("year")} />
+        <input data-input-debug="Library year filter" value={filters.year} onChange={(event) => update({ year: event.target.value })} placeholder={t("year")} />
         <label className="filter-tag-field">
-          <input value={filters.tag} onChange={(event) => update({ tag: event.target.value })} placeholder={t("tagsComma")} aria-label={t("tagsComma")} />
+          <input data-input-debug="Library tag filter" value={filters.tag} onChange={(event) => update({ tag: event.target.value })} placeholder={t("tagsComma")} aria-label={t("tagsComma")} />
           <span>{t("multiTagsHint")}</span>
         </label>
         <button type="button" className="secondary clear-filters" disabled={!hasFilters} onClick={clearFilters}>{t("clearFilters")}</button>
@@ -2497,7 +2838,7 @@ function GalleryView({ items, total, loading, onLoadMore, onOpenItem, onToggleFa
   );
 }
 
-function DetailView({ detail, countries, types, onBack, onAddImages, onStartPhoneUpload, onRemoveImage, onReplaceImage, onReorderImages, onUpdateImageNote, onAddAttachment, onUpdateAttachment, onOpenAttachment, onRemoveAttachment, onUpdate, onToggleFavorite, onDeleteItem }) {
+function DetailView({ detail, countries, types, onBack, onAddImages, onStartPhoneUpload, onRemoveImage, onReplaceImage, onReorderImages, onUpdateImageNote, onAddAttachment, onAddWebpageAttachment, onUpdateAttachment, onOpenAttachment, onOpenAttachmentSource, onRemoveAttachment, onUpdate, onToggleFavorite, onDeleteItem }) {
   const { t } = useI18n();
   const [activeImage, setActiveImage] = useState(0);
   const [editing, setEditing] = useState(false);
@@ -2520,6 +2861,20 @@ function DetailView({ detail, countries, types, onBack, onAddImages, onStartPhon
   useEffect(() => {
     setImageNoteDraft(image?.note || "");
   }, [image?.id, image?.note]);
+
+  useEffect(() => {
+    window.__archiveDetailInputContext = {
+      detailId: detail?.id || null,
+      activeImageId: image?.id || null,
+      activeImageIndex: activeImage,
+      attachmentIds: (detail?.attachments || []).map((attachment) => attachment.id)
+    };
+    return () => {
+      if (window.__archiveDetailInputContext?.detailId === detail?.id) {
+        window.__archiveDetailInputContext = {};
+      }
+    };
+  }, [activeImage, detail?.attachments, detail?.id, image?.id]);
 
   if (!detail) {
     return (
@@ -2610,6 +2965,7 @@ function DetailView({ detail, countries, types, onBack, onAddImages, onStartPhon
               <label>
                 {t("imageNote")}
                 <textarea
+                  data-input-debug="Image note"
                   value={imageNoteDraft}
                   placeholder={t("imageNotePlaceholder")}
                   onChange={(event) => setImageNoteDraft(event.target.value)}
@@ -2679,8 +3035,10 @@ function DetailView({ detail, countries, types, onBack, onAddImages, onStartPhon
             itemId={detail.id}
             attachments={detail.attachments || []}
             onAdd={onAddAttachment}
+            onAddWebpage={onAddWebpageAttachment}
             onUpdate={onUpdateAttachment}
             onOpen={onOpenAttachment}
+            onOpenSource={onOpenAttachmentSource}
             onRemove={onRemoveAttachment}
           />
         </aside>
@@ -2691,7 +3049,9 @@ function DetailView({ detail, countries, types, onBack, onAddImages, onStartPhon
           item={detail}
           countries={countries}
           types={types}
-          onClose={() => setEditing(false)}
+          onClose={() => {
+            setEditing(false);
+          }}
           onSubmit={async (payload) => {
             await onUpdate({ ...payload, id: detail.id });
             setEditing(false);
@@ -2709,14 +3069,23 @@ function ImageViewerButton({ images, activeImage, title }) {
   return (
     <>
       <button type="button" onClick={() => setOpen(true)}>{t("openViewer")}</button>
-      {open && <ImageViewer images={images} initialIndex={activeImage} title={title} onClose={() => setOpen(false)} />}
+      {open && <ImageViewer images={images} initialIndex={activeImage} title={title} onClose={() => {
+        setOpen(false);
+      }} />}
     </>
   );
 }
 
-function AttachmentsSection({ itemId, attachments, onAdd, onUpdate, onOpen, onRemove }) {
+function AttachmentsSection({ itemId, attachments, onAdd, onAddWebpage, onUpdate, onOpen, onOpenSource, onRemove }) {
   const { t } = useI18n();
   const [viewerAttachment, setViewerAttachment] = useState(null);
+  const [adding, setAdding] = useState(false);
+  function closeAddAttachment() {
+    setAdding(false);
+  }
+  function closeAttachmentViewer() {
+    setViewerAttachment(null);
+  }
   return (
     <section className="attachments-section">
       <header>
@@ -2724,8 +3093,22 @@ function AttachmentsSection({ itemId, attachments, onAdd, onUpdate, onOpen, onRe
           <h2>{t("attachments")}</h2>
           <p>{attachments.length ? `${attachments.length}` : t("noAttachmentsYet")}</p>
         </div>
-        <button type="button" className="secondary" onClick={() => onAdd(itemId)}>{t("addAttachment")}</button>
+        <button type="button" className="secondary" onClick={() => setAdding(true)}>{t("addAttachment")}</button>
       </header>
+      {adding && (
+        <AddAttachmentDialog
+          itemId={itemId}
+          onAddLocal={async () => {
+            await onAdd(itemId);
+            closeAddAttachment();
+          }}
+          onAddWebpage={async (payload) => {
+            await onAddWebpage(payload);
+            closeAddAttachment();
+          }}
+          onClose={closeAddAttachment}
+        />
+      )}
       <div className="attachments-list">
         {attachments.map((attachment) => (
           <AttachmentRow
@@ -2733,6 +3116,7 @@ function AttachmentsSection({ itemId, attachments, onAdd, onUpdate, onOpen, onRe
             attachment={attachment}
             onUpdate={onUpdate}
             onOpen={onOpen}
+            onOpenSource={onOpenSource}
             onView={setViewerAttachment}
             onRemove={onRemove}
           />
@@ -2743,10 +3127,117 @@ function AttachmentsSection({ itemId, attachments, onAdd, onUpdate, onOpen, onRe
         <AttachmentViewer
           attachment={viewerAttachment}
           onOpen={onOpen}
-          onClose={() => setViewerAttachment(null)}
+          onClose={closeAttachmentViewer}
         />
       )}
     </section>
+  );
+}
+
+function AddAttachmentDialog({ itemId, onAddLocal, onAddWebpage, onClose }) {
+  const { t } = useI18n();
+  const [method, setMethod] = useState("local");
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [title, setTitle] = useState("");
+  const [note, setNote] = useState("");
+  const [mode, setMode] = useState("url");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    cancelAppInteractions();
+  }, []);
+
+  async function addLocalFile() {
+    setBusy(true);
+    setError("");
+    try {
+      await onAddLocal();
+    } catch (localError) {
+      setError(localError.message || String(localError));
+      setBusy(false);
+    }
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    if (method === "local") {
+      await addLocalFile();
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await onAddWebpage({
+        itemId,
+        sourceUrl,
+        title,
+        note,
+        mode: mode === "pdf" ? "pdf" : "url"
+      });
+    } catch (submitError) {
+      setError(submitError.message || String(submitError));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <form className="modal attachment-add-dialog" onSubmit={submit}>
+        <header>
+          <div>
+            <h2>{t("addAttachment")}</h2>
+            <p>{t("attachmentDialogHelp")}</p>
+          </div>
+          <button type="button" onClick={onClose}>{t("close")}</button>
+        </header>
+        <div className="attachment-method-tabs" role="tablist" aria-label={t("addAttachment")}>
+          <button type="button" className={method === "local" ? "active" : ""} onClick={() => setMethod("local")} disabled={busy}>
+            {t("localFile")}
+          </button>
+          <button type="button" className={method === "webpage" ? "active" : ""} onClick={() => setMethod("webpage")} disabled={busy}>
+            {t("webpageUrl")}
+          </button>
+        </div>
+        {method === "local" ? (
+          <div className="attachment-method-panel">
+            <p>{t("localAttachmentHelp")}</p>
+            <p className="quiet">{t("executableBlockedHint")}</p>
+          </div>
+        ) : (
+          <div className="attachment-method-panel">
+            <p>{t("webpageAttachmentHelp")}</p>
+            <label>
+              {t("sourceUrl")}
+              <input data-input-debug="Add attachment source URL" type="url" value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} placeholder="https://example.com" required />
+            </label>
+            <label>
+              {t("title")}
+              <input data-input-debug="Add attachment title" value={title} onChange={(event) => setTitle(event.target.value)} />
+            </label>
+            <label>
+              {t("note")}
+              <textarea data-input-debug="Add attachment note" value={note} onChange={(event) => setNote(event.target.value)} />
+            </label>
+            <label>
+              {t("attachmentMode")}
+              <select value={mode} onChange={(event) => setMode(event.target.value)}>
+                <option value="url">{t("saveUrlOnly")}</option>
+                <option value="pdf">{t("saveAsPdfSnapshot")}</option>
+              </select>
+            </label>
+          </div>
+        )}
+        {error && <p className="form-error">{error}</p>}
+        <footer>
+          <button type="button" className="secondary" onClick={onClose} disabled={busy}>{t("cancel")}</button>
+          <button type="submit" className="primary" disabled={busy || (method === "webpage" && !sourceUrl.trim())}>
+            {method === "local" ? t("chooseFile") : mode === "pdf" ? t("capturePdf") : t("saveUrl")}
+          </button>
+        </footer>
+      </form>
+    </div>
   );
 }
 
@@ -2754,7 +3245,7 @@ function canPreviewAttachment(attachment) {
   return ["pdf", "video", "audio"].includes(attachment?.file_type) && Boolean(attachment?.url);
 }
 
-function AttachmentRow({ attachment, onUpdate, onOpen, onView, onRemove }) {
+function AttachmentRow({ attachment, onUpdate, onOpen, onOpenSource, onView, onRemove }) {
   const { t } = useI18n();
   const [title, setTitle] = useState(attachment.title || "");
   const [note, setNote] = useState(attachment.note || "");
@@ -2769,24 +3260,34 @@ function AttachmentRow({ attachment, onUpdate, onOpen, onView, onRemove }) {
     onUpdate({ id: attachment.id, title, note });
   }
 
-  const displayTitle = title.trim() || attachment.original_filename;
+  const displayTitle = title.trim() || attachment.original_filename || attachment.source_url || t("webpageUrl");
   const imported = attachment.created_at ? new Date(attachment.created_at).toLocaleString() : "-";
+  const captured = attachment.captured_at ? new Date(attachment.captured_at).toLocaleString() : "";
+  const typeLabel = attachment.attachment_kind && attachment.attachment_kind !== "file"
+    ? attachment.attachment_kind
+    : attachment.file_type || "other";
 
   return (
     <article className="attachment-card">
       <div className="attachment-main">
         <label>
           {t("title")}
-          <input value={title} placeholder={attachment.original_filename} onChange={(event) => setTitle(event.target.value)} onBlur={save} />
+          <input data-input-debug="Attachment title" value={title} placeholder={attachment.original_filename || attachment.source_url || t("title")} onChange={(event) => setTitle(event.target.value)} onBlur={save} />
         </label>
         <div className="attachment-meta">
-          <span>{t("fileType")}: {attachment.file_type || "other"}</span>
-          <span>{t("fileSize")}: {formatFileSize(attachment.file_size)}</span>
+          <span>{t("fileType")}: {typeLabel}</span>
+          {attachment.file_size > 0 && <span>{t("fileSize")}: {formatFileSize(attachment.file_size)}</span>}
           <span>{t("imported")}: {imported}</span>
+          {captured && <span>{t("capturedAt")}: {captured}</span>}
+          {attachment.source_url && (
+            <span className="attachment-source">
+              {t("sourceUrl")}: <span title={attachment.source_url}>{attachment.source_url}</span>
+            </span>
+          )}
         </div>
         <label>
           {t("note")}
-          <textarea value={note} onChange={(event) => setNote(event.target.value)} onBlur={save} />
+          <textarea data-input-debug="Attachment note" value={note} onChange={(event) => setNote(event.target.value)} onBlur={save} />
         </label>
       </div>
       <AttachmentPreview attachment={attachment} title={displayTitle} />
@@ -2794,7 +3295,9 @@ function AttachmentRow({ attachment, onUpdate, onOpen, onView, onRemove }) {
         {canPreviewAttachment(attachment) && (
           <button type="button" className="secondary" onClick={() => onView(attachment)}>{t("view")}</button>
         )}
-        <button type="button" onClick={() => onOpen(attachment.id)}>{t("openFile")}</button>
+        {attachment.attachment_kind !== "url" && <button type="button" onClick={() => onOpen(attachment.id)}>{t("openFile")}</button>}
+        {attachment.source_url && <button type="button" onClick={() => onOpenSource(attachment.id)}>{t("openUrl")}</button>}
+        {attachment.attachment_kind === "url" && !attachment.source_url && <button type="button" onClick={() => onOpen(attachment.id)}>{t("openUrl")}</button>}
         <button
           type="button"
           className="danger"
@@ -2839,6 +3342,7 @@ function AttachmentViewer({ attachment, onOpen, onClose }) {
 
   useEffect(() => {
     function handleKeyDown(event) {
+      if (shouldIgnoreAppShortcut(event, "AttachmentViewer.keydown")) return;
       if (event.key === "Escape") onClose();
     }
     window.addEventListener("keydown", handleKeyDown);
@@ -2881,7 +3385,7 @@ function AttachmentViewer({ attachment, onOpen, onClose }) {
 
 function pdfAttachmentDebugEnabled() {
   try {
-    return Boolean(import.meta.env.DEV || localStorage.getItem("archiveDebugMedia") === "1" || localStorage.getItem("archiveDebugAttachments") === "1");
+    return localStorage.getItem("archiveDebugMedia") === "1";
   } catch {
     return false;
   }
@@ -2993,6 +3497,7 @@ function PdfAttachmentCanvas({ attachment, title, compact = false }) {
 
     async function loadPdf() {
       let stage = "read-bytes";
+      let pdfjsRuntime = null;
       try {
         if (!attachment.id) throw new Error("Missing attachment id");
         if (!api?.readAttachmentBytes) throw new Error("Attachment byte reader is unavailable");
@@ -3017,7 +3522,9 @@ function PdfAttachmentCanvas({ attachment, title, compact = false }) {
         }
         if (cancelled) return;
         stage = "load-pdf";
-        const task = pdfjsLib.getDocument({ data: bytes });
+        pdfjsRuntime = await loadPdfJs();
+        if (cancelled) return;
+        const task = pdfjsRuntime.getDocument({ data: bytes });
         loadingTaskRef.current = task;
         const loadedPdf = await task.promise;
         if (cancelled) {
@@ -3035,7 +3542,7 @@ function PdfAttachmentCanvas({ attachment, title, compact = false }) {
               attachmentId: attachment.id,
               originalFilename: attachment.original_filename,
               stage,
-              workerSrc: pdfjsLib.GlobalWorkerOptions.workerSrc,
+              workerSrc: pdfjsRuntime?.GlobalWorkerOptions?.workerSrc || "not-loaded",
               message: loadError?.message || String(loadError),
               name: loadError?.name,
               stack: loadError?.stack
@@ -3485,7 +3992,9 @@ function AlbumsView({
             }
           }}
           onBulkAdd={pickerOpen === "background" ? null : onBulkAddItemsToPage}
-          onClose={() => setPickerOpen(null)}
+          onClose={() => {
+            setPickerOpen(null);
+          }}
         />
       )}
     </section>
@@ -4173,6 +4682,7 @@ function AlbumItemPicker({ countries, entityGroups = [], types, pageId, title = 
   }
 
   function handleKeyDown(event) {
+    if (shouldIgnoreAppShortcut(event, "AlbumItemPicker.keydown")) return;
     if (event.key === "Escape") {
       event.preventDefault();
       onClose();
@@ -4203,7 +4713,7 @@ function AlbumItemPicker({ countries, entityGroups = [], types, pageId, title = 
           <button type="button" onClick={onClose}>Close</button>
         </header>
         <div className="picker-filters">
-          <input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search title" />
+          <input data-input-debug="Album item picker search" ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search title" />
           <select value={countryId} onChange={(event) => setCountryId(event.target.value)}>
             <option value="">All issuing entities</option>
             {orderedRows(countries).map((country) => <option value={country.id} key={country.id}>{country.name}</option>)}
@@ -4216,8 +4726,8 @@ function AlbumItemPicker({ countries, entityGroups = [], types, pageId, title = 
             <option value="">All types</option>
             {orderedRows(types).map((type) => <option value={type.id} key={type.id}>{type.name}</option>)}
           </select>
-          <input value={year} onChange={(event) => setYear(event.target.value)} placeholder="Year" />
-          <input value={tag} onChange={(event) => setTag(event.target.value)} placeholder="Tags" />
+          <input data-input-debug="Album item picker year" value={year} onChange={(event) => setYear(event.target.value)} placeholder="Year" />
+          <input data-input-debug="Album item picker tags" value={tag} onChange={(event) => setTag(event.target.value)} placeholder="Tags" />
           <label><input type="checkbox" checked={favoritesOnly} onChange={(event) => setFavoritesOnly(event.target.checked)} /> Favorites</label>
         </div>
         <div className="picker-body">
@@ -4597,17 +5107,6 @@ function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePag
     await applySnapshot(future[0], "redo");
   }
 
-  function isTypingTarget(target) {
-    return Boolean(
-      target &&
-      (
-        ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) ||
-        target.isContentEditable ||
-        target.closest?.("[contenteditable='true']")
-      )
-    );
-  }
-
   function copySelection() {
     const selected = new Set(selectedIdsRef.current);
     clipboardRef.current = draftItemsRef.current.filter((entry) => selected.has(entry.id)).map((entry) => ({ ...entry }));
@@ -4665,21 +5164,14 @@ function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePag
   useEffect(() => {
     function handleKeyDown(event) {
       if (mode !== "edit") return;
-      const target = event.target;
-      const typing = isTypingTarget(target);
+      if (shouldIgnoreAppShortcut(event, "AlbumPage.keydown")) return;
       if (event.key === "Escape") {
         event.preventDefault();
-        if (typing) {
-          target.blur?.();
-          setEditingTextId("");
-          return;
-        }
         setSelectedIds([]);
         setEditingTextId("");
         cleanupInteraction();
         return;
       }
-      if (typing) return;
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
         event.preventDefault();
         if (event.shiftKey) redo();
@@ -4729,6 +5221,15 @@ function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePag
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [future, history, mode, page.grid_size, page.id, page.snap_to_grid, pageHeight, pageWidth]);
+
+  useEffect(() => {
+    function handleCancelInteractions() {
+      cleanupInteraction();
+      setSelectionRect(null);
+    }
+    window.addEventListener("archive:cancel-interactions", handleCancelInteractions);
+    return () => window.removeEventListener("archive:cancel-interactions", handleCancelInteractions);
+  }, []);
 
   function snap(value) {
     if (!page.snap_to_grid) return value;
@@ -5128,6 +5629,7 @@ function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePag
                     editingTextId === entry.id && mode === "edit" ? (
                       <textarea
                         className="album-text-content album-text-editor"
+                        data-input-debug="Album text box"
                         ref={(node) => {
                           if (node) {
                             textEditRefs.current.set(entry.id, node);
@@ -5919,6 +6421,7 @@ function SearchableCombobox({
       {open && (
         <div className="entity-combobox-panel">
           <input
+            data-input-debug={searchLabel || searchPlaceholder || "Searchable combobox"}
             ref={inputRef}
             value={query}
             onChange={(event) => {
@@ -6028,7 +6531,7 @@ function ItemForm({ title, item, countries, types, onClose, onSubmit, onBulkCrea
           </div>
         </header>
         <div className="form-grid">
-          <label>{t("title")}<input required value={form.title} onChange={(event) => update("title", event.target.value)} /></label>
+          <label>{t("title")}<input data-input-debug="Item title" required value={form.title} onChange={(event) => update("title", event.target.value)} /></label>
           <label>{t("issuingEntity")}<IssuingEntityCombobox countries={countries} value={form.country_id || ""} onChange={(value) => update("country_id", value)} /></label>
           <label>{t("type")}<select value={form.type_id || ""} onChange={(event) => update("type_id", event.target.value)}><option value="">{t("none")}</option>{orderedRows(types).map((type) => <option value={type.id} key={type.id}>{type.name}</option>)}</select></label>
           <label>{t("year")}<input value={form.year || ""} onChange={(event) => update("year", event.target.value)} /></label>
@@ -6036,10 +6539,10 @@ function ItemForm({ title, item, countries, types, onClose, onSubmit, onBulkCrea
           <label>{t("purchasePrice")}<input value={form.purchase_price || ""} onChange={(event) => update("purchase_price", event.target.value)} /></label>
           <label>{t("source")}<input value={form.source || ""} onChange={(event) => update("source", event.target.value)} /></label>
           <label>{t("tagsComma")}<input value={form.tags || ""} onChange={(event) => update("tags", event.target.value)} /></label>
-          <label className="full">{t("description")}<textarea value={form.description || ""} onChange={(event) => update("description", event.target.value)} /></label>
+          <label className="full">{t("description")}<textarea data-input-debug="Item description" value={form.description || ""} onChange={(event) => update("description", event.target.value)} /></label>
           <details className="custom-fields-section full" open={customFieldsOpen} onToggle={(event) => setCustomFieldsOpen(event.currentTarget.open)}>
             <summary>{t("customFields")}</summary>
-            <label>{t("jsonStyleLines")}<textarea value={form.customFieldsText || ""} onChange={(event) => update("customFieldsText", event.target.value)} /></label>
+            <label>{t("jsonStyleLines")}<textarea data-input-debug="Item custom fields" value={form.customFieldsText || ""} onChange={(event) => update("customFieldsText", event.target.value)} /></label>
           </details>
         </div>
       </form>
@@ -6255,7 +6758,9 @@ function ManageLists({ library, onClose, onRefresh, onMessage }) {
           country={editingCountry}
           groups={library.entityGroups || []}
           selectedGroupIds={groupsForEntity(editingCountry.id, library).map((group) => group.id)}
-          onClose={() => setEditingCountry(null)}
+          onClose={() => {
+            setEditingCountry(null);
+          }}
           onSubmit={async ({ groupIds, ...payload }) => {
             await api.updateCountry(payload);
             await api.setEntityMemberships({ entityId: payload.id, groupIds });
@@ -6268,7 +6773,9 @@ function ManageLists({ library, onClose, onRefresh, onMessage }) {
         <NameForm
           title="New issuing entity"
           label="Name"
-          onClose={() => setCountryFormOpen(false)}
+          onClose={() => {
+            setCountryFormOpen(false);
+          }}
           onSubmit={async (payload) => {
             await api.createCountry(payload);
             setCountryFormOpen(false);
@@ -6280,7 +6787,9 @@ function ManageLists({ library, onClose, onRefresh, onMessage }) {
         <NameForm
           title="New collection type"
           label="Name"
-          onClose={() => setTypeFormOpen(false)}
+          onClose={() => {
+            setTypeFormOpen(false);
+          }}
           onSubmit={async (payload) => {
             await api.createType(payload);
             setTypeFormOpen(false);
@@ -6292,7 +6801,9 @@ function ManageLists({ library, onClose, onRefresh, onMessage }) {
         <NameForm
           title="New entity group"
           label="Name"
-          onClose={() => setGroupFormOpen(false)}
+          onClose={() => {
+            setGroupFormOpen(false);
+          }}
           onSubmit={async (payload) => {
             await api.createEntityGroup(payload);
             setGroupFormOpen(false);
@@ -6303,7 +6814,9 @@ function ManageLists({ library, onClose, onRefresh, onMessage }) {
       {editingGroup && (
         <EntityGroupEditForm
           group={editingGroup}
-          onClose={() => setEditingGroup(null)}
+          onClose={() => {
+            setEditingGroup(null);
+          }}
           onSubmit={async (payload) => {
             await api.updateEntityGroup(payload);
             setEditingGroup(null);
@@ -6314,7 +6827,9 @@ function ManageLists({ library, onClose, onRefresh, onMessage }) {
       {editingType && (
         <TypeEditForm
           type={editingType}
-          onClose={() => setEditingType(null)}
+          onClose={() => {
+            setEditingType(null);
+          }}
           onSubmit={async (payload) => {
             await api.updateType(payload);
             setEditingType(null);

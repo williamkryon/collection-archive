@@ -133,6 +133,7 @@ Performance data is stored under `perf-data/`, which is ignored by git.
 - Smoke/performance scripts are Windows-oriented.
 - The app uses `sql.js`; very large archives should continue to be tested carefully.
 - Album editing is functional but still MVP-level for precision layout workflows.
+- Occasionally, text fields may stop accepting input after window restore/refocus. Workaround: switch album page/view and switch back.
 - No AI image recognition, OCR, marketplace, or pricing features.
 - Local archive data must be backed up manually.
 

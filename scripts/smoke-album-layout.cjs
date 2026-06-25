@@ -247,6 +247,10 @@ async function evaluateQuick(client, expression, timeoutMs = 5000) {
   return result.result?.value;
 }
 
+async function insertText(client, text) {
+  await client.send("Input.insertText", { text });
+}
+
 async function waitFor(client, expression, message) {
   const deadline = Date.now() + 20000;
   while (Date.now() < deadline) {
@@ -1094,7 +1098,8 @@ async function main() {
         initialCustomOpen,
         toastAfterCreate,
         toastGone,
-        clearedCountryId: detail.country_id || ''
+        clearedCountryId: detail.country_id || '',
+        deletedItemId: item.id
       };
     })()`
   );
@@ -1105,6 +1110,38 @@ async function main() {
   assert(itemComboboxUi.initialCustomOpen === false && itemComboboxUi.createdCustomSmoke === "yes", `Custom fields section did not stay compact/editable: ${JSON.stringify(itemComboboxUi)}`);
   assert(itemComboboxUi.toastAfterCreate === "Item created." && itemComboboxUi.toastGone, `Toast did not auto-dismiss after item create: ${JSON.stringify(itemComboboxUi)}`);
   assert(itemComboboxUi.selectedClearBeforeSave === "None" && itemComboboxUi.clearedCountryId === "", `Clearing issuing entity did not work: ${JSON.stringify(itemComboboxUi)}`);
+
+  await smokeStep(client, "trash restore typing: restore deleted item", () => evaluate(client, `(async () => {
+    [...document.querySelectorAll('nav button')].find((button) => button.textContent.trim() === 'Trash').click();
+    await new Promise((resolve) => setTimeout(resolve, 180));
+    const row = [...document.querySelectorAll('.trash-row')]
+      .find((entry) => entry.textContent.includes('Combobox Smoke'));
+    if (!row) throw new Error('Deleted smoke item did not appear in Trash');
+    row.querySelector('button').click();
+    await new Promise((resolve) => setTimeout(resolve, 220));
+    return ![...document.querySelectorAll('.trash-row')].some((entry) => entry.textContent.includes('Combobox Smoke'));
+  })()`));
+  await smokeStep(client, "trash restore typing: open new item form", () => evaluate(client, `(() => {
+    [...document.querySelectorAll('.sidebar-actions button')].find((button) => button.textContent.trim() === 'New item').click();
+    return true;
+  })()`));
+  await waitFor(client, "document.querySelector('.modal input[data-input-debug=\"Item title\"]')", "New item title input did not open after Trash restore");
+  await smokeStep(client, "trash restore typing: focus title input", () => evaluate(client, `(() => {
+    const input = document.querySelector('.modal input[data-input-debug="Item title"]');
+    input.focus();
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, '');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    return document.activeElement === input;
+  })()`));
+  await smokeStep(client, "trash restore typing: insert real text", () => insertText(client, "Typing After Restore"));
+  const trashRestoreTyping = await smokeStep(client, "trash restore typing: verify typed value", () => evaluate(client, `(() => {
+    const input = document.querySelector('.modal input[data-input-debug="Item title"]');
+    const value = input?.value || '';
+    [...document.querySelectorAll('.modal header button')].find((button) => button.textContent.trim() === 'Close')?.click();
+    return value;
+  })()`));
+  assert(trashRestoreTyping === "Typing After Restore", `Manual text insertion failed after Trash restore: ${JSON.stringify({ trashRestoreTyping })}`);
+  await smokeStep(client, "trash restore typing: cleanup restored item", () => evaluate(client, `window.archiveAPI.deleteItem(${JSON.stringify(itemComboboxUi.deletedItemId)})`));
 
   await evaluate(client, `(() => { window.location.reload(); return true; })()`);
   await waitFor(client, "Boolean(window.archiveAPI && document.querySelector('.item-card .favorite'))", "Library cards did not return after reload");

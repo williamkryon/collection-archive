@@ -117,9 +117,11 @@ textarea {
   border-radius: var(--radius);
   background: #fff;
   color: var(--color-text);
+  caret-color: var(--color-text);
   min-height: var(--control-height);
   padding: 8px 10px;
   font-size: 13px;
+  user-select: text;
 }
 
 input:focus,
@@ -980,6 +982,64 @@ dd {
   gap: 3px;
   color: #617073;
   font-size: 12px;
+}
+
+.attachment-source {
+  min-width: 0;
+}
+
+.attachment-source span {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+.attachment-add-dialog {
+  width: min(620px, 100%);
+}
+
+.attachment-add-dialog header p {
+  margin: 4px 0 0;
+  color: #617073;
+  font-size: 13px;
+}
+
+.attachment-method-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.48);
+  padding: 4px;
+}
+
+.attachment-method-tabs button {
+  flex: 1 1 0;
+  min-height: 34px;
+  background: transparent;
+  color: #526266;
+}
+
+.attachment-method-tabs button.active {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.attachment-method-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.attachment-method-panel > p {
+  margin: 0;
+  color: #526266;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .attachment-preview {
