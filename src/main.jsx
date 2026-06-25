@@ -2776,11 +2776,11 @@ function FilterBar({ library, filters, setFilters }) {
 function GalleryView({ items, total, loading, onLoadMore, onOpenItem, onToggleFavorite }) {
   const { t } = useI18n();
   const [viewerIndex, setViewerIndex] = useState(null);
-  const viewerImages = items.map((item) => ({
+  const viewerImages = useMemo(() => items.map((item) => ({
     ...item.cover,
     itemId: item.id,
     title: item.title
-  }));
+  })), [items]);
 
   useEffect(() => {
     setViewerIndex(null);
@@ -2876,6 +2876,11 @@ function DetailView({ detail, countries, types, onBack, onAddImages, onStartPhon
     };
   }, [activeImage, detail?.attachments, detail?.id, image?.id]);
 
+  const viewerImages = useMemo(
+    () => (detail?.images || []).map((entry) => ({ ...entry, title: entry.original_filename })),
+    [detail?.images]
+  );
+
   if (!detail) {
     return (
       <section className="workspace">
@@ -2884,8 +2889,6 @@ function DetailView({ detail, countries, types, onBack, onAddImages, onStartPhon
       </section>
     );
   }
-
-  const viewerImages = detail.images.map((entry) => ({ ...entry, title: entry.original_filename }));
 
   async function saveImageNote(targetImage = image, note = imageNoteDraft) {
     if (!targetImage || String(note || "") === String(targetImage.note || "")) return;

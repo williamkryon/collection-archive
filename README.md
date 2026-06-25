@@ -57,7 +57,21 @@ The app stores archive data under Electron's user data folder in `collection-arc
 
 The exact folder can be opened from the in-app data-folder control. For tests and performance runs, scripts use separate temporary or perf data folders so they do not overwrite the user's real archive.
 
+On Windows packaged builds, the user data folder is normally under:
+
+```text
+%APPDATA%\Collection Archive\collection-archive-data\
+```
+
+Back up this folder regularly, especially `archive.sqlite`, `images/`, `thumbnails/`, and `attachments/`. Runtime archive data is intentionally stored outside the installed app and outside `app.asar` so it remains writable and can be backed up independently.
+
 Do not commit local archive data, generated thumbnails, performance databases, smoke-test artifacts, or build output. `.gitignore` excludes these paths.
+
+Clean temporary smoke/test folders and old build cache folders:
+
+```bash
+npm run clean:temp
+```
 
 ## Requirements
 
@@ -80,6 +94,8 @@ Run the app in development mode:
 npm run dev
 ```
 
+This starts Vite and launches Electron against the local dev server.
+
 Build the renderer:
 
 ```bash
@@ -91,6 +107,33 @@ Run the built desktop shell:
 ```bash
 npm start
 ```
+
+## Windows Packaging
+
+Build a Windows installer and portable executable:
+
+```bash
+npm run dist:win
+```
+
+Build only the installer:
+
+```bash
+npm run dist:win:installer
+```
+
+Build only the portable executable:
+
+```bash
+npm run dist:win:portable
+```
+
+Packaging uses `electron-builder` and outputs files under `release/`, typically:
+
+- `release/Collection Archive-0.1.0-setup.exe`
+- `release/Collection Archive-0.1.0-portable.exe`
+
+The packaged app loads the built renderer from `dist/`; it does not require the Vite dev server or `localhost`.
 
 ## Smoke Testing
 
@@ -129,7 +172,7 @@ Performance data is stored under `perf-data/`, which is ignored by git.
 - No authentication, users, roles, or permissions.
 - No cloud sync or backup service.
 - No import/export workflow for production migration yet.
-- No packaged installer or auto-updater yet.
+- No auto-updater yet.
 - Smoke/performance scripts are Windows-oriented.
 - The app uses `sql.js`; very large archives should continue to be tested carefully.
 - Album editing is functional but still MVP-level for precision layout workflows.

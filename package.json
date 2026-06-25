@@ -8,6 +8,10 @@
     "dev": "C:\\Progra~1\\nodejs\\node.exe scripts/dev.mjs",
     "build": "C:\\Progra~1\\nodejs\\node.exe node_modules/vite/bin/vite.js build",
     "start": "C:\\Progra~1\\nodejs\\node.exe node_modules/electron/cli.js .",
+    "dist:win": "set CSC_IDENTITY_AUTO_DISCOVERY=false&& npm run build && C:\\Progra~1\\nodejs\\node.exe node_modules/electron-builder/cli.js --win nsis portable",
+    "dist:win:installer": "set CSC_IDENTITY_AUTO_DISCOVERY=false&& npm run build && C:\\Progra~1\\nodejs\\node.exe node_modules/electron-builder/cli.js --win nsis",
+    "dist:win:portable": "set CSC_IDENTITY_AUTO_DISCOVERY=false&& npm run build && C:\\Progra~1\\nodejs\\node.exe node_modules/electron-builder/cli.js --win portable",
+    "clean:temp": "C:\\Progra~1\\nodejs\\node.exe scripts/clean-temp.cjs",
     "smoke:album": "C:\\Progra~1\\nodejs\\node.exe scripts/smoke-album-layout.cjs",
     "seed:perf": "C:\\Progra~1\\nodejs\\node.exe scripts/seed-perf.cjs",
     "test:perf": "C:\\Progra~1\\nodejs\\node.exe scripts/test-perf.cjs"
@@ -24,7 +28,65 @@
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "^33.4.11",
+    "electron-builder": "^26.15.3",
     "vite": "^6.0.7"
+  },
+  "build": {
+    "appId": "com.local.collectionarchive",
+    "productName": "Collection Archive",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json",
+      "node_modules/**/*",
+      "!**/.git/**/*",
+      "!**/.tmp-*",
+      "!**/test-artifacts/**/*",
+      "!**/perf-data/**/*",
+      "!**/collection-archive-data/**/*",
+      "!**/*.sqlite",
+      "!**/*.sqlite-shm",
+      "!**/*.sqlite-wal",
+      "!**/release/**/*",
+      "!**/out/**/*",
+      "!**/docs/screenshots/**/*"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/sharp/**/*",
+      "node_modules/@img/**/*",
+      "node_modules/sql.js/dist/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "signExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "${productName}-${version}-setup.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-portable.${ext}"
+    }
   },
   "allowScripts": {}
 }
