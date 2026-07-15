@@ -10,7 +10,9 @@ const initSqlJs = require("sql.js");
 const heicConvert = require("heic-convert");
 const QRCode = require("qrcode");
 const sharp = require("sharp");
+const archiveHealth = require("./archive-health-core");
 const backupRestore = require("./backup-restore-core");
+const { imageDisplayUrls } = require("./thumbnail-fallback-core");
 
 let db;
 let SQL;
@@ -19,6 +21,7 @@ let databaseReady = false;
 let mediaProtocolRegistered = false;
 let phoneUploadSession = null;
 let phoneUploadQueue = Promise.resolve();
+const pendingThumbnailRegeneration = new Set();
 const mainStartedAt = performance.now();
 const startupTimings = [];
 
@@ -306,6 +309,7 @@ function execSchema(databaseWasCreated = false) {
     "items",
     "images",
     "item_attachments",
+    "label_cards",
     "albums",
     "album_pages",
     "album_page_items",
@@ -414,6 +418,25 @@ function execSchema(databaseWasCreated = false) {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS label_cards (
+      id TEXT PRIMARY KEY,
+      item_id TEXT NOT NULL,
+      title TEXT DEFAULT '',
+      subtitle TEXT DEFAULT '',
+      main_text TEXT DEFAULT '',
+      small_notes TEXT DEFAULT '',
+      provenance_text TEXT DEFAULT '',
+      catalog_text TEXT DEFAULT '',
+      image_id TEXT DEFAULT '',
+      image_position TEXT DEFAULT 'top',
+      preset TEXT DEFAULT 'museum',
+      style_json TEXT DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE,
+      FOREIGN KEY (image_id) REFERENCES images(id) ON DELETE SET NULL
     );
 
     CREATE TABLE IF NOT EXISTS albums (
@@ -689,6 +712,8 @@ function createIndexes() {
     ["idx_images_deleted_at", "CREATE INDEX idx_images_deleted_at ON images(deleted_at)"],
     ["idx_item_attachments_item_id", "CREATE INDEX idx_item_attachments_item_id ON item_attachments(item_id)"],
     ["idx_item_attachments_created_at", "CREATE INDEX idx_item_attachments_created_at ON item_attachments(created_at)"],
+    ["idx_label_cards_item_id", "CREATE INDEX idx_label_cards_item_id ON label_cards(item_id)"],
+    ["idx_label_cards_updated_at", "CREATE INDEX idx_label_cards_updated_at ON label_cards(updated_at)"],
     ["idx_album_page_items_page_id", "CREATE INDEX idx_album_page_items_page_id ON album_page_items(page_id)"],
     ["idx_album_page_items_item_id", "CREATE INDEX idx_album_page_items_item_id ON album_page_items(item_id)"],
     ["idx_album_page_items_image_id", "CREATE INDEX idx_album_page_items_image_id ON album_page_items(image_id)"],
@@ -752,11 +777,37 @@ function parseJson(value, fallback) {
   }
 }
 
+function enqueueThumbnailRegeneration(row) {
+  if (!row?.id || !row.image_path || !row.thumbnail_path || pendingThumbnailRegeneration.has(row.id)) return;
+  pendingThumbnailRegeneration.add(row.id);
+  setTimeout(async () => {
+    try {
+      const current = get("SELECT * FROM images WHERE id = ? AND COALESCE(deleted_at, '') = ''", [row.id]);
+      if (!current) return;
+      const urls = imageDisplayUrls(current, paths);
+      if (urls.thumbnailMissing) {
+        await regenerateThumbnailFile(current);
+      }
+    } catch (error) {
+      console.warn("[images:thumbnail] lazy regeneration failed", {
+        imageId: row.id,
+        message: error.message || String(error)
+      });
+    } finally {
+      pendingThumbnailRegeneration.delete(row.id);
+    }
+  }, 250);
+}
+
 function mapImage(row) {
+  const urls = imageDisplayUrls(row, paths);
+  if (urls.thumbnailMissing) enqueueThumbnailRegeneration(row);
   return {
     ...row,
-    url: mediaUrl("images", row.image_path),
-    thumbnailUrl: mediaUrl("thumbnails", row.thumbnail_path)
+    url: urls.url,
+    thumbnailUrl: urls.thumbnailUrl,
+    thumbnailMissing: urls.thumbnailMissing,
+    imageMissing: urls.imageMissing
   };
 }
 
@@ -768,12 +819,64 @@ function mapAttachment(row) {
   };
 }
 
+function mapLabelCard(row) {
+  const urls = row.image_path
+    ? imageDisplayUrls({ image_path: row.image_path, thumbnail_path: row.thumbnail_path }, paths)
+    : { url: null, thumbnailUrl: null, thumbnailMissing: false, imageMissing: false };
+  if (urls.thumbnailMissing) enqueueThumbnailRegeneration({ id: row.image_id, image_path: row.image_path, thumbnail_path: row.thumbnail_path });
+  return {
+    ...row,
+    style: parseJson(row.style_json, {}),
+    image: row.image_path
+      ? {
+          id: row.image_id,
+          url: urls.url,
+          thumbnailUrl: urls.thumbnailUrl,
+          thumbnailMissing: urls.thumbnailMissing,
+          imageMissing: urls.imageMissing,
+          width: row.width,
+          height: row.height,
+          aspect_ratio: row.aspect_ratio,
+          original_filename: row.original_filename
+        }
+      : null
+  };
+}
+
+function normalizeLabelCardPayload(payload = {}) {
+  const style = payload.style && typeof payload.style === "object" ? payload.style : {};
+  const presetAliases = { museum: "museum-specimen", classic: "stamp-exhibition", vintage: "museum-specimen" };
+  const preset = presetAliases[payload.preset] || payload.preset;
+  return {
+    title: String(payload.title || ""),
+    subtitle: String(payload.subtitle || ""),
+    main_text: String(payload.main_text ?? payload.mainText ?? ""),
+    small_notes: String(payload.small_notes ?? payload.smallNotes ?? ""),
+    provenance_text: String(payload.provenance_text ?? payload.provenanceText ?? ""),
+    catalog_text: String(payload.catalog_text ?? payload.catalogText ?? ""),
+    image_id: payload.image_id || payload.imageId || null,
+    image_position: ["center-showcase", "top", "left", "right", "image-only", "pair", "main-detail", "text-only"].includes(payload.image_position || payload.imagePosition)
+      ? (payload.image_position || payload.imagePosition)
+      : "center-showcase",
+    preset: ["stamp-exhibition", "museum-specimen", "auction", "coin-cabinet", "exhibition-share", "minimal"].includes(preset) ? preset : "museum-specimen",
+    style_json: JSON.stringify(style)
+  };
+}
+
 function mapItem(row) {
+  const coverUrls = row.cover_thumbnail_path
+    ? imageDisplayUrls({ image_path: row.cover_image_path, thumbnail_path: row.cover_thumbnail_path }, paths)
+    : { url: null, thumbnailUrl: null, thumbnailMissing: false, imageMissing: false };
+  if (coverUrls.thumbnailMissing) {
+    enqueueThumbnailRegeneration({ id: row.cover_id, image_path: row.cover_image_path, thumbnail_path: row.cover_thumbnail_path });
+  }
   const cover = row.cover_thumbnail_path
     ? {
         id: row.cover_id,
-        url: mediaUrl("images", row.cover_image_path),
-        thumbnailUrl: mediaUrl("thumbnails", row.cover_thumbnail_path),
+        url: coverUrls.url,
+        thumbnailUrl: coverUrls.thumbnailUrl,
+        thumbnailMissing: coverUrls.thumbnailMissing,
+        imageMissing: coverUrls.imageMissing,
         width: row.cover_width,
         height: row.cover_height,
         aspect_ratio: row.cover_aspect_ratio
@@ -2579,12 +2682,94 @@ function getItemForRenderer(itemId) {
   return {
     ...mapItem(item),
     images: all("SELECT * FROM images WHERE item_id = ? AND COALESCE(deleted_at, '') = '' ORDER BY sort_order ASC, created_at ASC", [itemId]).map(mapImage),
-    attachments: all("SELECT * FROM item_attachments WHERE item_id = ? ORDER BY created_at ASC", [itemId]).map(mapAttachment)
+    attachments: all("SELECT * FROM item_attachments WHERE item_id = ? ORDER BY created_at ASC", [itemId]).map(mapAttachment),
+    labelCards: tableExists("label_cards")
+      ? all(`
+          SELECT label_cards.*, images.image_path, images.thumbnail_path, images.width, images.height,
+                 images.aspect_ratio, images.original_filename
+          FROM label_cards
+          LEFT JOIN images ON images.id = label_cards.image_id
+          WHERE label_cards.item_id = ?
+          ORDER BY label_cards.updated_at DESC, label_cards.created_at DESC
+        `, [itemId]).map(mapLabelCard)
+      : []
   };
 }
 
 ipcMain.handle("item:get", (_event, itemId) => {
   return getItemForRenderer(itemId);
+});
+
+ipcMain.handle("label-card:create", (_event, payload = {}) => {
+  const item = get("SELECT * FROM items WHERE id = ? AND COALESCE(deleted_at, '') = ''", [payload.itemId || payload.item_id]);
+  if (!item) throw new Error("Item not found");
+  const cardId = id();
+  const normalized = normalizeLabelCardPayload({
+    title: payload.title || item.title || "",
+    subtitle: payload.subtitle || "",
+    main_text: payload.main_text || payload.mainText || "",
+    image_id: payload.image_id || payload.imageId || "",
+    image_position: payload.image_position || payload.imagePosition || "center-showcase",
+    preset: payload.preset || "stamp-exhibition",
+    style: payload.style || { fontSize: 17, alignment: "center", border: true, backgroundColor: "#f4ecd8", textColor: "#203832" }
+  });
+  run(
+    `INSERT INTO label_cards (
+      id, item_id, title, subtitle, main_text, small_notes, provenance_text, catalog_text,
+      image_id, image_position, preset, style_json, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      cardId,
+      item.id,
+      normalized.title,
+      normalized.subtitle,
+      normalized.main_text,
+      normalized.small_notes,
+      normalized.provenance_text,
+      normalized.catalog_text,
+      normalized.image_id,
+      normalized.image_position,
+      normalized.preset,
+      normalized.style_json,
+      now(),
+      now()
+    ]
+  );
+  return getItemForRenderer(item.id);
+});
+
+ipcMain.handle("label-card:update", (_event, payload = {}) => {
+  const card = get("SELECT * FROM label_cards WHERE id = ?", [payload.id]);
+  if (!card) throw new Error("Label card not found");
+  const normalized = normalizeLabelCardPayload(payload);
+  run(
+    `UPDATE label_cards
+     SET title = ?, subtitle = ?, main_text = ?, small_notes = ?, provenance_text = ?, catalog_text = ?,
+         image_id = ?, image_position = ?, preset = ?, style_json = ?, updated_at = ?
+     WHERE id = ?`,
+    [
+      normalized.title,
+      normalized.subtitle,
+      normalized.main_text,
+      normalized.small_notes,
+      normalized.provenance_text,
+      normalized.catalog_text,
+      normalized.image_id,
+      normalized.image_position,
+      normalized.preset,
+      normalized.style_json,
+      now(),
+      payload.id
+    ]
+  );
+  return getItemForRenderer(card.item_id);
+});
+
+ipcMain.handle("label-card:delete", (_event, cardId) => {
+  const card = get("SELECT * FROM label_cards WHERE id = ?", [cardId]);
+  if (!card) throw new Error("Label card not found");
+  run("DELETE FROM label_cards WHERE id = ?", [cardId]);
+  return getItemForRenderer(card.item_id);
 });
 
 ipcMain.handle("item:delete", (_event, itemId) => {
@@ -4048,6 +4233,75 @@ ipcMain.handle("album-export:page-png", async (_event, payload = {}) => {
   }
 });
 
+ipcMain.handle("label-card:export-png", async (_event, payload = {}) => {
+  const testExportPath = process.env.COLLECTION_ARCHIVE_ALLOW_EXPORT_PATH === "1"
+    ? process.env.COLLECTION_ARCHIVE_LABEL_CARD_EXPORT_PATH
+    : "";
+  const filePath = await chooseExportPath(testExportPath ? { ...payload, filePath: testExportPath } : payload, {
+    title: "Export label card as PNG",
+    defaultFilename: "label-card.png",
+    filters: [{ name: "PNG image", extensions: ["png"] }]
+  });
+  if (!filePath) return { canceled: true };
+
+  let win = null;
+  let diagnostics = null;
+  let tempFolder = null;
+  try {
+    const width = Math.max(240, Math.ceil(Number(payload.width || 720)));
+    const height = Math.max(160, Math.ceil(Number(payload.height || 480)));
+    const loaded = await loadExportWindow(payload.html, width, height);
+    win = loaded.win;
+    diagnostics = loaded.diagnostics;
+    tempFolder = loaded.tempFolder;
+    const labelCardDiagnostics = await win.webContents.executeJavaScript(`
+      (() => {
+        const page = document.querySelector("[data-export-page]");
+        if (!page) return {};
+        const pageStyle = getComputedStyle(page);
+        const frame = page.querySelector(".label-card-image-frame");
+        const frameStyle = frame ? getComputedStyle(frame) : null;
+        const surface = page.querySelector(".label-card-surface");
+        const surfaceStyle = surface ? getComputedStyle(surface) : null;
+        return {
+          pageClass: page.className || "",
+          cardStyle: {
+            backgroundColor: pageStyle.backgroundColor,
+            color: pageStyle.color,
+            boxShadow: pageStyle.boxShadow,
+            textureIntensity: pageStyle.getPropertyValue("--texture-intensity").trim(),
+            surfaceBrightness: pageStyle.getPropertyValue("--surface-brightness").trim(),
+            surfaceAging: pageStyle.getPropertyValue("--surface-aging").trim()
+          },
+          frameStyle: frameStyle ? {
+            border: frameStyle.border,
+            backgroundColor: frameStyle.backgroundColor,
+            backgroundImage: frameStyle.backgroundImage,
+            boxShadow: frameStyle.boxShadow
+          } : null,
+          surfaceStyle: surfaceStyle ? {
+            backgroundColor: surfaceStyle.backgroundColor,
+            backgroundImage: surfaceStyle.backgroundImage,
+            filter: surfaceStyle.filter,
+            opacity: surfaceStyle.opacity
+          } : null
+        };
+      })()
+    `, true);
+    diagnostics = { ...diagnostics, ...labelCardDiagnostics };
+    const image = await win.webContents.capturePage({ x: 0, y: 0, width, height });
+    const capturedSize = image.getSize();
+    const outputImage = capturedSize.width === width && capturedSize.height === height
+      ? image
+      : image.resize({ width, height, quality: "best" });
+    fs.writeFileSync(filePath, outputImage.toPNG());
+    return { canceled: false, filePath, diagnostics: { ...diagnostics, capturedSize, outputWidth: width, outputHeight: height } };
+  } finally {
+    if (win && !win.isDestroyed()) win.destroy();
+    if (tempFolder) fs.rmSync(tempFolder, { recursive: true, force: true });
+  }
+});
+
 ipcMain.handle("album-export:pdf", async (_event, payload = {}) => {
   const filePath = await chooseExportPath(payload, {
     title: "Export album as PDF",
@@ -4173,6 +4427,74 @@ async function chooseBackupParent() {
 }
 
 ipcMain.handle("app:storage-usage", () => archiveStorageUsage());
+
+function runArchiveHealthScan() {
+  saveDb();
+  return archiveHealth.scanArchiveHealth({ SQL, paths });
+}
+
+ipcMain.handle("app:health-check", () => runArchiveHealthScan());
+
+ipcMain.handle("app:health-regenerate-thumbnails", async () => {
+  const images = tableExists("images")
+    ? all("SELECT * FROM images WHERE COALESCE(deleted_at, '') = '' ORDER BY sort_order ASC, created_at ASC")
+    : [];
+  let regenerated = 0;
+  const errors = [];
+  for (const image of images) {
+    try {
+      await regenerateThumbnailFile(image);
+      regenerated += 1;
+    } catch (error) {
+      errors.push({
+        imageId: image.id,
+        filename: image.original_filename || image.stored_filename || "",
+        message: error.message || String(error)
+      });
+    }
+  }
+  return { regenerated, errors, health: runArchiveHealthScan() };
+});
+
+ipcMain.handle("app:health-export-report", async () => {
+  const report = runArchiveHealthScan();
+  const result = await dialog.showSaveDialog({
+    title: "Export Archive Doctor report",
+    defaultPath: `collection-archive-health-${new Date().toISOString().slice(0, 10)}.json`,
+    filters: [
+      { name: "JSON report", extensions: ["json"] },
+      { name: "Text files", extensions: ["txt"] }
+    ]
+  });
+  if (result.canceled || !result.filePath) return { canceled: true };
+  const extension = path.extname(result.filePath).toLowerCase();
+  if (extension === ".txt") {
+    const lines = [
+      "Collection Archive Data Health Report",
+      `Generated: ${report.generatedAt}`,
+      `Data folder: ${report.dataFolder}`,
+      "",
+      `OK checks: ${report.summary.okItems}`,
+      `Warnings: ${report.summary.warnings}`,
+      `Missing files: ${report.summary.missingFiles}`,
+      `Orphan files: ${report.summary.orphanFiles}`,
+      `Affected size: ${report.summary.affectedBytes} bytes`,
+      "",
+      "Checks:",
+      ...report.checks.map((check) => `- ${check.label}: ${check.status} (${check.detail})`),
+      "",
+      "Missing files:",
+      ...(report.missingFiles.length ? report.missingFiles.map((entry) => `- ${entry.kind}: ${entry.label || entry.id || ""} ${entry.expectedPath}`) : ["- none"]),
+      "",
+      "Orphan files:",
+      ...(report.orphanFiles.length ? report.orphanFiles.map((entry) => `- ${entry.kind}: ${entry.path} (${entry.bytes} bytes)`) : ["- none"])
+    ];
+    fs.writeFileSync(result.filePath, lines.join("\n"), "utf8");
+  } else {
+    fs.writeFileSync(result.filePath, JSON.stringify(report, null, 2), "utf8");
+  }
+  return { canceled: false, filePath: result.filePath };
+});
 
 ipcMain.handle("app:backup-metadata", async () => {
   const destinationParent = await chooseBackupParent();

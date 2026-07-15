@@ -67,6 +67,25 @@ const translations = {
     storageBackupHelp: "Review archive size and create safe backups.",
     storageUsage: "Storage usage",
     refreshUsage: "Refresh usage",
+    archiveDoctor: "Archive Doctor",
+    dataHealth: "Data Health",
+    archiveDoctorHelp: "Run read-only checks after backup, restore, or large imports. No files are deleted or changed automatically.",
+    runHealthCheck: "Run health check",
+    exportHealthReport: "Export health report",
+    healthReportExported: "Health report exported.",
+    regenerateThumbnails: "Regenerate thumbnails",
+    healthCheckComplete: "Health check complete.",
+    healthCheckFailed: "Health check failed.",
+    okItems: "OK checks",
+    warnings: "Warnings",
+    missingFiles: "Missing files",
+    orphanFiles: "Orphan files",
+    affectedSize: "Affected size",
+    healthDetails: "Health details",
+    noHealthIssues: "No health issues found.",
+    thumbnailHealth: "Thumbnail cache",
+    canRegenerateThumbnails: "Thumbnails can be regenerated from source images.",
+    cannotRegenerateAllThumbnails: "Some source images are missing, so not every thumbnail can be regenerated.",
     database: "Database",
     images: "Images",
     thumbnails: "Thumbnails",
@@ -203,6 +222,109 @@ const translations = {
     reload: "Reload",
     attachmentSaved: "Attachment saved.",
     attachmentRemoved: "Attachment removed.",
+    labelCards: "Label Cards",
+    noLabelCardsYet: "No label cards yet",
+    newLabelCard: "New card",
+    saveLabelCard: "Save card",
+    deleteLabelCard: "Delete card",
+    exportCardPng: "Export PNG",
+    exporting: "Exporting...",
+    saving: "Saving...",
+    exportCanceled: "Export canceled.",
+    exportCardFailed: "Card export failed.",
+    cardExported: "Card exported.",
+    cardSaved: "Card saved.",
+    cardDeleted: "Card deleted.",
+    cardSubtitle: "Subtitle",
+    cardMainText: "Main text",
+    smallNotes: "Small notes",
+    provenanceText: "Provenance/source text",
+    catalogText: "Catalog/reference text",
+    imagePosition: "Image position",
+    topImage: "Top image",
+    leftImage: "Left image",
+    rightImage: "Right image",
+    imageOnlyCaption: "Image only + caption",
+    textOnly: "Text only",
+    centeredShowcase: "Centered showcase",
+    stampExhibitionCard: "Stamp Exhibition Card",
+    museumSpecimenCard: "Museum Specimen Card",
+    museumLabel: "Museum Label",
+    classicAlbumCard: "Classic Album Card",
+    auctionNote: "Auction Lot Card",
+    minimalCard: "Minimal Modern Card",
+    vintagePaperCard: "Vintage Paper Card",
+    resetStyleToPreset: "Reset style to preset defaults",
+    borderOn: "Border on",
+    backgroundTone: "Background tone",
+    editLabelCard: "Edit",
+    labelCardEditor: "Label Card Editor",
+    cardContent: "Content",
+    cardLayout: "Layout",
+    cardStyle: "Style",
+    cardExport: "Export",
+    cardPreset: "Card type",
+    cardSize: "Card size",
+    smallTicket: "Small ticket",
+    a6Landscape: "A6 landscape",
+    a6Portrait: "A6 portrait",
+    squareShareCard: "Square share card",
+    socialShareLandscape: "Social share landscape",
+    classicStampSlip: "Classic Stamp Album Slip",
+    coinCabinetTicket: "Coin Cabinet Ticket",
+    exhibitionShareCard: "Exhibition Share Card",
+    minimalArchiveCard: "Minimal Archive Card",
+    primaryImage: "Primary image",
+    reverseImage: "Reverse / second image",
+    exportScale: "Export scale",
+    exportHelp: "Export the card exactly as shown in the preview.",
+    cardPreview: "Card preview",
+    materialSurface: "Material / surface",
+    creamAlbumPaper: "Cream album paper",
+    archivalCardStock: "Archival card stock",
+    agedPaper: "Aged paper",
+    linenTexture: "Linen texture",
+    whiteMuseumBoard: "White museum board",
+    darkWalnutWood: "Dark walnut wood",
+    mahoganyWood: "Mahogany wood",
+    blackVelvet: "Black velvet",
+    greenFelt: "Green felt",
+    textureIntensity: "Texture intensity",
+    brightness: "Brightness",
+    agingLevel: "Aging level",
+    presentationFrame: "Presentation frame",
+    thinDoubleAlbumFrame: "Thin double-line album frame",
+    blackStampMount: "Black stamp mount",
+    creamMatWindow: "Cream mat window",
+    transparentMount: "Transparent mount effect",
+    circularCoinRecess: "Circular coin recess",
+    capsuleRim: "Capsule rim",
+    velvetTray: "Velvet tray",
+    woodenCabinetSlot: "Wooden cabinet slot",
+    obverseReverseFrame: "Obverse/reverse double frame",
+    classicGoldFrame: "Classic gold frame",
+    darkWoodFrame: "Dark wood frame",
+    blackGalleryFrame: "Black gallery frame",
+    whiteMatFrame: "White mat frame",
+    cardEdge: "Card edge",
+    squareEdge: "Square",
+    roundedEdge: "Rounded",
+    clippedCorners: "Clipped corners",
+    doubleLineEdge: "Double-line edge",
+    embossedEdge: "Embossed edge",
+    thinGoldEdge: "Thin gold edge",
+    ticketPerforation: "Ticket perforation",
+    deckledEdge: "Deckled paper edge",
+    centeredSingleImage: "Centered single image",
+    imageTopTextBelow: "Image top, text below",
+    imageLeftTextRight: "Image left, text right",
+    obverseReversePair: "Obverse / reverse pair",
+    mainImageDetailImage: "Main image + detail image",
+    textOnlyArchivalLabel: "Text-only archival label",
+    frontSide: "Front",
+    backSide: "Back",
+    acquisitionNotes: "Acquisition notes",
+    researchNotes: "Research notes",
     trashTitle: "Trash",
     trashEmpty: "Trash is empty",
     restore: "Restore",
@@ -542,6 +664,25 @@ translations.zh.archiveStorage = "\u6863\u6848\u5b58\u50a8";
 translations.zh.storageBackupHelp = "\u67e5\u770b\u6863\u6848\u5360\u7528\u7a7a\u95f4\u5e76\u521b\u5efa\u5b89\u5168\u5907\u4efd\u3002";
 translations.zh.storageUsage = "\u5b58\u50a8\u5360\u7528";
 translations.zh.refreshUsage = "\u5237\u65b0\u5360\u7528";
+translations.zh.archiveDoctor = "\u6863\u6848\u533b\u751f";
+translations.zh.dataHealth = "\u6570\u636e\u5065\u5eb7";
+translations.zh.archiveDoctorHelp = "\u5728\u5907\u4efd\u3001\u6062\u590d\u6216\u5927\u6279\u91cf\u5bfc\u5165\u540e\u8fdb\u884c\u53ea\u8bfb\u68c0\u67e5\u3002\u4e0d\u4f1a\u81ea\u52a8\u5220\u9664\u6216\u66f4\u6539\u6587\u4ef6\u3002";
+translations.zh.runHealthCheck = "\u8fd0\u884c\u5065\u5eb7\u68c0\u67e5";
+translations.zh.exportHealthReport = "\u5bfc\u51fa\u5065\u5eb7\u62a5\u544a";
+translations.zh.healthReportExported = "\u5065\u5eb7\u62a5\u544a\u5df2\u5bfc\u51fa\u3002";
+translations.zh.regenerateThumbnails = "\u91cd\u5efa\u7f29\u7565\u56fe";
+translations.zh.healthCheckComplete = "\u5065\u5eb7\u68c0\u67e5\u5b8c\u6210\u3002";
+translations.zh.healthCheckFailed = "\u5065\u5eb7\u68c0\u67e5\u5931\u8d25\u3002";
+translations.zh.okItems = "\u6b63\u5e38\u68c0\u67e5";
+translations.zh.warnings = "\u8b66\u544a";
+translations.zh.missingFiles = "\u7f3a\u5931\u6587\u4ef6";
+translations.zh.orphanFiles = "\u672a\u5f15\u7528\u6587\u4ef6";
+translations.zh.affectedSize = "\u53d7\u5f71\u54cd\u5927\u5c0f";
+translations.zh.healthDetails = "\u5065\u5eb7\u8be6\u60c5";
+translations.zh.noHealthIssues = "\u672a\u53d1\u73b0\u5065\u5eb7\u95ee\u9898\u3002";
+translations.zh.thumbnailHealth = "\u7f29\u7565\u56fe\u7f13\u5b58";
+translations.zh.canRegenerateThumbnails = "\u53ef\u4ee5\u4ece\u539f\u59cb\u56fe\u7247\u91cd\u5efa\u7f29\u7565\u56fe\u3002";
+translations.zh.cannotRegenerateAllThumbnails = "\u90e8\u5206\u539f\u59cb\u56fe\u7247\u7f3a\u5931\uff0c\u56e0\u6b64\u4e0d\u80fd\u91cd\u5efa\u6240\u6709\u7f29\u7565\u56fe\u3002";
 translations.zh.database = "\u6570\u636e\u5e93";
 translations.zh.images = "\u56fe\u7247";
 translations.zh.thumbnails = "\u7f29\u7565\u56fe";
@@ -657,6 +798,109 @@ translations.zh.pdfActualSize = "\u5b9e\u9645\u5927\u5c0f";
 translations.zh.reload = "\u91cd\u65b0\u52a0\u8f7d";
 translations.zh.attachmentSaved = "\u9644\u4ef6\u5df2\u4fdd\u5b58\u3002";
 translations.zh.attachmentRemoved = "\u9644\u4ef6\u5df2\u79fb\u9664\u3002";
+translations.zh.labelCards = "\u6807\u7b7e\u5361";
+translations.zh.noLabelCardsYet = "\u8fd8\u6ca1\u6709\u6807\u7b7e\u5361";
+translations.zh.newLabelCard = "\u65b0\u5efa\u5361\u7247";
+translations.zh.saveLabelCard = "\u4fdd\u5b58\u5361\u7247";
+translations.zh.deleteLabelCard = "\u5220\u9664\u5361\u7247";
+translations.zh.exportCardPng = "\u5bfc\u51fa PNG";
+translations.zh.exporting = "\u6b63\u5728\u5bfc\u51fa...";
+translations.zh.saving = "\u6b63\u5728\u4fdd\u5b58...";
+translations.zh.exportCanceled = "\u5df2\u53d6\u6d88\u5bfc\u51fa\u3002";
+translations.zh.exportCardFailed = "\u5361\u7247\u5bfc\u51fa\u5931\u8d25\u3002";
+translations.zh.cardExported = "\u5361\u7247\u5df2\u5bfc\u51fa\u3002";
+translations.zh.cardSaved = "\u5361\u7247\u5df2\u4fdd\u5b58\u3002";
+translations.zh.cardDeleted = "\u5361\u7247\u5df2\u5220\u9664\u3002";
+translations.zh.cardSubtitle = "\u526f\u6807\u9898";
+translations.zh.cardMainText = "\u4e3b\u8981\u6587\u5b57";
+translations.zh.smallNotes = "\u5c0f\u5907\u6ce8";
+translations.zh.provenanceText = "\u6765\u6e90/\u51fa\u5904\u6587\u5b57";
+translations.zh.catalogText = "\u76ee\u5f55/\u53c2\u8003\u6587\u5b57";
+translations.zh.imagePosition = "\u56fe\u7247\u4f4d\u7f6e";
+translations.zh.topImage = "\u9876\u90e8\u56fe\u7247";
+translations.zh.leftImage = "\u5de6\u4fa7\u56fe\u7247";
+translations.zh.rightImage = "\u53f3\u4fa7\u56fe\u7247";
+translations.zh.imageOnlyCaption = "\u4ec5\u56fe\u7247+\u8bf4\u660e";
+translations.zh.textOnly = "\u4ec5\u6587\u5b57";
+translations.zh.centeredShowcase = "\u5c45\u4e2d\u5c55\u793a";
+translations.zh.stampExhibitionCard = "\u90ae\u7968\u5c55\u89c8\u5361";
+translations.zh.museumSpecimenCard = "\u535a\u7269\u9986\u6807\u672c\u5361";
+translations.zh.museumLabel = "\u535a\u7269\u9986\u6807\u7b7e";
+translations.zh.classicAlbumCard = "\u7ecf\u5178\u518c\u9875\u5361";
+translations.zh.auctionNote = "\u62cd\u5356\u6279\u6b21\u5361";
+translations.zh.minimalCard = "\u73b0\u4ee3\u6781\u7b80\u5361";
+translations.zh.vintagePaperCard = "\u590d\u53e4\u7eb8\u5361";
+translations.zh.resetStyleToPreset = "\u91cd\u7f6e\u4e3a\u9884\u8bbe\u6837\u5f0f";
+translations.zh.borderOn = "\u663e\u793a\u8fb9\u6846";
+translations.zh.backgroundTone = "\u80cc\u666f\u7eb8\u8272";
+translations.zh.editLabelCard = "\u7f16\u8f91";
+translations.zh.labelCardEditor = "\u6807\u7b7e\u5361\u7f16\u8f91\u5668";
+translations.zh.cardContent = "\u5185\u5bb9";
+translations.zh.cardLayout = "\u5e03\u5c40";
+translations.zh.cardStyle = "\u6837\u5f0f";
+translations.zh.cardExport = "\u5bfc\u51fa";
+translations.zh.cardPreset = "\u5361\u7247\u7c7b\u578b";
+translations.zh.cardSize = "\u5361\u7247\u5c3a\u5bf8";
+translations.zh.smallTicket = "\u5c0f\u7968\u5361";
+translations.zh.a6Landscape = "A6 \u6a2a\u5411";
+translations.zh.a6Portrait = "A6 \u7ad6\u5411";
+translations.zh.squareShareCard = "\u65b9\u5f62\u5206\u4eab\u5361";
+translations.zh.socialShareLandscape = "\u793e\u4ea4\u5206\u4eab\u6a2a\u5361";
+translations.zh.classicStampSlip = "\u7ecf\u5178\u90ae\u7968\u518c\u7b7e";
+translations.zh.coinCabinetTicket = "\u94b1\u5e01\u67dc\u7968\u7b7e";
+translations.zh.exhibitionShareCard = "\u5c55\u89c8\u5206\u4eab\u5361";
+translations.zh.minimalArchiveCard = "\u6781\u7b80\u6863\u6848\u5361";
+translations.zh.primaryImage = "\u4e3b\u56fe\u7247";
+translations.zh.reverseImage = "\u80cc\u9762 / \u7b2c\u4e8c\u5f20\u56fe\u7247";
+translations.zh.exportScale = "\u5bfc\u51fa\u500d\u7387";
+translations.zh.exportHelp = "\u5bfc\u51fa\u7ed3\u679c\u4e0e\u9884\u89c8\u4e2d\u663e\u793a\u7684\u5361\u7247\u4e00\u81f4\u3002";
+translations.zh.cardPreview = "\u5361\u7247\u9884\u89c8";
+translations.zh.materialSurface = "\u6750\u8d28 / \u8868\u9762";
+translations.zh.creamAlbumPaper = "\u4e73\u767d\u8272\u518c\u9875\u7eb8";
+translations.zh.archivalCardStock = "\u6863\u6848\u5361\u7eb8";
+translations.zh.agedPaper = "\u505a\u65e7\u7eb8";
+translations.zh.linenTexture = "\u4e9a\u9ebb\u7eb9\u7406";
+translations.zh.whiteMuseumBoard = "\u767d\u8272\u535a\u7269\u9986\u5361\u677f";
+translations.zh.darkWalnutWood = "\u6df1\u8272\u80e1\u6843\u6728";
+translations.zh.mahoganyWood = "\u7ea2\u6728";
+translations.zh.blackVelvet = "\u9ed1\u8272\u5929\u9e45\u7ed2";
+translations.zh.greenFelt = "\u7eff\u8272\u6be1\u9762";
+translations.zh.textureIntensity = "\u7eb9\u7406\u5f3a\u5ea6";
+translations.zh.brightness = "\u4eae\u5ea6";
+translations.zh.agingLevel = "\u505a\u65e7\u7a0b\u5ea6";
+translations.zh.presentationFrame = "\u5c55\u793a\u6846";
+translations.zh.thinDoubleAlbumFrame = "\u7ec6\u53cc\u7ebf\u518c\u9875\u6846";
+translations.zh.blackStampMount = "\u9ed1\u8272\u90ae\u7968\u62a4\u90ae\u888b";
+translations.zh.creamMatWindow = "\u4e73\u767d\u8272\u5361\u7eb8\u7a97";
+translations.zh.transparentMount = "\u900f\u660e\u62a4\u90ae\u6548\u679c";
+translations.zh.circularCoinRecess = "\u5706\u5f62\u94b1\u5e01\u51f9\u69fd";
+translations.zh.capsuleRim = "\u4fdd\u62a4\u76d2\u5706\u8fb9";
+translations.zh.velvetTray = "\u5929\u9e45\u7ed2\u6258\u76d8";
+translations.zh.woodenCabinetSlot = "\u6728\u5236\u67dc\u683c";
+translations.zh.obverseReverseFrame = "\u6b63\u53cd\u9762\u53cc\u6846";
+translations.zh.classicGoldFrame = "\u7ecf\u5178\u91d1\u8272\u753b\u6846";
+translations.zh.darkWoodFrame = "\u6df1\u8272\u6728\u6846";
+translations.zh.blackGalleryFrame = "\u9ed1\u8272\u753b\u5eca\u6846";
+translations.zh.whiteMatFrame = "\u767d\u8272\u5361\u7eb8\u6846";
+translations.zh.cardEdge = "\u5361\u7247\u8fb9\u7f18";
+translations.zh.squareEdge = "\u76f4\u89d2";
+translations.zh.roundedEdge = "\u5706\u89d2";
+translations.zh.clippedCorners = "\u5207\u89d2";
+translations.zh.doubleLineEdge = "\u53cc\u7ebf\u8fb9";
+translations.zh.embossedEdge = "\u6d6e\u96d5\u8fb9";
+translations.zh.thinGoldEdge = "\u7ec6\u91d1\u8fb9";
+translations.zh.ticketPerforation = "\u7968\u5238\u9f7f\u5b54";
+translations.zh.deckledEdge = "\u624b\u6495\u7eb8\u8fb9";
+translations.zh.centeredSingleImage = "\u5355\u56fe\u5c45\u4e2d";
+translations.zh.imageTopTextBelow = "\u56fe\u7247\u5728\u4e0a\uff0c\u6587\u5b57\u5728\u4e0b";
+translations.zh.imageLeftTextRight = "\u56fe\u7247\u5728\u5de6\uff0c\u6587\u5b57\u5728\u53f3";
+translations.zh.obverseReversePair = "\u6b63\u53cd\u9762\u5e76\u5217";
+translations.zh.mainImageDetailImage = "\u4e3b\u56fe + \u7ec6\u8282\u56fe";
+translations.zh.textOnlyArchivalLabel = "\u7eaf\u6587\u5b57\u6863\u6848\u6807\u7b7e";
+translations.zh.frontSide = "\u6b63\u9762";
+translations.zh.backSide = "\u80cc\u9762";
+translations.zh.acquisitionNotes = "\u5165\u85cf\u5907\u6ce8";
+translations.zh.researchNotes = "\u7814\u7a76\u5907\u6ce8";
 translations.zh.trashTitle = "\u56de\u6536\u7ad9";
 translations.zh.trashEmpty = "\u56de\u6536\u7ad9\u4e3a\u7a7a";
 translations.zh.restore = "\u6062\u590d";
@@ -1684,6 +1928,7 @@ function StorageBackupDialog({ onClose, onMessage }) {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [restorePreview, setRestorePreview] = useState(null);
+  const [health, setHealth] = useState(null);
 
   async function loadUsage() {
     setLoading(true);
@@ -1759,6 +2004,52 @@ function StorageBackupDialog({ onClose, onMessage }) {
     }
   }
 
+  async function runHealthCheck() {
+    setBusy("health");
+    setError("");
+    try {
+      const result = await api.checkArchiveHealth();
+      setHealth(result);
+      onMessage(t("healthCheckComplete"));
+    } catch (healthError) {
+      setError(healthError.message || String(healthError));
+      onMessage(`${t("healthCheckFailed")} ${healthError.message || healthError}`);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function regenerateThumbnailsFromHealth() {
+    setBusy("thumbnails");
+    setError("");
+    try {
+      const result = await api.regenerateAllThumbnails();
+      setHealth(result.health || await api.checkArchiveHealth());
+      onMessage(`${t("thumbnailsRegenerated")} ${result.regenerated || 0}`);
+    } catch (thumbnailError) {
+      setError(thumbnailError.message || String(thumbnailError));
+      onMessage(`${t("healthCheckFailed")} ${thumbnailError.message || thumbnailError}`);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function exportHealthReport() {
+    setBusy("health-export");
+    setError("");
+    try {
+      const result = await api.exportHealthReport();
+      if (!result?.canceled) {
+        onMessage(`${t("healthReportExported")} ${result.filePath || ""}`.trim());
+      }
+    } catch (reportError) {
+      setError(reportError.message || String(reportError));
+      onMessage(`${t("healthCheckFailed")} ${reportError.message || reportError}`);
+    } finally {
+      setBusy("");
+    }
+  }
+
   const categories = usage?.categories || {};
   const mediaLabels = [
     ["images", t("images")],
@@ -1803,6 +2094,87 @@ function StorageBackupDialog({ onClose, onMessage }) {
             </div>
           )}
           {error && <p className="error-text">{error}</p>}
+        </section>
+
+        <section className="storage-section health-section">
+          <div className="storage-section-header">
+            <div>
+              <h3>{t("archiveDoctor")}</h3>
+              <p className="hint">{t("archiveDoctorHelp")}</p>
+            </div>
+            <div className="row-actions">
+              <button type="button" className="secondary" disabled={Boolean(busy)} onClick={runHealthCheck}>
+                {busy === "health" ? t("loading") : t("runHealthCheck")}
+              </button>
+              <button type="button" className="secondary" disabled={Boolean(busy)} onClick={exportHealthReport}>
+                {busy === "health-export" ? t("loading") : t("exportHealthReport")}
+              </button>
+            </div>
+          </div>
+
+          {health ? (
+            <div className="health-report">
+              <div className="health-summary">
+                <span><strong>{health.summary?.okItems || 0}</strong>{t("okItems")}</span>
+                <span className={health.summary?.warnings ? "health-warning" : ""}><strong>{health.summary?.warnings || 0}</strong>{t("warnings")}</span>
+                <span className={health.summary?.missingFiles ? "health-error" : ""}><strong>{health.summary?.missingFiles || 0}</strong>{t("missingFiles")}</span>
+                <span className={health.summary?.orphanFiles ? "health-warning" : ""}><strong>{health.summary?.orphanFiles || 0}</strong>{t("orphanFiles")}</span>
+                <span><strong>{formatFileSize(health.summary?.affectedBytes || 0)}</strong>{t("affectedSize")}</span>
+              </div>
+
+              <div className="health-actions">
+                <button type="button" className="secondary" onClick={() => api.revealDataFolder()}>{t("openDataFolder")}</button>
+                <button type="button" className="secondary" disabled={Boolean(busy) || !health.thumbnail?.sourceImagesAvailable} onClick={regenerateThumbnailsFromHealth}>
+                  {busy === "thumbnails" ? t("loading") : t("regenerateThumbnails")}
+                </button>
+              </div>
+
+              <p className={health.thumbnail?.canRegenerate ? "hint" : "warning-text"}>
+                {health.thumbnail?.canRegenerate ? t("canRegenerateThumbnails") : t("cannotRegenerateAllThumbnails")}
+              </p>
+
+              <details className="health-details" open={Boolean(health.summary?.missingFiles || health.summary?.orphanFiles || health.summary?.warnings)}>
+                <summary>{t("healthDetails")}</summary>
+                <div className="health-check-list">
+                  {(health.checks || []).map((check) => (
+                    <div className={`health-check ${check.status}`} key={check.key}>
+                      <strong>{check.label}</strong>
+                      <span>{check.detail}</span>
+                    </div>
+                  ))}
+                </div>
+                {health.warnings?.length > 0 && (
+                  <div className="health-issue-list">
+                    <h4>{t("warnings")}</h4>
+                    {health.warnings.slice(0, 12).map((warning, index) => (
+                      <p key={`${warning.kind}-${index}`}>{warning.message || JSON.stringify(warning)}</p>
+                    ))}
+                  </div>
+                )}
+                {health.missingFiles?.length > 0 && (
+                  <div className="health-issue-list">
+                    <h4>{t("missingFiles")}</h4>
+                    {health.missingFiles.slice(0, 12).map((entry, index) => (
+                      <p key={`${entry.kind}-${entry.id}-${index}`}>{entry.kind}: {entry.label || entry.id || ""} {entry.expectedPath}</p>
+                    ))}
+                  </div>
+                )}
+                {health.orphanFiles?.length > 0 && (
+                  <div className="health-issue-list">
+                    <h4>{t("orphanFiles")}</h4>
+                    {health.orphanFiles.slice(0, 12).map((entry, index) => (
+                      <p key={`${entry.kind}-${entry.path}-${index}`}>{entry.kind}: {entry.path} ({formatFileSize(entry.bytes || 0)})</p>
+                    ))}
+                  </div>
+                )}
+                {!health.summary?.warnings && !health.summary?.missingFiles && !health.summary?.orphanFiles && (
+                  <p className="hint">{t("noHealthIssues")}</p>
+                )}
+              </details>
+            </div>
+          ) : (
+            <p className="hint">{t("dataHealth")}: {t("runHealthCheck")}</p>
+          )}
         </section>
 
         <section className="storage-section backup-options">
@@ -2475,6 +2847,68 @@ function ArchiveApp() {
     setMessage(t("imageNoteSaved"));
   }
 
+  async function createLabelCard(item, draft = null) {
+    const coverImage = item.images?.[0] || null;
+    const updated = await api.createLabelCard({
+      itemId: item.id,
+      title: draft?.title ?? item.title,
+      subtitle: draft?.subtitle ?? [item.country_name, item.type_name, item.year].filter(Boolean).join(" / "),
+      main_text: draft?.main_text ?? item.description ?? "",
+      small_notes: draft?.small_notes || "",
+      provenance_text: draft?.provenance_text || "",
+      catalog_text: draft?.catalog_text || "",
+      image_id: draft?.image_id ?? coverImage?.id ?? "",
+      image_position: draft?.image_position || (coverImage ? "center-showcase" : "text-only"),
+      preset: draft?.preset || "stamp-exhibition",
+      style: draft?.style || defaultLabelCardStyle("stamp-exhibition")
+    });
+    setDetail(updated || await api.getItem(item.id));
+    setMessage(t("cardSaved"));
+  }
+
+  async function updateLabelCard(payload) {
+    const updated = await api.updateLabelCard(payload);
+    setDetail(updated || await api.getItem(payload.itemId || selectedItemId));
+    setMessage(t("cardSaved"));
+  }
+
+  async function deleteLabelCard(cardId) {
+    if (!window.confirm(t("deleteLabelCard"))) return;
+    const updated = await api.deleteLabelCard(cardId);
+    setDetail(updated || (selectedItemId ? await api.getItem(selectedItemId) : null));
+    setMessage(t("cardDeleted"));
+  }
+
+  async function exportLabelCard(card, images) {
+    try {
+      const dimensions = labelCardDimensions(card);
+      const exportScale = Math.max(1, Math.min(2, Number(card.style?.exportScale || 1)));
+      const html = labelCardExportHtml(card, images, exportScale, {
+        back: t("backSide"),
+        provenance: t("provenanceText"),
+        catalog: t("catalogText"),
+        acquisition: t("acquisitionNotes"),
+        research: t("researchNotes")
+      });
+      const result = await api.exportLabelCardPng({
+        html,
+        width: dimensions.width * exportScale,
+        height: dimensions.height * exportScale,
+        defaultFilename: `${safeExportFilename(card.title || "label-card", "label-card")}.png`
+      });
+      window.dispatchEvent(new CustomEvent("archive:label-card-exported", { detail: result }));
+      if (result?.canceled) {
+        setMessage(t("exportCanceled"));
+      } else {
+        setMessage(result?.filePath ? `${t("cardExported")} ${result.filePath}` : t("cardExported"));
+      }
+      return result;
+    } catch (error) {
+      setMessage(`${t("exportCardFailed")} ${error?.message || error}`);
+      throw error;
+    }
+  }
+
   async function addAttachment(itemId) {
     try {
       const updated = await api.addAttachment(itemId);
@@ -2720,6 +3154,10 @@ function ArchiveApp() {
             onReplaceImage={replaceImage}
             onReorderImages={reorderImages}
             onUpdateImageNote={updateImageNote}
+            onCreateLabelCard={createLabelCard}
+            onUpdateLabelCard={updateLabelCard}
+            onDeleteLabelCard={deleteLabelCard}
+            onExportLabelCard={exportLabelCard}
             onAddAttachment={addAttachment}
             onAddWebpageAttachment={addWebpageAttachment}
             onUpdateAttachment={updateAttachment}
@@ -3157,7 +3595,7 @@ function GalleryView({ items, total, loading, onLoadMore, onOpenItem, onToggleFa
   );
 }
 
-function DetailView({ detail, countries, types, onBack, onAddImages, onStartPhoneUpload, onRemoveImage, onReplaceImage, onReorderImages, onUpdateImageNote, onAddAttachment, onAddWebpageAttachment, onUpdateAttachment, onOpenAttachment, onOpenAttachmentSource, onRemoveAttachment, onUpdate, onToggleFavorite, onDeleteItem }) {
+function DetailView({ detail, countries, types, onBack, onAddImages, onStartPhoneUpload, onRemoveImage, onReplaceImage, onReorderImages, onUpdateImageNote, onCreateLabelCard, onUpdateLabelCard, onDeleteLabelCard, onExportLabelCard, onAddAttachment, onAddWebpageAttachment, onUpdateAttachment, onOpenAttachment, onOpenAttachmentSource, onRemoveAttachment, onUpdate, onToggleFavorite, onDeleteItem }) {
   const { t } = useI18n();
   const [activeImage, setActiveImage] = useState(0);
   const [editing, setEditing] = useState(false);
@@ -3353,6 +3791,15 @@ function DetailView({ detail, countries, types, onBack, onAddImages, onStartPhon
           {viewerImages.length > 0 && (
             <ImageViewerButton images={viewerImages} activeImage={activeImage} title={detail.title} />
           )}
+          <LabelCardsSection
+            item={detail}
+            cards={detail.labelCards || []}
+            images={detail.images || []}
+            onCreate={onCreateLabelCard}
+            onUpdate={onUpdateLabelCard}
+            onDelete={onDeleteLabelCard}
+            onExport={onExportLabelCard}
+          />
           <AttachmentsSection
             itemId={detail.id}
             attachments={detail.attachments || []}
@@ -3395,6 +3842,478 @@ function ImageViewerButton({ images, activeImage, title }) {
         setOpen(false);
       }} />}
     </>
+  );
+}
+
+function normalizeLabelCardPreset(preset) {
+  const aliases = { museum: "museum-specimen", classic: "stamp-exhibition", vintage: "museum-specimen" };
+  const normalized = aliases[preset] || preset;
+  return LABEL_CARD_PRESETS.some((option) => option.value === normalized) ? normalized : "museum-specimen";
+}
+
+function labelCardPresetDefaults(preset) {
+  return LABEL_CARD_PRESETS.find((option) => option.value === normalizeLabelCardPreset(preset))?.defaults || LABEL_CARD_PRESETS[1].defaults;
+}
+
+function labelCardPresetOption(preset) {
+  return LABEL_CARD_PRESETS.find((option) => option.value === normalizeLabelCardPreset(preset)) || LABEL_CARD_PRESETS[1];
+}
+
+function labelCardSizeOption(value) {
+  return LABEL_CARD_SIZES.find((option) => option.value === value) || LABEL_CARD_SIZES[1];
+}
+
+function labelCardMaterialOption(value) {
+  return LABEL_CARD_MATERIALS.find((option) => option.value === value) || LABEL_CARD_MATERIALS[0];
+}
+
+function labelCardDimensions(card) {
+  return labelCardSizeOption(card?.style?.cardSize || labelCardPresetDefaults(card?.preset).cardSize);
+}
+
+function normalizeLabelCardLayout(value) {
+  if (value === "right") return "left";
+  if (value === "image-only") return "center-showcase";
+  return LABEL_CARD_IMAGE_POSITIONS.some((option) => option.value === value) ? value : "center-showcase";
+}
+
+function defaultLabelCardStyle(preset = "museum-specimen") {
+  return { ...labelCardPresetDefaults(preset) };
+}
+
+function normalizeLabelCardPresentation(card) {
+  const preset = normalizeLabelCardPreset(card?.preset || "museum-specimen");
+  const style = { ...defaultLabelCardStyle(preset), ...(card?.style || {}) };
+  const imagePosition = normalizeLabelCardLayout(card?.image_position);
+  const dimensions = labelCardSizeOption(style.cardSize || labelCardPresetDefaults(preset).cardSize);
+  const material = LABEL_CARD_MATERIALS.some((option) => option.value === style.material) ? style.material : "cream-paper";
+  const frame = LABEL_CARD_FRAMES.some((option) => option.value === style.frame) ? style.frame : "thin-double";
+  const edge = LABEL_CARD_EDGES.some((option) => option.value === style.edge) ? style.edge : "square";
+  const side = style.side === "back" ? "back" : "front";
+  const normalizedCard = { ...card, preset, image_position: imagePosition, style: { ...style, material, frame, edge, side } };
+  return { card: normalizedCard, preset, style: normalizedCard.style, imagePosition, dimensions, material, frame, edge, side };
+}
+
+function labelCardDraftFrom(card, item) {
+  const preset = normalizeLabelCardPreset(card?.preset || "stamp-exhibition");
+  return {
+    id: card?.id || "",
+    itemId: item.id,
+    title: card?.title || item.title || "",
+    subtitle: card?.subtitle || "",
+    main_text: card?.main_text || "",
+    small_notes: card?.small_notes || "",
+    provenance_text: card?.provenance_text || "",
+    catalog_text: card?.catalog_text || "",
+    image_id: card?.image_id || "",
+    image_position: normalizeLabelCardLayout(card?.image_position || labelCardPresetOption(preset).defaultImagePosition),
+    preset,
+    style: { ...defaultLabelCardStyle(preset), ...(card?.style || {}) }
+  };
+}
+
+function labelCardImage(card, images) {
+  const imageId = card?.image_id || card?.imageId;
+  return images.find((image) => image.id === imageId) || card?.image || null;
+}
+
+function labelCardSecondaryImage(card, images) {
+  const imageId = card?.style?.secondaryImageId;
+  return imageId ? images.find((image) => image.id === imageId) || null : null;
+}
+
+function labelCardClass(card) {
+  const presentation = normalizeLabelCardPresentation(card);
+  return `label-card-preview preset-${presentation.preset} image-${presentation.imagePosition} size-${presentation.dimensions.value} material-${presentation.material} frame-${presentation.frame} edge-${presentation.edge} side-${presentation.side} ${presentation.style.border === false ? "no-border" : ""}`;
+}
+
+function labelCardStyle(card) {
+  const { style, dimensions } = normalizeLabelCardPresentation(card);
+  return {
+    "--card-font-size": `${Math.max(10, Number(style.fontSize || 16))}px`,
+    "--card-align": style.alignment || "left",
+    "--card-bg": style.backgroundColor || "#f7f1e4",
+    "--card-text": style.textColor || "#283331",
+    "--card-aspect": `${dimensions.width} / ${dimensions.height}`,
+    "--texture-intensity": `${Math.max(0, Math.min(100, Number(style.textureIntensity ?? 40))) / 100}`,
+    "--surface-brightness": `${Math.max(70, Math.min(130, Number(style.brightness ?? 100)))}%`,
+    "--surface-aging": `${Math.max(0, Math.min(100, Number(style.aging ?? 0))) / 100}`
+  };
+}
+
+function LabelCardPreview({ card, images }) {
+  const { t } = useI18n();
+  const presentation = normalizeLabelCardPresentation(card);
+  const { card: normalizedCard, style, side, imagePosition } = presentation;
+  const image = labelCardImage(normalizedCard, images);
+  const secondaryImage = labelCardSecondaryImage(normalizedCard, images);
+  const showImage = side === "front" && imagePosition !== "text-only" && image?.url;
+  const showSecondary = showImage && ["pair", "main-detail"].includes(imagePosition) && secondaryImage?.url;
+  return (
+    <article className={`${labelCardClass(normalizedCard)} ${showImage ? "" : "no-image"}`} style={labelCardStyle(normalizedCard)}>
+      <div className="label-card-surface" aria-hidden="true" />
+      <div className="label-card-ornament" aria-hidden="true" />
+      {side === "front" ? <>
+        {showImage && (
+        <div className={`label-card-media ${showSecondary ? "has-secondary" : ""}`}>
+          {[image, showSecondary ? secondaryImage : null].filter(Boolean).map((cardImage, index) => (
+            <figure className="label-card-image" key={cardImage.id || index}>
+              <span className="label-card-image-frame">
+                <MediaImage src={cardImage.thumbnailUrl || cardImage.url} alt={card.title || cardImage.original_filename || ""} context={`Label card: ${card.title || ""}`} />
+              </span>
+            </figure>
+          ))}
+        </div>
+        )}
+        <div className="label-card-text">
+          {card.title && <h3>{card.title}</h3>}
+          {card.subtitle && <p className="label-card-subtitle">{card.subtitle}</p>}
+          {card.main_text && <p className="label-card-main">{card.main_text}</p>}
+          {card.small_notes && <p className="label-card-small">{card.small_notes}</p>}
+          {(card.provenance_text || card.catalog_text) && (
+            <div className="label-card-refbar">
+              {card.provenance_text && <p className="label-card-meta">{card.provenance_text}</p>}
+              {card.catalog_text && <p className="label-card-meta">{card.catalog_text}</p>}
+            </div>
+          )}
+        </div>
+      </> : (
+        <div className="label-card-back">
+          <header><span>{t("backSide")}</span>{card.title && <h3>{card.title}</h3>}</header>
+          <div className="label-card-back-fields">
+            {card.provenance_text && <div><strong>{t("provenanceText")}</strong><p>{card.provenance_text}</p></div>}
+            {card.catalog_text && <div><strong>{t("catalogText")}</strong><p>{card.catalog_text}</p></div>}
+            {style.backAcquisitionNotes && <div><strong>{t("acquisitionNotes")}</strong><p>{style.backAcquisitionNotes}</p></div>}
+            {style.backResearchNotes && <div><strong>{t("researchNotes")}</strong><p>{style.backResearchNotes}</p></div>}
+          </div>
+        </div>
+      )}
+    </article>
+  );
+}
+
+let cachedLabelCardStylesheet = "";
+
+function labelCardStylesheetText() {
+  if (cachedLabelCardStylesheet) return cachedLabelCardStylesheet;
+  const css = Array.from(document.styleSheets).flatMap((sheet) => {
+    try {
+      return Array.from(sheet.cssRules || [], (rule) => rule.cssText);
+    } catch {
+      return [];
+    }
+  }).join("\n");
+  if (!css.includes(".label-card-preview") || !css.includes(".frame-wood-slot") || !css.includes(".edge-embossed")) {
+    throw new Error("Label Card stylesheet is unavailable for export");
+  }
+  cachedLabelCardStylesheet = css.replace(/<\/style/gi, "<\\/style");
+  return cachedLabelCardStylesheet;
+}
+
+function labelCardExportHtml(card, images, exportScale = 1, labels = {}) {
+  const presentation = normalizeLabelCardPresentation(card);
+  const { card: normalizedCard, style, side, imagePosition, dimensions } = presentation;
+  const image = labelCardImage(normalizedCard, images);
+  const secondaryImage = labelCardSecondaryImage(normalizedCard, images);
+  const showImage = side === "front" && imagePosition !== "text-only" && image?.url;
+  const showSecondary = showImage && ["pair", "main-detail"].includes(imagePosition) && secondaryImage?.url;
+  const safeText = (value) => escapeHtml(value || "").replace(/\n/g, "<br>");
+  const scale = Math.max(1, Math.min(2, Number(exportScale || 1)));
+  const mediaImages = showImage ? [image, showSecondary ? secondaryImage : null].filter(Boolean) : [];
+  const img = mediaImages.length ? `<div class="label-card-media ${mediaImages.length > 1 ? "has-secondary" : ""}">${mediaImages.map((cardImage) => `<figure class="label-card-image"><span class="label-card-image-frame"><img src="${escapeHtml(cardImage.url || cardImage.thumbnailUrl || "")}" alt=""></span></figure>`).join("")}</div>` : "";
+  const refbar = normalizedCard.provenance_text || normalizedCard.catalog_text ? `
+      <div class="label-card-refbar">
+        ${normalizedCard.provenance_text ? `<p class="label-card-meta">${safeText(normalizedCard.provenance_text)}</p>` : ""}
+        ${normalizedCard.catalog_text ? `<p class="label-card-meta">${safeText(normalizedCard.catalog_text)}</p>` : ""}
+      </div>` : "";
+  const text = `
+    <div class="label-card-text">
+      ${normalizedCard.title ? `<h3>${safeText(normalizedCard.title)}</h3>` : ""}
+      ${normalizedCard.subtitle ? `<p class="label-card-subtitle">${safeText(normalizedCard.subtitle)}</p>` : ""}
+      ${normalizedCard.main_text ? `<p class="label-card-main">${safeText(normalizedCard.main_text)}</p>` : ""}
+      ${normalizedCard.small_notes ? `<p class="label-card-small">${safeText(normalizedCard.small_notes)}</p>` : ""}
+      ${refbar}
+    </div>`;
+  const back = `
+    <div class="label-card-back">
+      <header><span>${safeText(labels.back || "Back")}</span>${normalizedCard.title ? `<h3>${safeText(normalizedCard.title)}</h3>` : ""}</header>
+      <div class="label-card-back-fields">
+        ${normalizedCard.provenance_text ? `<div><strong>${safeText(labels.provenance || "Provenance")}</strong><p>${safeText(normalizedCard.provenance_text)}</p></div>` : ""}
+        ${normalizedCard.catalog_text ? `<div><strong>${safeText(labels.catalog || "Catalog / reference")}</strong><p>${safeText(normalizedCard.catalog_text)}</p></div>` : ""}
+        ${style.backAcquisitionNotes ? `<div><strong>${safeText(labels.acquisition || "Acquisition notes")}</strong><p>${safeText(style.backAcquisitionNotes)}</p></div>` : ""}
+        ${style.backResearchNotes ? `<div><strong>${safeText(labels.research || "Research notes")}</strong><p>${safeText(style.backResearchNotes)}</p></div>` : ""}
+      </div>
+    </div>`;
+  return `<!doctype html>
+<html class="png-export">
+<head>
+<meta charset="utf-8">
+<style>
+${labelCardStylesheetText()}
+html.png-export,html.png-export body{margin:0;width:${dimensions.width * scale}px;height:${dimensions.height * scale}px;overflow:hidden;background:transparent}
+html.png-export body{display:block;min-width:0;min-height:0;font-family:Inter,"Segoe UI","Microsoft YaHei",Arial,sans-serif}
+html.png-export .export-scale{width:${dimensions.width}px;height:${dimensions.height}px;transform:scale(${scale});transform-origin:top left}
+html.png-export [data-export-page].label-card-preview{width:100%;height:100%;max-width:none;aspect-ratio:auto}
+</style>
+</head>
+<body><div class="export-scale"><article data-export-page class="${labelCardClass(normalizedCard)} ${showImage ? "" : "no-image"}" style="${Object.entries(labelCardStyle(normalizedCard)).map(([key, value]) => `${key}:${escapeHtml(value)}`).join(";")}"><div class="label-card-surface"></div><div class="label-card-ornament"></div>${side === "back" ? back : `${img}${text}`}</article></div></body>
+</html>`;
+}
+
+function LabelCardEditorModal({ item, card, images, onCreate, onUpdate, onExport, onClose }) {
+  const { t } = useI18n();
+  const [draft, setDraft] = useState(() => labelCardDraftFrom(card, item));
+  const [activeTab, setActiveTab] = useState("content");
+  const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
+  const [previewZoom, setPreviewZoom] = useState(1);
+  const [previewMode, setPreviewMode] = useState("fit");
+  const previewCanvasRef = useRef(null);
+  const previewDimensions = labelCardDimensions(draft);
+
+  const fitPreview = useCallback(() => {
+    const canvas = previewCanvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const availableWidth = Math.max(1, rect.width - 40);
+    const availableHeight = Math.max(1, rect.height - 40);
+    const nextZoom = Math.max(0.2, Math.min(2, availableWidth / previewDimensions.width, availableHeight / previewDimensions.height));
+    setPreviewZoom((current) => Math.abs(current - nextZoom) < 0.005 ? current : nextZoom);
+  }, [previewDimensions.width, previewDimensions.height]);
+
+  useLayoutEffect(() => {
+    if (previewMode !== "fit") return undefined;
+    const canvas = previewCanvasRef.current;
+    if (!canvas) return undefined;
+    const frame = window.requestAnimationFrame(fitPreview);
+    const observer = new ResizeObserver(() => fitPreview());
+    observer.observe(canvas);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [fitPreview, previewMode]);
+
+  function updateDraft(patch) {
+    setDraft((current) => ({ ...current, ...patch }));
+  }
+
+  function updateStyle(patch) {
+    setDraft((current) => ({ ...current, style: { ...current.style, ...patch } }));
+  }
+
+  async function saveDraft() {
+    setSaving(true);
+    try {
+      if (draft.id) await onUpdate(draft);
+      else await onCreate(item, draft);
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function exportDraft() {
+    setExportError("");
+    setExporting(true);
+    try {
+      await onExport(draft, images);
+    } catch (error) {
+      setExportError(`${t("exportCardFailed")} ${error?.message || error}`);
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  function resetStyleToPreset() {
+    setDraft((current) => ({
+      ...current,
+      style: {
+        ...defaultLabelCardStyle(current.preset),
+        secondaryImageId: current.style.secondaryImageId || "",
+        backAcquisitionNotes: current.style.backAcquisitionNotes || "",
+        backResearchNotes: current.style.backResearchNotes || "",
+        side: current.style.side === "back" ? "back" : "front",
+        exportScale: current.style.exportScale || 1
+      }
+    }));
+  }
+
+  function changePreviewZoom(multiplier) {
+    setPreviewMode("manual");
+    setPreviewZoom((current) => Math.max(0.2, Math.min(3, current * multiplier)));
+  }
+
+  const tabs = [
+    ["content", "cardContent"],
+    ["layout", "cardLayout"],
+    ["style", "cardStyle"],
+    ["export", "cardExport"]
+  ];
+
+  return (
+    <div className="modal-backdrop label-card-modal-backdrop">
+      <section className="modal label-card-modal" role="dialog" aria-modal="true" aria-label={t("labelCardEditor")}>
+        <header>
+          <div>
+            <h2>{t("labelCardEditor")}</h2>
+            <p>{item.title}</p>
+          </div>
+          <button type="button" className="ghost" onClick={onClose}>{t("close")}</button>
+        </header>
+        <div className="label-card-modal-body">
+          <div className="label-card-preview-stage" aria-label={t("cardPreview")}>
+            <div className="label-card-preview-toolbar">
+              <span>{t("cardPreview")}</span>
+              <div>
+                <div className="label-card-side-toggle" aria-label={t("cardPreview")}>
+                  <button type="button" className={draft.style.side !== "back" ? "active" : ""} onClick={() => updateStyle({ side: "front" })}>{t("frontSide")}</button>
+                  <button type="button" className={draft.style.side === "back" ? "active" : ""} onClick={() => updateStyle({ side: "back" })}>{t("backSide")}</button>
+                </div>
+                <button type="button" className="ghost compact" onClick={() => changePreviewZoom(1 / 1.15)} aria-label={t("zoomOut")}>{t("zoomOut")}</button>
+                <button type="button" className="ghost compact" onClick={() => changePreviewZoom(1.15)} aria-label={t("zoomIn")}>{t("zoomIn")}</button>
+                <button type="button" className="ghost compact" onClick={() => { setPreviewMode("fit"); window.requestAnimationFrame(fitPreview); }}>{t("fitPage")}</button>
+                <button type="button" className="ghost compact" onClick={() => { setPreviewMode("manual"); setPreviewZoom(1); }}>{t("actualSize")}</button>
+                <output>{Math.round(previewZoom * 100)}%</output>
+              </div>
+            </div>
+            <div className="label-card-preview-canvas" ref={previewCanvasRef}>
+              <div className="label-card-preview-space" style={{ width: previewDimensions.width * previewZoom, height: previewDimensions.height * previewZoom }}>
+                <div className="label-card-preview-transform" style={{ width: previewDimensions.width, height: previewDimensions.height, transform: `scale(${previewZoom})` }}>
+                  <LabelCardPreview card={draft} images={images} />
+                </div>
+              </div>
+            </div>
+          </div>
+          <aside className="label-card-controls">
+            <div className="label-card-tabs" role="tablist" aria-label={t("labelCardEditor")}>
+              {tabs.map(([value, labelKey]) => (
+                <button type="button" role="tab" aria-selected={activeTab === value} className={activeTab === value ? "active" : ""} key={value} onClick={() => setActiveTab(value)}>{t(labelKey)}</button>
+              ))}
+            </div>
+            <div className="label-card-form">
+              {activeTab === "content" && (
+                <div className="label-card-control-section">
+                  <label>{t("title")}<input value={draft.title} onChange={(event) => updateDraft({ title: event.target.value })} /></label>
+                  <label>{t("cardSubtitle")}<input value={draft.subtitle} onChange={(event) => updateDraft({ subtitle: event.target.value })} /></label>
+                  <label>{t("cardMainText")}<textarea value={draft.main_text} onChange={(event) => updateDraft({ main_text: event.target.value })} /></label>
+                  <label>{t("smallNotes")}<textarea value={draft.small_notes} onChange={(event) => updateDraft({ small_notes: event.target.value })} /></label>
+                  <label>{t("provenanceText")}<input value={draft.provenance_text} onChange={(event) => updateDraft({ provenance_text: event.target.value })} /></label>
+                  <label>{t("catalogText")}<input value={draft.catalog_text} onChange={(event) => updateDraft({ catalog_text: event.target.value })} /></label>
+                  <label>{t("acquisitionNotes")}<textarea value={draft.style.backAcquisitionNotes || ""} onChange={(event) => updateStyle({ backAcquisitionNotes: event.target.value })} /></label>
+                  <label>{t("researchNotes")}<textarea value={draft.style.backResearchNotes || ""} onChange={(event) => updateStyle({ backResearchNotes: event.target.value })} /></label>
+                </div>
+              )}
+              {activeTab === "layout" && (
+                <div className="label-card-control-section">
+                  <label>{t("cardPreset")}<select value={draft.preset} onChange={(event) => {
+                    const preset = event.target.value;
+                    const option = labelCardPresetOption(preset);
+                    setDraft((current) => ({
+                      ...current,
+                      preset,
+                      image_position: option.defaultImagePosition,
+                      style: {
+                        ...defaultLabelCardStyle(preset),
+                        secondaryImageId: current.style.secondaryImageId || "",
+                        backAcquisitionNotes: current.style.backAcquisitionNotes || "",
+                        backResearchNotes: current.style.backResearchNotes || "",
+                        side: current.style.side === "back" ? "back" : "front",
+                        exportScale: current.style.exportScale || 1
+                      }
+                    }));
+                  }}>{LABEL_CARD_PRESETS.map((option) => <option value={option.value} key={option.value}>{t(option.labelKey)}</option>)}</select></label>
+                  <label>{t("cardSize")}<select value={draft.style.cardSize} onChange={(event) => updateStyle({ cardSize: event.target.value })}>{LABEL_CARD_SIZES.map((option) => <option value={option.value} key={option.value}>{t(option.labelKey)}</option>)}</select></label>
+                  <label>{t("imagePosition")}<select value={draft.image_position} onChange={(event) => updateDraft({ image_position: event.target.value })}>{LABEL_CARD_IMAGE_POSITIONS.map((option) => <option value={option.value} key={option.value}>{t(option.labelKey)}</option>)}</select></label>
+                  <label>{t("primaryImage")}<select value={draft.image_id} onChange={(event) => updateDraft({ image_id: event.target.value })}><option value="">{t("none")}</option>{images.map((image, index) => <option value={image.id} key={image.id}>{image.original_filename || `${t("addImages")} ${index + 1}`}</option>)}</select></label>
+                  {["pair", "main-detail"].includes(draft.image_position) && <label>{t("reverseImage")}<select value={draft.style.secondaryImageId || ""} onChange={(event) => updateStyle({ secondaryImageId: event.target.value })}><option value="">{t("none")}</option>{images.filter((image) => image.id !== draft.image_id).map((image, index) => <option value={image.id} key={image.id}>{image.original_filename || `${t("addImages")} ${index + 1}`}</option>)}</select></label>}
+                </div>
+              )}
+              {activeTab === "style" && (
+                <div className="label-card-control-section">
+                  <label>{t("materialSurface")}<select value={draft.style.material || "cream-paper"} onChange={(event) => {
+                    const material = labelCardMaterialOption(event.target.value);
+                    updateStyle({ material: material.value, backgroundColor: material.backgroundColor, textColor: material.textColor });
+                  }}>{LABEL_CARD_MATERIALS.map((option) => <option value={option.value} key={option.value}>{t(option.labelKey)}</option>)}</select></label>
+                  <label>{t("presentationFrame")}<select value={draft.style.frame || "thin-double"} onChange={(event) => updateStyle({ frame: event.target.value })}>{LABEL_CARD_FRAMES.map((option) => <option value={option.value} key={option.value}>{t(option.labelKey)}</option>)}</select></label>
+                  <label>{t("cardEdge")}<select value={draft.style.edge || "square"} onChange={(event) => updateStyle({ edge: event.target.value })}>{LABEL_CARD_EDGES.map((option) => <option value={option.value} key={option.value}>{t(option.labelKey)}</option>)}</select></label>
+                  <div className="label-card-finish-grid">
+                    <label>{t("textureIntensity")}<input type="range" min="0" max="100" value={draft.style.textureIntensity ?? 40} onChange={(event) => updateStyle({ textureIntensity: Number(event.target.value) })} /><output>{draft.style.textureIntensity ?? 40}%</output></label>
+                    <label>{t("brightness")}<input type="range" min="70" max="130" value={draft.style.brightness ?? 100} onChange={(event) => updateStyle({ brightness: Number(event.target.value) })} /><output>{draft.style.brightness ?? 100}%</output></label>
+                    <label>{t("agingLevel")}<input type="range" min="0" max="100" value={draft.style.aging ?? 0} onChange={(event) => updateStyle({ aging: Number(event.target.value) })} /><output>{draft.style.aging ?? 0}%</output></label>
+                  </div>
+                  <div className="label-card-grid">
+                    <label>{t("size")}<input type="number" min="10" max="36" value={draft.style.fontSize} onChange={(event) => updateStyle({ fontSize: Number(event.target.value) })} /></label>
+                    <label>{t("alignment")}<select value={draft.style.alignment} onChange={(event) => updateStyle({ alignment: event.target.value })}><option value="left">{t("left")}</option><option value="center">{t("center")}</option><option value="right">{t("right")}</option></select></label>
+                    <label>{t("backgroundTone")}<input type="color" value={draft.style.backgroundColor} onChange={(event) => updateStyle({ backgroundColor: event.target.value })} /></label>
+                    <label>{t("textColor")}<input type="color" value={draft.style.textColor} onChange={(event) => updateStyle({ textColor: event.target.value })} /></label>
+                    <label className="check"><input type="checkbox" checked={draft.style.border !== false} onChange={(event) => updateStyle({ border: event.target.checked })} />{t("borderOn")}</label>
+                  </div>
+                  <button type="button" className="ghost" onClick={resetStyleToPreset}>{t("resetStyleToPreset")}</button>
+                </div>
+              )}
+              {activeTab === "export" && (
+                <div className="label-card-control-section label-card-export-panel">
+                  <p>{t("exportHelp")}</p>
+                  <label>{t("exportScale")}<select value={draft.style.exportScale || 1} onChange={(event) => updateStyle({ exportScale: Number(event.target.value) })}><option value="1">1x</option><option value="2">2x</option></select></label>
+                  <button type="button" className="primary" onClick={exportDraft} disabled={exporting}>{exporting ? t("exporting") : t("exportCardPng")}</button>
+                  {exportError && <p className="form-error">{exportError}</p>}
+                </div>
+              )}
+            </div>
+          </aside>
+        </div>
+        <footer>
+          <button type="button" className="secondary" onClick={onClose}>{t("cancel")}</button>
+          <button type="button" className="primary" onClick={saveDraft} disabled={saving}>{saving ? t("saving") : t("saveLabelCard")}</button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
+function LabelCardsSection({ item, cards, images, onCreate, onUpdate, onDelete, onExport }) {
+  const { t } = useI18n();
+  const [editingCard, setEditingCard] = useState(null);
+  const [exportingId, setExportingId] = useState("");
+  const [exportError, setExportError] = useState("");
+
+  async function exportCard(card) {
+    setExportError("");
+    setExportingId(card.id);
+    try {
+      await onExport(card, images);
+    } catch (error) {
+      setExportError(`${t("exportCardFailed")} ${error?.message || error}`);
+    } finally {
+      setExportingId("");
+    }
+  }
+
+  return (
+    <section className="label-cards-section">
+      <header>
+        <div>
+          <h2>{t("labelCards")}</h2>
+          <p>{cards.length ? `${cards.length}` : t("noLabelCardsYet")}</p>
+        </div>
+        <button type="button" className="secondary" onClick={() => setEditingCard({})}>{t("newLabelCard")}</button>
+      </header>
+      {cards.length ? <div className="label-card-shelf">{cards.map((card) => (
+        <article className="label-card-shelf-item" key={card.id}>
+          <div className="label-card-thumbnail"><LabelCardPreview card={card} images={images} /></div>
+          <div className="label-card-shelf-meta"><strong>{card.title || t("labelCards")}</strong><span>{t(labelCardPresetOption(card.preset).labelKey)}</span></div>
+          <div className="label-card-actions">
+            <button type="button" className="secondary compact" onClick={() => setEditingCard(card)}>{t("editLabelCard")}</button>
+            <button type="button" className="ghost compact" onClick={() => exportCard(card)} disabled={exportingId === card.id}>{exportingId === card.id ? t("exporting") : t("exportCardPng")}</button>
+            <button type="button" className="danger compact" onClick={() => onDelete(card.id)}>{t("delete")}</button>
+          </div>
+        </article>
+      ))}</div> : <p className="quiet">{t("noLabelCardsYet")}</p>}
+      {exportError && <p className="form-error">{exportError}</p>}
+      {editingCard && <LabelCardEditorModal item={item} card={editingCard.id ? editingCard : null} images={images} onCreate={onCreate} onUpdate={onUpdate} onExport={onExport} onClose={() => setEditingCard(null)} />}
+    </section>
   );
 }
 
@@ -4359,6 +5278,71 @@ const TEXT_FONT_OPTIONS = [
   { value: "verdana", label: "Verdana", css: "Verdana, Geneva, sans-serif" }
 ];
 
+const LABEL_CARD_PRESETS = [
+  { value: "stamp-exhibition", labelKey: "classicStampSlip", defaultImagePosition: "center-showcase", defaults: { fontSize: 17, alignment: "center", border: true, backgroundColor: "#f4ecd8", textColor: "#203832", cardSize: "a6-landscape", exportScale: 1, material: "cream-paper", frame: "thin-double", edge: "double-line", side: "front", textureIntensity: 45, brightness: 100, aging: 12 } },
+  { value: "museum-specimen", labelKey: "museumSpecimenCard", defaultImagePosition: "left", defaults: { fontSize: 15, alignment: "left", border: true, backgroundColor: "#eee6d2", textColor: "#29322f", cardSize: "small-ticket", exportScale: 1, material: "archival-stock", frame: "cream-mat", edge: "square", side: "front", textureIntensity: 38, brightness: 100, aging: 18 } },
+  { value: "auction", labelKey: "auctionNote", defaultImagePosition: "top", defaults: { fontSize: 15, alignment: "left", border: true, backgroundColor: "#fffaf0", textColor: "#272b2d", cardSize: "a6-landscape", exportScale: 1, material: "white-board", frame: "black-gallery", edge: "ticket", side: "front", textureIntensity: 22, brightness: 102, aging: 4 } },
+  { value: "coin-cabinet", labelKey: "coinCabinetTicket", defaultImagePosition: "pair", defaults: { fontSize: 14, alignment: "left", border: true, backgroundColor: "#e8dfc8", textColor: "#282a27", cardSize: "small-ticket", exportScale: 1, material: "green-felt", frame: "coin-double", edge: "rounded", side: "front", textureIntensity: 62, brightness: 92, aging: 8, secondaryImageId: "" } },
+  { value: "exhibition-share", labelKey: "exhibitionShareCard", defaultImagePosition: "center-showcase", defaults: { fontSize: 18, alignment: "center", border: true, backgroundColor: "#f7f2e8", textColor: "#183c36", cardSize: "social-landscape", exportScale: 1, material: "linen", frame: "white-mat", edge: "thin-gold", side: "front", textureIntensity: 35, brightness: 103, aging: 0 } },
+  { value: "minimal", labelKey: "minimalArchiveCard", defaultImagePosition: "left", defaults: { fontSize: 16, alignment: "left", border: false, backgroundColor: "#ffffff", textColor: "#20282a", cardSize: "a6-landscape", exportScale: 1, material: "white-board", frame: "transparent", edge: "square", side: "front", textureIntensity: 10, brightness: 100, aging: 0 } }
+];
+
+const LABEL_CARD_SIZES = [
+  { value: "small-ticket", labelKey: "smallTicket", width: 600, height: 360 },
+  { value: "a6-landscape", labelKey: "a6Landscape", width: 740, height: 525 },
+  { value: "a6-portrait", labelKey: "a6Portrait", width: 525, height: 740 },
+  { value: "square-share", labelKey: "squareShareCard", width: 720, height: 720 },
+  { value: "social-landscape", labelKey: "socialShareLandscape", width: 900, height: 506 }
+];
+
+const LABEL_CARD_IMAGE_POSITIONS = [
+  { value: "center-showcase", labelKey: "centeredSingleImage" },
+  { value: "top", labelKey: "imageTopTextBelow" },
+  { value: "left", labelKey: "imageLeftTextRight" },
+  { value: "pair", labelKey: "obverseReversePair" },
+  { value: "main-detail", labelKey: "mainImageDetailImage" },
+  { value: "text-only", labelKey: "textOnlyArchivalLabel" }
+];
+
+const LABEL_CARD_MATERIALS = [
+  { value: "cream-paper", labelKey: "creamAlbumPaper", backgroundColor: "#f4ecd8", textColor: "#203832" },
+  { value: "archival-stock", labelKey: "archivalCardStock", backgroundColor: "#e8dec8", textColor: "#29322f" },
+  { value: "aged-paper", labelKey: "agedPaper", backgroundColor: "#d8bd82", textColor: "#3a2a19" },
+  { value: "linen", labelKey: "linenTexture", backgroundColor: "#eee7d7", textColor: "#253430" },
+  { value: "white-board", labelKey: "whiteMuseumBoard", backgroundColor: "#ffffff", textColor: "#20282a" },
+  { value: "dark-walnut", labelKey: "darkWalnutWood", backgroundColor: "#2f1d13", textColor: "#f5ead7" },
+  { value: "mahogany", labelKey: "mahoganyWood", backgroundColor: "#4b1f1c", textColor: "#f8ead8" },
+  { value: "black-velvet", labelKey: "blackVelvet", backgroundColor: "#151716", textColor: "#f4efe4" },
+  { value: "green-felt", labelKey: "greenFelt", backgroundColor: "#274c3a", textColor: "#f7f0dc" }
+];
+
+const LABEL_CARD_FRAMES = [
+  { value: "thin-double", labelKey: "thinDoubleAlbumFrame" },
+  { value: "black-mount", labelKey: "blackStampMount" },
+  { value: "cream-mat", labelKey: "creamMatWindow" },
+  { value: "transparent", labelKey: "transparentMount" },
+  { value: "coin-recess", labelKey: "circularCoinRecess" },
+  { value: "capsule", labelKey: "capsuleRim" },
+  { value: "velvet-tray", labelKey: "velvetTray" },
+  { value: "wood-slot", labelKey: "woodenCabinetSlot" },
+  { value: "coin-double", labelKey: "obverseReverseFrame" },
+  { value: "gold", labelKey: "classicGoldFrame" },
+  { value: "dark-wood", labelKey: "darkWoodFrame" },
+  { value: "black-gallery", labelKey: "blackGalleryFrame" },
+  { value: "white-mat", labelKey: "whiteMatFrame" }
+];
+
+const LABEL_CARD_EDGES = [
+  { value: "square", labelKey: "squareEdge" },
+  { value: "rounded", labelKey: "roundedEdge" },
+  { value: "clipped", labelKey: "clippedCorners" },
+  { value: "double-line", labelKey: "doubleLineEdge" },
+  { value: "embossed", labelKey: "embossedEdge" },
+  { value: "thin-gold", labelKey: "thinGoldEdge" },
+  { value: "ticket", labelKey: "ticketPerforation" },
+  { value: "deckled", labelKey: "deckledEdge" }
+];
+
 function textFontCss(value) {
   return TEXT_FONT_OPTIONS.find((option) => option.value === value)?.css || TEXT_FONT_OPTIONS[0].css;
 }
@@ -4682,12 +5666,12 @@ function styleToCss(style) {
     .join(";");
 }
 
-function safeExportFilename(name) {
-  const cleaned = String(name || "album")
+function safeExportFilename(name, fallback = "album") {
+  const cleaned = String(name || fallback)
     .replace(/[<>:"/\\|?*\x00-\x1f]/g, "-")
     .replace(/\s+/g, " ")
     .trim();
-  return cleaned || "album";
+  return cleaned || fallback;
 }
 
 function exportFrameCss(entry) {

@@ -591,6 +591,50 @@ async function main() {
   assert(lowPdfSize <= originalPdfSize, `Low-quality PDF is larger than original-quality PDF: ${JSON.stringify({ originalPdfSize, lowPdfSize })}`);
   assert(!exportSmoke.png.diagnostics.hasHorizontalScrollbar && !exportSmoke.png.diagnostics.hasVerticalScrollbar, `PNG export had scrollbars: ${JSON.stringify(exportSmoke.png.diagnostics)}`);
 
+  const labelCardPng = path.join(tempRoot, "label-card-export.png");
+  const labelCardSmoke = await evaluate(
+    client,
+    `(async () => {
+      let detail = await window.archiveAPI.createLabelCard({
+        itemId: "item-multi",
+        title: "Manual Label Card",
+        subtitle: "Smoke subtitle",
+        main_text: "Manually written smoke card.",
+        small_notes: "front",
+        provenance_text: "Estate box",
+        catalog_text: "A1",
+        image_id: "image-one",
+        image_position: "left",
+        preset: "museum",
+        style: { fontSize: 17, alignment: "left", border: true, backgroundColor: "#f7f1e4", textColor: "#283331" }
+      });
+      const created = detail.labelCards[0];
+      detail = await window.archiveAPI.updateLabelCard({
+        ...created,
+        title: "Edited Manual Label Card",
+        main_text: "Edited manual text.",
+        style: { ...created.style, fontSize: 18, alignment: "center" }
+      });
+      const reopened = await window.archiveAPI.getItem("item-multi");
+      const card = reopened.labelCards.find((entry) => entry.title === "Edited Manual Label Card");
+      const imageUrl = card.image?.url || reopened.images[0]?.url || "";
+      const html = '<!doctype html><html><head><style>*{box-sizing:border-box}html,body{margin:0;width:360px;height:240px;overflow:hidden}.card{width:360px;height:240px;padding:20px;background:#f7f1e4;color:#283331;border:1px solid #b9aa8b;font:18px Arial;text-align:center}.card img{max-width:110px;max-height:120px;object-fit:contain;float:left;margin-right:16px}.card h1{font-size:24px;margin:0 0 8px}.card p{margin:0 0 8px}</style></head><body><section class="card" data-export-page>' + (imageUrl ? '<img src="' + imageUrl + '" alt="">' : '') + '<h1>' + card.title + '</h1><p>' + card.main_text + '</p><small>' + card.catalog_text + '</small></section></body></html>';
+      const exported = await window.archiveAPI.exportLabelCardPng({ html, width: 360, height: 240, filePath: ${JSON.stringify(labelCardPng)}, defaultFilename: "label-card-export.png" });
+      return {
+        count: reopened.labelCards.length,
+        cardTitle: card?.title,
+        cardText: card?.main_text,
+        imageId: card?.image_id,
+        styleFontSize: card?.style?.fontSize,
+        exported
+      };
+    })()`
+  );
+  assert(labelCardSmoke.count >= 1, `Label card was not saved: ${JSON.stringify(labelCardSmoke)}`);
+  assert(labelCardSmoke.cardTitle === "Edited Manual Label Card" && labelCardSmoke.cardText === "Edited manual text.", `Label card edit/reopen failed: ${JSON.stringify(labelCardSmoke)}`);
+  assert(labelCardSmoke.imageId === "image-one" && Number(labelCardSmoke.styleFontSize) === 18, `Label card image/style did not persist: ${JSON.stringify(labelCardSmoke)}`);
+  assert(!labelCardSmoke.exported.canceled && fs.existsSync(labelCardPng) && fs.statSync(labelCardPng).size > 20, `Label card PNG export failed: ${JSON.stringify(labelCardSmoke)}`);
+
   const data = await evaluate(
     client,
     `(async () => {
