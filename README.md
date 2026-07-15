@@ -65,6 +65,14 @@ On Windows packaged builds, the user data folder is normally under:
 
 Back up this folder regularly, especially `archive.sqlite`, `images/`, `thumbnails/`, and `attachments/`. Runtime archive data is intentionally stored outside the installed app and outside `app.asar` so it remains writable and can be backed up independently.
 
+The app also includes a Storage & backup dialog from the sidebar. It can:
+
+- Open the data folder.
+- Show storage usage by category: database, images, thumbnails, attachments, webpage captures, and temp/cache.
+- Create a metadata-only backup folder containing the SQLite database and a manifest, excluding images, thumbnails, attachments, captures, and cache.
+- Create an optional full backup folder containing the database, images, attachments, and captures. Thumbnails and temp/cache/export folders are excluded by default.
+- Restore a metadata-only or full backup folder after validating `backup-manifest.json`, `archive.sqlite`, and SQLite integrity. Restore shows a preview with counts, included media folders, and current data size that may be affected. Metadata-only restore backs up only the current `archive.sqlite` plus a small manifest before replacing the database, so existing media folders are not copied or moved. Full restore renames the current database, images, attachments, and captures into a timestamped same-volume pre-restore folder, copies restored data into the active data folder, and rolls back from that folder if restore fails. Generated thumbnails/cache are excluded and regenerated as needed.
+
 Do not commit local archive data, generated thumbnails, performance databases, smoke-test artifacts, or build output. `.gitignore` excludes these paths.
 
 Clean temporary smoke/test folders and old build cache folders:

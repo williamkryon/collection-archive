@@ -10,6 +10,7 @@ const initSqlJs = require("sql.js");
 const heicConvert = require("heic-convert");
 const QRCode = require("qrcode");
 const sharp = require("sharp");
+const backupRestore = require("./backup-restore-core");
 
 let db;
 let SQL;
@@ -92,8 +93,71 @@ function getPaths() {
     images: path.join(base, "images"),
     thumbs: path.join(base, "thumbnails"),
     attachments: path.join(base, "attachments"),
+    captures: path.join(base, "captures"),
     phoneUploads: path.join(base, "phone-upload-temp")
   };
+}
+
+function safeStat(filePath) {
+  try {
+    return fs.statSync(filePath);
+  } catch {
+    return null;
+  }
+}
+
+function folderUsage(folder) {
+  const usage = { bytes: 0, files: 0 };
+  const stat = safeStat(folder);
+  if (!stat) return usage;
+  if (stat.isFile()) {
+    return { bytes: stat.size, files: 1 };
+  }
+  if (!stat.isDirectory()) return usage;
+  for (const entry of fs.readdirSync(folder, { withFileTypes: true })) {
+    const entryPath = path.join(folder, entry.name);
+    if (entry.isDirectory()) {
+      const child = folderUsage(entryPath);
+      usage.bytes += child.bytes;
+      usage.files += child.files;
+    } else if (entry.isFile()) {
+      const childStat = safeStat(entryPath);
+      if (childStat) {
+        usage.bytes += childStat.size;
+        usage.files += 1;
+      }
+    }
+  }
+  return usage;
+}
+
+function sanitizeFolderName(name) {
+  return String(name || "backup")
+    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 120) || "backup";
+}
+
+function backupTimestamp() {
+  return new Date().toISOString().replace(/[:.]/g, "-");
+}
+
+function copyIfExists(source, destination) {
+  if (!source || !fs.existsSync(source)) return false;
+  ensureDir(path.dirname(destination));
+  fs.cpSync(source, destination, { recursive: true, force: true });
+  return true;
+}
+
+function writeBackupManifest(folder, payload) {
+  fs.writeFileSync(path.join(folder, "backup-manifest.json"), JSON.stringify({
+    app: "Collection Archive",
+    version: "0.1.0",
+    created_at: now(),
+    data_folder: paths.base,
+    ...payload
+  }, null, 2));
 }
 
 function isInside(parent, child) {
@@ -657,6 +721,7 @@ async function initDatabase() {
     ensureDir(paths.images);
     ensureDir(paths.thumbs);
     ensureDir(paths.attachments);
+    ensureDir(paths.captures);
     ensureDir(paths.phoneUploads);
   });
 
@@ -4016,6 +4081,154 @@ ipcMain.handle("album-export:pdf", async (_event, payload = {}) => {
 ipcMain.handle("app:reveal-data-folder", () => {
   shell.openPath(paths.base);
   return paths.base;
+});
+
+function attachmentUsageByKind() {
+  const usage = { attachments: { bytes: 0, files: 0 }, captures: { bytes: 0, files: 0 } };
+  const rows = tableExists("item_attachments")
+    ? all("SELECT relative_path, stored_filename, attachment_kind FROM item_attachments")
+    : [];
+  const seen = new Set();
+  rows.forEach((row) => {
+    const raw = row.relative_path || row.stored_filename;
+    if (!raw) return;
+    const filePath = path.resolve(paths.attachments, path.basename(raw));
+    if (!isInside(paths.attachments, filePath) || seen.has(filePath)) return;
+    seen.add(filePath);
+    const stat = safeStat(filePath);
+    if (!stat?.isFile()) return;
+    const bucket = row.attachment_kind === "webpage_pdf" ? usage.captures : usage.attachments;
+    bucket.bytes += stat.size;
+    bucket.files += 1;
+  });
+  const folder = folderUsage(paths.attachments);
+  const knownBytes = usage.attachments.bytes + usage.captures.bytes;
+  const knownFiles = usage.attachments.files + usage.captures.files;
+  if (folder.bytes > knownBytes || folder.files > knownFiles) {
+    usage.attachments.bytes += Math.max(0, folder.bytes - knownBytes);
+    usage.attachments.files += Math.max(0, folder.files - knownFiles);
+  }
+  const captureFolder = folderUsage(paths.captures);
+  usage.captures.bytes += captureFolder.bytes;
+  usage.captures.files += captureFolder.files;
+  return usage;
+}
+
+function archiveStorageUsage() {
+  const dbUsage = folderUsage(paths.db);
+  const imageUsage = folderUsage(paths.images);
+  const thumbUsage = folderUsage(paths.thumbs);
+  const attachmentUsage = attachmentUsageByKind();
+  const tempUsage = folderUsage(paths.phoneUploads);
+  const categories = {
+    database: dbUsage,
+    images: imageUsage,
+    thumbnails: thumbUsage,
+    attachments: attachmentUsage.attachments,
+    captures: attachmentUsage.captures,
+    tempCache: tempUsage
+  };
+  const totalBytes = Object.values(categories).reduce((sum, entry) => sum + entry.bytes, 0);
+  return {
+    dataFolder: paths.base,
+    generatedAt: now(),
+    totalBytes,
+    categories
+  };
+}
+
+function inspectBackupFolder(folder) {
+  return backupRestore.inspectBackupFolder({ folder, SQL, paths });
+}
+
+function reloadDatabaseFromDisk() {
+  if (db?.close) db.close();
+  db = new SQL.Database(fs.existsSync(paths.db) ? fs.readFileSync(paths.db) : undefined);
+  execSchema(false);
+  databaseReady = true;
+}
+
+function scheduleRendererReload() {
+  setTimeout(() => {
+    BrowserWindow.getAllWindows().forEach((win) => {
+      if (!win.isDestroyed()) {
+        loadApp(win).catch((error) => {
+          console.error("[restore] failed to reload app window", error);
+        });
+      }
+    });
+  }, 250);
+}
+
+function applyBackupRestore(folder) {
+  return backupRestore.applyBackupRestore({ folder, SQL, paths, saveDb, reloadDatabaseFromDisk });
+}
+
+async function chooseBackupParent() {
+  const result = await dialog.showOpenDialog({
+    title: "Choose backup destination folder",
+    properties: ["openDirectory", "createDirectory"]
+  });
+  return result.canceled ? null : result.filePaths[0];
+}
+
+ipcMain.handle("app:storage-usage", () => archiveStorageUsage());
+
+ipcMain.handle("app:backup-metadata", async () => {
+  const destinationParent = await chooseBackupParent();
+  if (!destinationParent) return { canceled: true };
+  saveDb();
+  const backupFolder = path.join(destinationParent, sanitizeFolderName(`Collection Archive metadata backup ${backupTimestamp()}`));
+  ensureDir(backupFolder);
+  copyIfExists(paths.db, path.join(backupFolder, "archive.sqlite"));
+  writeBackupManifest(backupFolder, {
+    kind: "metadata-only",
+    includes: ["archive.sqlite", "backup-manifest.json"],
+    excludes: ["images", "thumbnails", "attachments", "captures", "temp/cache", "exports"]
+  });
+  return { canceled: false, folder: backupFolder, usage: archiveStorageUsage() };
+});
+
+ipcMain.handle("app:backup-full", async () => {
+  const destinationParent = await chooseBackupParent();
+  if (!destinationParent) return { canceled: true };
+  saveDb();
+  const backupFolder = path.join(destinationParent, sanitizeFolderName(`Collection Archive full backup ${backupTimestamp()}`));
+  ensureDir(backupFolder);
+  copyIfExists(paths.db, path.join(backupFolder, "archive.sqlite"));
+  copyIfExists(paths.images, path.join(backupFolder, "images"));
+  copyIfExists(paths.attachments, path.join(backupFolder, "attachments"));
+  copyIfExists(paths.captures, path.join(backupFolder, "captures"));
+  writeBackupManifest(backupFolder, {
+    kind: "full",
+    includes: ["archive.sqlite", "images", "attachments", "captures", "backup-manifest.json"],
+    excludes: ["thumbnails", "temp/cache", "exports"],
+    note: "Thumbnails and cache/temp folders are intentionally excluded; they can be regenerated or are non-archive working data."
+  });
+  return { canceled: false, folder: backupFolder, usage: archiveStorageUsage() };
+});
+
+ipcMain.handle("app:backup-restore-preview", async () => {
+  const result = await dialog.showOpenDialog({
+    title: "Choose backup folder to restore",
+    properties: ["openDirectory"]
+  });
+  if (result.canceled || !result.filePaths[0]) return { canceled: true };
+  return { canceled: false, ...inspectBackupFolder(result.filePaths[0]) };
+});
+
+ipcMain.handle("app:backup-restore-apply", async (_event, payload = {}) => {
+  const folder = payload.folder;
+  if (!folder) throw new Error("No backup folder selected.");
+  const result = applyBackupRestore(folder);
+  scheduleRendererReload();
+  return {
+    canceled: false,
+    restoredKind: result.preview.manifest.kind,
+    strategy: result.strategy,
+    folder: result.preview.folder,
+    preRestoreBackupFolder: result.preRestoreBackupFolder
+  };
 });
 
 app.whenReady().then(async () => {

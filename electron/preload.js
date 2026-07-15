@@ -69,5 +69,10 @@ contextBridge.exposeInMainWorld("archiveAPI", {
   restoreTrash: (payload) => invoke("trash:restore", payload),
   permanentlyDeleteTrash: (payload) => invoke("trash:permanent-delete", payload),
   emptyTrash: () => invoke("trash:empty"),
+  getStorageUsage: () => invoke("app:storage-usage"),
+  backupMetadata: () => invoke("app:backup-metadata"),
+  backupFull: () => invoke("app:backup-full"),
+  previewRestoreBackup: () => invoke("app:backup-restore-preview"),
+  restoreBackup: (payload) => invoke("app:backup-restore-apply", payload),
   revealDataFolder: () => invoke("app:reveal-data-folder")
 });

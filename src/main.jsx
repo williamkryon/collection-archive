@@ -62,6 +62,48 @@ const translations = {
     bulkCreateErrors: "Errors",
     manageLists: "Manage lists",
     dataFolder: "Data folder",
+    storageBackup: "Storage & backup",
+    archiveStorage: "Archive storage",
+    storageBackupHelp: "Review archive size and create safe backups.",
+    storageUsage: "Storage usage",
+    refreshUsage: "Refresh usage",
+    database: "Database",
+    images: "Images",
+    thumbnails: "Thumbnails",
+    captures: "Captures",
+    tempCache: "Temp/cache",
+    total: "Total",
+    metadataBackup: "Metadata-only backup",
+    metadataBackupHelp: "Backs up the database, settings, albums, layouts, and item metadata. Images, thumbnails, and attachments are excluded.",
+    fullBackup: "Full backup",
+    fullBackupHelp: "Copies the database, images, attachments, and captures. Thumbnails and temp/cache folders are excluded.",
+    fullBackupWarning: "Full backups can be very large. Choose a drive with enough free space.",
+    backupCreated: "Backup created.",
+    backupCanceled: "Backup canceled.",
+    backupFailed: "Backup failed.",
+    restoreBackup: "Restore backup...",
+    loadBackup: "Load backup...",
+    restoreBackupHelp: "Validate a backup folder, preview what it contains, then replace the current archive after an automatic pre-restore backup.",
+    restorePreview: "Restore preview",
+    backupType: "Backup type",
+    createdAt: "Created",
+    appVersion: "App version",
+    currentDataAffected: "Current data affected",
+    itemCount: "Item count",
+    imageMetadataCount: "Image metadata count",
+    albumCount: "Album count",
+    mediaFolders: "Media folders",
+    included: "Included",
+    missing: "Missing",
+    integrityCheck: "Integrity check",
+    foreignKeyWarnings: "Foreign key warnings",
+    metadataRestoreWarning: "This is a metadata-only backup. Images, attachments, and captures are not included and may appear missing after restore.",
+    fullRestoreWarning: "This will replace the current database and media folders with the selected backup.",
+    confirmRestoreBackup: "Restore this backup? Current data will be protected in a pre-restore folder before replacement.",
+    restoreCompleted: "Backup restored. Reloading archive...",
+    restoreFailed: "Restore failed.",
+    preRestoreBackup: "Pre-restore backup",
+    openDataFolder: "Open Data Folder",
     openingArchive: "Opening archive...",
     loadingDatabase: "Loading database...",
     loadingLibrary: "Loading library...",
@@ -495,6 +537,48 @@ translations.zh.selectedObject = "\u9009\u4e2d\u5bf9\u8c61";
 translations.zh.textStyle = "\u6587\u5b57\u6837\u5f0f";
 translations.zh.frame = "\u8fb9\u6846";
 translations.zh.grid = "\u7f51\u683c";
+translations.zh.storageBackup = "\u5b58\u50a8\u4e0e\u5907\u4efd";
+translations.zh.archiveStorage = "\u6863\u6848\u5b58\u50a8";
+translations.zh.storageBackupHelp = "\u67e5\u770b\u6863\u6848\u5360\u7528\u7a7a\u95f4\u5e76\u521b\u5efa\u5b89\u5168\u5907\u4efd\u3002";
+translations.zh.storageUsage = "\u5b58\u50a8\u5360\u7528";
+translations.zh.refreshUsage = "\u5237\u65b0\u5360\u7528";
+translations.zh.database = "\u6570\u636e\u5e93";
+translations.zh.images = "\u56fe\u7247";
+translations.zh.thumbnails = "\u7f29\u7565\u56fe";
+translations.zh.captures = "\u7f51\u9875\u5feb\u7167";
+translations.zh.tempCache = "\u4e34\u65f6/\u7f13\u5b58";
+translations.zh.total = "\u603b\u8ba1";
+translations.zh.metadataBackup = "\u4ec5\u5143\u6570\u636e\u5907\u4efd";
+translations.zh.metadataBackupHelp = "\u5907\u4efd\u6570\u636e\u5e93\u3001\u8bbe\u7f6e\u3001\u518c\u9875\u3001\u5e03\u5c40\u548c\u85cf\u54c1\u5143\u6570\u636e\uff1b\u4e0d\u5305\u542b\u56fe\u7247\u3001\u7f29\u7565\u56fe\u548c\u9644\u4ef6\u3002";
+translations.zh.fullBackup = "\u5b8c\u6574\u5907\u4efd";
+translations.zh.fullBackupHelp = "\u590d\u5236\u6570\u636e\u5e93\u3001\u56fe\u7247\u3001\u9644\u4ef6\u548c\u7f51\u9875\u5feb\u7167\uff1b\u9ed8\u8ba4\u4e0d\u5305\u542b\u7f29\u7565\u56fe\u548c\u4e34\u65f6/\u7f13\u5b58\u6587\u4ef6\u5939\u3002";
+translations.zh.fullBackupWarning = "\u5b8c\u6574\u5907\u4efd\u53ef\u80fd\u5f88\u5927\u3002\u8bf7\u9009\u62e9\u6709\u8db3\u591f\u53ef\u7528\u7a7a\u95f4\u7684\u78c1\u76d8\u3002";
+translations.zh.backupCreated = "\u5907\u4efd\u5df2\u521b\u5efa\u3002";
+translations.zh.backupCanceled = "\u5df2\u53d6\u6d88\u5907\u4efd\u3002";
+translations.zh.backupFailed = "\u5907\u4efd\u5931\u8d25\u3002";
+translations.zh.restoreBackup = "\u6062\u590d\u5907\u4efd...";
+translations.zh.loadBackup = "\u52a0\u8f7d\u5907\u4efd...";
+translations.zh.restoreBackupHelp = "\u9a8c\u8bc1\u5907\u4efd\u6587\u4ef6\u5939\uff0c\u9884\u89c8\u5176\u5185\u5bb9\uff0c\u7136\u540e\u5728\u81ea\u52a8\u521b\u5efa\u6062\u590d\u524d\u5907\u4efd\u540e\u66ff\u6362\u5f53\u524d\u6863\u6848\u3002";
+translations.zh.restorePreview = "\u6062\u590d\u9884\u89c8";
+translations.zh.backupType = "\u5907\u4efd\u7c7b\u578b";
+translations.zh.createdAt = "\u521b\u5efa\u65f6\u95f4";
+translations.zh.appVersion = "\u5e94\u7528\u7248\u672c";
+translations.zh.currentDataAffected = "\u5c06\u53d7\u5f71\u54cd\u7684\u5f53\u524d\u6570\u636e";
+translations.zh.itemCount = "\u85cf\u54c1\u6570";
+translations.zh.imageMetadataCount = "\u56fe\u7247\u5143\u6570\u636e\u6570";
+translations.zh.albumCount = "\u518c\u9875\u6570";
+translations.zh.mediaFolders = "\u5a92\u4f53\u6587\u4ef6\u5939";
+translations.zh.included = "\u5df2\u5305\u542b";
+translations.zh.missing = "\u7f3a\u5931";
+translations.zh.integrityCheck = "\u5b8c\u6574\u6027\u68c0\u67e5";
+translations.zh.foreignKeyWarnings = "\u5916\u952e\u8b66\u544a";
+translations.zh.metadataRestoreWarning = "\u8fd9\u662f\u4ec5\u5143\u6570\u636e\u5907\u4efd\u3002\u56fe\u7247\u3001\u9644\u4ef6\u548c\u7f51\u9875\u5feb\u7167\u4e0d\u5305\u542b\u5728\u5185\uff0c\u6062\u590d\u540e\u53ef\u80fd\u663e\u793a\u4e3a\u7f3a\u5931\u3002";
+translations.zh.fullRestoreWarning = "\u8fd9\u5c06\u7528\u6240\u9009\u5907\u4efd\u66ff\u6362\u5f53\u524d\u6570\u636e\u5e93\u548c\u5a92\u4f53\u6587\u4ef6\u5939\u3002";
+translations.zh.confirmRestoreBackup = "\u8981\u6062\u590d\u6b64\u5907\u4efd\u5417\uff1f\u5c06\u5148\u628a\u5f53\u524d\u6570\u636e\u4fdd\u62a4\u5230\u6062\u590d\u524d\u6587\u4ef6\u5939\uff0c\u7136\u540e\u66ff\u6362\u3002";
+translations.zh.restoreCompleted = "\u5907\u4efd\u5df2\u6062\u590d\u3002\u6b63\u5728\u91cd\u65b0\u52a0\u8f7d\u6863\u6848...";
+translations.zh.restoreFailed = "\u6062\u590d\u5931\u8d25\u3002";
+translations.zh.preRestoreBackup = "\u6062\u590d\u524d\u5907\u4efd";
+translations.zh.openDataFolder = "\u6253\u5f00\u6570\u636e\u6587\u4ef6\u5939";
 translations.zh.loadingDatabase = "\u6b63\u5728\u52a0\u8f7d\u6570\u636e\u5e93...";
 translations.zh.loadingLibrary = "\u6b63\u5728\u52a0\u8f7d\u9986\u85cf...";
 translations.zh.preparingInterface = "\u6b63\u5728\u51c6\u5907\u5de5\u4f5c\u533a...";
@@ -1584,6 +1668,232 @@ function TrashView({ rows, onRestore, onPermanentDelete, onEmpty }) {
   );
 }
 
+const STORAGE_CATEGORY_KEYS = [
+  ["database", "database"],
+  ["images", "images"],
+  ["thumbnails", "thumbnails"],
+  ["attachments", "attachments"],
+  ["captures", "captures"],
+  ["tempCache", "tempCache"]
+];
+
+function StorageBackupDialog({ onClose, onMessage }) {
+  const { t } = useI18n();
+  const [usage, setUsage] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const [restorePreview, setRestorePreview] = useState(null);
+
+  async function loadUsage() {
+    setLoading(true);
+    setError("");
+    try {
+      setUsage(await api.getStorageUsage());
+    } catch (usageError) {
+      setError(usageError.message || String(usageError));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadUsage();
+  }, []);
+
+  async function runBackup(kind) {
+    if (kind === "full" && !window.confirm(`${t("fullBackupWarning")}\n\n${t("fullBackupHelp")}`)) {
+      return;
+    }
+    setBusy(kind);
+    setError("");
+    try {
+      const result = kind === "full" ? await api.backupFull() : await api.backupMetadata();
+      if (result?.canceled) {
+        onMessage(t("backupCanceled"));
+      } else {
+        setUsage(result.usage || await api.getStorageUsage());
+        onMessage(`${t("backupCreated")} ${result.folder || ""}`.trim());
+      }
+    } catch (backupError) {
+      setError(backupError.message || String(backupError));
+      onMessage(`${t("backupFailed")} ${backupError.message || backupError}`);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function loadRestorePreview() {
+    setBusy("restore-preview");
+    setError("");
+    try {
+      const result = await api.previewRestoreBackup();
+      if (result?.canceled) {
+        onMessage(t("backupCanceled"));
+        return;
+      }
+      setRestorePreview(result);
+    } catch (restoreError) {
+      setError(restoreError.message || String(restoreError));
+      onMessage(`${t("restoreFailed")} ${restoreError.message || restoreError}`);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function applyRestore() {
+    if (!restorePreview?.valid || !restorePreview.folder) return;
+    if (!window.confirm(`${t("confirmRestoreBackup")}\n\n${restorePreview.manifest?.kind === "metadata-only" ? t("metadataRestoreWarning") : t("fullRestoreWarning")}`)) {
+      return;
+    }
+    setBusy("restore");
+    setError("");
+    try {
+      const result = await api.restoreBackup({ folder: restorePreview.folder });
+      onMessage(`${t("restoreCompleted")} ${t("preRestoreBackup")}: ${result.preRestoreBackupFolder || ""}`.trim());
+    } catch (restoreError) {
+      setError(restoreError.message || String(restoreError));
+      onMessage(`${t("restoreFailed")} ${restoreError.message || restoreError}`);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  const categories = usage?.categories || {};
+  const mediaLabels = [
+    ["images", t("images")],
+    ["attachments", t("attachments")],
+    ["captures", t("captures")]
+  ];
+
+  return (
+    <div className="modal-backdrop">
+      <section className="modal storage-backup-dialog" role="dialog" aria-modal="true" aria-label={t("archiveStorage")}>
+        <header>
+          <div>
+            <h2>{t("archiveStorage")}</h2>
+            <p className="hint">{t("storageBackupHelp")}</p>
+          </div>
+          <button type="button" onClick={onClose}>{t("close")}</button>
+        </header>
+
+        <section className="storage-section">
+          <div className="storage-section-header">
+            <h3>{t("storageUsage")}</h3>
+            <button type="button" className="secondary" disabled={loading || Boolean(busy)} onClick={loadUsage}>
+              {t("refreshUsage")}
+            </button>
+          </div>
+          {loading ? (
+            <p className="quiet">{t("loading")}</p>
+          ) : (
+            <div className="storage-usage-list">
+              {STORAGE_CATEGORY_KEYS.map(([key, labelKey]) => (
+                <div className="storage-usage-row" key={key}>
+                  <span>{t(labelKey)}</span>
+                  <strong>{formatFileSize(categories[key]?.bytes || 0)}</strong>
+                  <small>{categories[key]?.files || 0} files</small>
+                </div>
+              ))}
+              <div className="storage-usage-row total">
+                <span>{t("total")}</span>
+                <strong>{formatFileSize(usage?.totalBytes || 0)}</strong>
+                <small>{usage?.dataFolder || ""}</small>
+              </div>
+            </div>
+          )}
+          {error && <p className="error-text">{error}</p>}
+        </section>
+
+        <section className="storage-section backup-options">
+          <article>
+            <h3>{t("metadataBackup")}</h3>
+            <p className="hint">{t("metadataBackupHelp")}</p>
+            <button type="button" className="primary" disabled={Boolean(busy)} onClick={() => runBackup("metadata")}>
+              {busy === "metadata" ? t("loading") : t("metadataBackup")}
+            </button>
+          </article>
+          <article>
+            <h3>{t("fullBackup")}</h3>
+            <p className="hint">{t("fullBackupHelp")}</p>
+            <p className="warning-text">{t("fullBackupWarning")}</p>
+            <button type="button" className="secondary" disabled={Boolean(busy)} onClick={() => runBackup("full")}>
+              {busy === "full" ? t("loading") : t("fullBackup")}
+            </button>
+          </article>
+        </section>
+
+        <section className="storage-section restore-section">
+          <div className="storage-section-header">
+            <div>
+              <h3>{t("restoreBackup")}</h3>
+              <p className="hint">{t("restoreBackupHelp")}</p>
+            </div>
+            <button type="button" className="secondary" disabled={Boolean(busy)} onClick={loadRestorePreview}>
+              {busy === "restore-preview" ? t("loading") : t("loadBackup")}
+            </button>
+          </div>
+          {restorePreview && (
+            <div className="restore-preview">
+              <h4>{t("restorePreview")}</h4>
+              {restorePreview.valid ? (
+                <>
+                  <dl className="restore-preview-grid">
+                    <div><dt>{t("backupType")}</dt><dd>{restorePreview.manifest?.kind || "-"}</dd></div>
+                    <div><dt>{t("createdAt")}</dt><dd>{restorePreview.manifest?.created_at || "-"}</dd></div>
+                    <div><dt>{t("appVersion")}</dt><dd>{restorePreview.manifest?.version || "-"}</dd></div>
+                    <div><dt>{t("currentDataAffected")}</dt><dd>{formatFileSize(restorePreview.currentReplacement?.totalBytes || 0)}</dd></div>
+                    <div><dt>{t("itemCount")}</dt><dd>{restorePreview.counts?.items ?? 0}</dd></div>
+                    <div><dt>{t("imageMetadataCount")}</dt><dd>{restorePreview.counts?.images ?? 0}</dd></div>
+                    <div><dt>{t("albumCount")}</dt><dd>{restorePreview.counts?.albums ?? 0}</dd></div>
+                    <div><dt>{t("integrityCheck")}</dt><dd>{restorePreview.integrity?.ok ? "OK" : (restorePreview.integrity?.messages || []).join(", ") || "-"}</dd></div>
+                  </dl>
+                  <div className="media-status-list" aria-label={t("mediaFolders")}>
+                    {mediaLabels.map(([key, label]) => (
+                      <span className={restorePreview.media?.[key] ? "media-status included" : "media-status missing"} key={key}>
+                        {label}: {restorePreview.media?.[key] ? t("included") : t("missing")}
+                      </span>
+                    ))}
+                  </div>
+                  {restorePreview.manifest?.kind === "metadata-only" && <p className="warning-text">{t("metadataRestoreWarning")}</p>}
+                  {restorePreview.manifest?.kind === "full" && <p className="warning-text">{t("fullRestoreWarning")}</p>}
+                  {restorePreview.foreignKeyWarnings?.length > 0 && (
+                    <details className="restore-warnings">
+                      <summary>{t("foreignKeyWarnings")}: {restorePreview.foreignKeyWarnings.length}</summary>
+                      <ul>
+                        {restorePreview.foreignKeyWarnings.slice(0, 20).map((warning, index) => (
+                          <li key={`${warning.table}-${warning.rowid}-${index}`}>
+                            {warning.table || "-"} row {warning.rowid || "-"} → {warning.parent || "-"}
+                          </li>
+                        ))}
+                        {restorePreview.foreignKeyWarnings.length > 20 && <li>...</li>}
+                      </ul>
+                    </details>
+                  )}
+                  <button type="button" className="danger" disabled={busy === "restore"} onClick={applyRestore}>
+                    {busy === "restore" ? t("loading") : t("restoreBackup")}
+                  </button>
+                </>
+              ) : (
+                <div className="restore-errors">
+                  {(restorePreview.errors || []).map((message, index) => (
+                    <p className="error-text" key={`${message}-${index}`}>{message}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+
+        <footer>
+          <button type="button" className="secondary" onClick={() => api.revealDataFolder()}>{t("openDataFolder")}</button>
+          <button type="button" onClick={onClose}>{t("close")}</button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
 function useInputDiagnostics(context) {
   const contextRef = useRef(context);
 
@@ -1707,6 +2017,7 @@ function ArchiveApp() {
   const [typeFormOpen, setTypeFormOpen] = useState(false);
   const [albumFormOpen, setAlbumFormOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
+  const [storageOpen, setStorageOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [phoneUpload, setPhoneUpload] = useState(null);
   const [phoneUploadOpen, setPhoneUploadOpen] = useState(false);
@@ -1746,6 +2057,7 @@ function ArchiveApp() {
       typeFormOpen,
       albumFormOpen,
       manageOpen,
+      storageOpen,
       bulkEditOpen,
       bulkCreateOpen,
       bulkAlbumOpen,
@@ -1768,6 +2080,7 @@ function ArchiveApp() {
     itemFormOpen,
     manageOpen,
     phoneUploadOpen,
+    storageOpen,
     selectedAlbumId,
     selectedItemId,
     selectedLibraryIds,
@@ -2344,7 +2657,7 @@ function ArchiveApp() {
           </label>
           <button onClick={() => setItemFormOpen(true)}>{t("newItem")}</button>
           <button onClick={() => setManageOpen(true)}>{t("manageLists")}</button>
-          <button className="ghost" onClick={() => api.revealDataFolder()}>
+          <button className="ghost" onClick={() => setStorageOpen(true)}>
             {t("dataFolder")}
           </button>
         </div>
@@ -2567,6 +2880,12 @@ function ArchiveApp() {
           library={library}
           onClose={() => setManageOpen(false)}
           onRefresh={refresh}
+          onMessage={setMessage}
+        />
+      )}
+      {storageOpen && (
+        <StorageBackupDialog
+          onClose={() => setStorageOpen(false)}
           onMessage={setMessage}
         />
       )}

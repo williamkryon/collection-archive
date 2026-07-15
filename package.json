@@ -12,6 +12,7 @@
     "dist:win:installer": "set CSC_IDENTITY_AUTO_DISCOVERY=false&& npm run build && C:\\Progra~1\\nodejs\\node.exe node_modules/electron-builder/cli.js --win nsis",
     "dist:win:portable": "set CSC_IDENTITY_AUTO_DISCOVERY=false&& npm run build && C:\\Progra~1\\nodejs\\node.exe node_modules/electron-builder/cli.js --win portable",
     "clean:temp": "C:\\Progra~1\\nodejs\\node.exe scripts/clean-temp.cjs",
+    "test:backup-restore": "C:\\Progra~1\\nodejs\\node.exe scripts/test-backup-restore.cjs",
     "smoke:album": "C:\\Progra~1\\nodejs\\node.exe scripts/smoke-album-layout.cjs",
     "seed:perf": "C:\\Progra~1\\nodejs\\node.exe scripts/seed-perf.cjs",
     "test:perf": "C:\\Progra~1\\nodejs\\node.exe scripts/test-perf.cjs"
