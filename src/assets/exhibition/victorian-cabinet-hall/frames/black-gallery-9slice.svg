@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240">
+  <defs><linearGradient id="lacquer" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#080909"/><stop offset=".32" stop-color="#474a48"/><stop offset=".5" stop-color="#111312"/><stop offset=".78" stop-color="#343735"/><stop offset="1" stop-color="#050606"/></linearGradient></defs>
+  <path d="M0 0h240v72H0zM0 168h240v72H0zM0 0h72v240H0zM168 0h72v240h-72z" fill="url(#lacquer)"/>
+  <path d="M72 54h96v18H72zM72 168h96v18H72zM54 72h18v96H54zM168 72h18v96h-18z" fill="#030404" stroke="#747875" stroke-width="2"/>
+  <path d="M7 7h226v226H7z" fill="none" stroke="#666a67" stroke-width="7"/><path d="M75 75h90v90H75z" fill="none" stroke="#090a0a" stroke-width="7"/>
+</svg>

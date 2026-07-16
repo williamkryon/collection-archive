@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="320" viewBox="0 0 600 320" preserveAspectRatio="none">
+  <defs>
+    <linearGradient id="wood" x2="0" y2="1"><stop stop-color="#6d4328"/><stop offset=".4" stop-color="#3c2418"/><stop offset="1" stop-color="#20140f"/></linearGradient>
+    <linearGradient id="panel" x2="1" y2="1"><stop stop-color="#9a6840"/><stop offset=".22" stop-color="#5a3521"/><stop offset=".8" stop-color="#2b1a12"/><stop offset="1" stop-color="#795036"/></linearGradient>
+    <filter id="grain"><feTurbulence baseFrequency=".035 .24" numOctaves="2" seed="8"/><feBlend in="SourceGraphic" mode="multiply"/></filter>
+  </defs>
+  <rect width="600" height="320" fill="url(#wood)"/>
+  <g filter="url(#grain)" opacity=".88">
+    <path d="M28 28h244v250H28zM328 28h244v250H328z" fill="url(#panel)" stroke="#160d09" stroke-width="14"/>
+    <path d="M48 50h204v206H48zM348 50h204v206H348z" fill="none" stroke="#bd8652" stroke-opacity=".38" stroke-width="7"/>
+    <path d="M67 69h166v168H67zM367 69h166v168H367z" fill="#27170f" fill-opacity=".26" stroke="#130b08" stroke-width="3"/>
+  </g>
+  <path d="M0 8h600v16H0zM0 286h600v30H0z" fill="#1d110c"/>
+  <path d="M0 0h600v9H0zM0 280h600v9H0z" fill="#b27b48" fill-opacity=".46"/>
+</svg>

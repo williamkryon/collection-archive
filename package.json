@@ -16,6 +16,7 @@
     "test:health": "C:\\Progra~1\\nodejs\\node.exe scripts/test-archive-health.cjs",
     "test:thumbnail-fallback": "C:\\Progra~1\\nodejs\\node.exe scripts/test-thumbnail-fallback.cjs",
     "smoke:album": "C:\\Progra~1\\nodejs\\node.exe scripts/smoke-album-layout.cjs",
+    "smoke:exhibition": "C:\\Progra~1\\nodejs\\node.exe scripts/smoke-exhibition.cjs",
     "smoke:label-cards": "C:\\Progra~1\\nodejs\\node.exe scripts/smoke-label-cards.cjs",
     "seed:perf": "C:\\Progra~1\\nodejs\\node.exe scripts/seed-perf.cjs",
     "test:perf": "C:\\Progra~1\\nodejs\\node.exe scripts/test-perf.cjs"

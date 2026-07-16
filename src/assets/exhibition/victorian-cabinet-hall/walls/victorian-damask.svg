@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="300" viewBox="0 0 240 300">
+  <defs>
+    <linearGradient id="paper" x2="0" y2="1"><stop stop-color="#c7b591"/><stop offset="1" stop-color="#aa9674"/></linearGradient>
+    <pattern id="damask" width="120" height="150" patternUnits="userSpaceOnUse">
+      <path d="M60 16c-11 19-28 23-28 45 0 13 9 22 19 30-9 13-12 26 9 43 21-17 18-30 9-43 10-8 19-17 19-30 0-22-17-26-28-45Z" fill="#4f493b" fill-opacity=".13"/>
+      <path d="M60 29c-4 17-16 20-16 34 0 11 8 17 16 24 8-7 16-13 16-24 0-14-12-17-16-34Zm0 63c-7 10-12 18 0 31 12-13 7-21 0-31Z" fill="none" stroke="#fff6dc" stroke-opacity=".17" stroke-width="2"/>
+      <path d="M4 76h28M88 76h28" stroke="#5b4f3d" stroke-opacity=".1"/>
+    </pattern>
+  </defs>
+  <rect width="240" height="300" fill="url(#paper)"/>
+  <rect width="240" height="300" fill="url(#damask)"/>
+  <path d="M0 0v300M120 0v300M239 0v300" stroke="#6b5a42" stroke-opacity=".08"/>
+</svg>

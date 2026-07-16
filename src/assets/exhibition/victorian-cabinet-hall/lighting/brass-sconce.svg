@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="260" viewBox="0 0 180 260">
+  <defs>
+    <radialGradient id="glow"><stop stop-color="#fff8c8"/><stop offset=".32" stop-color="#ffd875"/><stop offset="1" stop-color="#b16d21"/></radialGradient>
+    <linearGradient id="brass" x2="1" y2="1"><stop stop-color="#5d3b10"/><stop offset=".26" stop-color="#e1b65e"/><stop offset=".48" stop-color="#7b4f16"/><stop offset=".72" stop-color="#f1cf78"/><stop offset="1" stop-color="#56350d"/></linearGradient>
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="8" stdDeviation="7" flood-color="#1b1208" flood-opacity=".55"/></filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <ellipse cx="90" cy="141" rx="27" ry="42" fill="#20150b" opacity=".35"/>
+    <path d="M90 152v54c0 17-17 22-30 22" fill="none" stroke="url(#brass)" stroke-width="15" stroke-linecap="round"/>
+    <path d="M58 220h64l-9 25H67z" fill="url(#brass)" stroke="#3d260b" stroke-width="4"/>
+    <path d="M42 90h96l-17 76H59z" fill="#fff0ae" fill-opacity=".65" stroke="url(#brass)" stroke-width="8"/>
+    <ellipse cx="90" cy="99" rx="37" ry="47" fill="url(#glow)" opacity=".86"/>
+    <path d="M55 76c9-38 61-38 70 0" fill="none" stroke="url(#brass)" stroke-width="9"/>
+    <circle cx="90" cy="143" r="13" fill="url(#brass)"/>
+  </g>
+</svg>

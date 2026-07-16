@@ -1,0 +1,45 @@
+{
+  "id": "victorian-cabinet-hall",
+  "name": "Victorian Cabinet Hall",
+  "version": 1,
+  "scene": {
+    "width": 1920,
+    "height": 1080
+  },
+  "layers": {
+    "walls": {
+      "plain": "walls/subtle-plaster-overlay.svg",
+      "plaster": "walls/warm-plaster.svg",
+      "linen": "walls/linen-cloth.svg",
+      "wallpaper": "walls/victorian-damask.svg"
+    },
+    "crownMolding": "architecture/crown-molding.svg",
+    "wainscoting": "architecture/carved-wainscoting.svg",
+    "chairRail": "architecture/chair-rail.svg",
+    "brassSconce": "lighting/brass-sconce.svg",
+    "lightWash": "lighting/warm-light-wash.svg"
+  },
+  "frames": {
+    "ornate-gold": {
+      "source": "frames/ornate-gold-9slice.svg",
+      "slice": 92,
+      "status": "placeholder-art"
+    },
+    "dark-wood": {
+      "source": "frames/carved-dark-wood-9slice.svg",
+      "slice": 92,
+      "status": "placeholder-art"
+    },
+    "black-gallery": {
+      "source": "frames/black-gallery-9slice.svg",
+      "slice": 72,
+      "status": "production"
+    },
+    "white-mat": {
+      "source": "frames/warm-white-mat-9slice.svg",
+      "slice": 72,
+      "status": "production"
+    }
+  },
+  "notes": "The asset pipeline and 9-slice behavior are production-ready. Ornate gold and carved wood artwork are explicitly replaceable local placeholders."
+}

@@ -314,7 +314,10 @@ function execSchema(databaseWasCreated = false) {
     "album_pages",
     "album_page_items",
     "album_text_items",
-    "album_page_templates"
+    "album_page_templates",
+    "exhibitions",
+    "exhibition_segments",
+    "exhibition_placements"
   ];
   if (!dirty) {
     dirty = expectedTables.some((name) => !tableExists(name));
@@ -551,6 +554,46 @@ function execSchema(databaseWasCreated = false) {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS exhibitions (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      style_json TEXT DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS exhibition_segments (
+      id TEXT PRIMARY KEY,
+      exhibition_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      segment_number INTEGER NOT NULL,
+      style_json TEXT DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (exhibition_id) REFERENCES exhibitions(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS exhibition_placements (
+      id TEXT PRIMARY KEY,
+      segment_id TEXT NOT NULL,
+      item_id TEXT NOT NULL,
+      image_id TEXT,
+      x REAL NOT NULL DEFAULT 10,
+      y REAL NOT NULL DEFAULT 12,
+      width REAL NOT NULL DEFAULT 22,
+      height REAL NOT NULL DEFAULT 42,
+      z_index INTEGER NOT NULL DEFAULT 0,
+      frame_style TEXT NOT NULL DEFAULT 'black-gallery',
+      label_text TEXT DEFAULT '',
+      show_label INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (segment_id) REFERENCES exhibition_segments(id) ON DELETE CASCADE,
+      FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE,
+      FOREIGN KEY (image_id) REFERENCES images(id) ON DELETE SET NULL
+    );
   `);
   const countryColumns = all("PRAGMA table_info(countries)").map((column) => column.name);
   if (!countryColumns.includes("sort_key")) {
@@ -723,6 +766,10 @@ function createIndexes() {
     ["idx_albums_deleted_at", "CREATE INDEX idx_albums_deleted_at ON albums(deleted_at)"],
     ["idx_album_pages_deleted_at", "CREATE INDEX idx_album_pages_deleted_at ON album_pages(deleted_at)"],
     ["idx_album_page_templates_updated_at", "CREATE INDEX idx_album_page_templates_updated_at ON album_page_templates(updated_at)"],
+    ["idx_exhibition_segments_order", "CREATE INDEX idx_exhibition_segments_order ON exhibition_segments(exhibition_id, segment_number)"],
+    ["idx_exhibition_placements_segment", "CREATE INDEX idx_exhibition_placements_segment ON exhibition_placements(segment_id, z_index, created_at)"],
+    ["idx_exhibition_placements_item", "CREATE INDEX idx_exhibition_placements_item ON exhibition_placements(item_id)"],
+    ["idx_exhibition_placements_image", "CREATE INDEX idx_exhibition_placements_image ON exhibition_placements(image_id)"],
     ["idx_countries_sort_order", "CREATE INDEX idx_countries_sort_order ON countries(sort_order)"],
     ["idx_collection_types_sort_order", "CREATE INDEX idx_collection_types_sort_order ON collection_types(sort_order)"],
     ["idx_entity_groups_sort_order", "CREATE INDEX idx_entity_groups_sort_order ON entity_groups(sort_order)"],
@@ -1077,6 +1124,18 @@ function albumList() {
   );
 }
 
+function exhibitionList() {
+  return all(
+    `
+      SELECT exhibitions.*, COUNT(exhibition_segments.id) AS segment_count
+      FROM exhibitions
+      LEFT JOIN exhibition_segments ON exhibition_segments.exhibition_id = exhibitions.id
+      GROUP BY exhibitions.id
+      ORDER BY exhibitions.updated_at DESC
+    `
+  ).map((row) => ({ ...row, style: parseJson(row.style_json, {}) }));
+}
+
 function normalizeSortOrder(table) {
   const rows = all(`SELECT id, sort_order FROM ${table} ORDER BY sort_order ASC, created_at ASC, name ASC`);
   const changedRows = rows.filter((row, index) => Number(row.sort_order) !== index);
@@ -1195,6 +1254,7 @@ function getLibrary() {
     entityMemberships: all("SELECT entity_id, group_id FROM entity_group_memberships"),
     types: manualRows("collection_types"),
     albums: albumList(),
+    exhibitions: exhibitionList(),
     dataFolder: paths.base
   };
 }
@@ -3234,6 +3294,272 @@ ipcMain.handle("trash:empty", () => {
   return getLibrary();
 });
 
+const EXHIBITION_FRAME_STYLES = new Set(["black-gallery", "dark-wood", "white-mat", "ornate-gold"]);
+
+function exhibitionStyle(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function exhibitionBackground(styleValue) {
+  const style = exhibitionStyle(styleValue);
+  const itemId = String(style.backgroundItemId || "");
+  const imageId = String(style.backgroundImageId || "");
+  if (!itemId && !imageId) return null;
+  const item = itemId
+    ? get("SELECT id, title FROM items WHERE id = ? AND COALESCE(deleted_at, '') = ''", [itemId])
+    : null;
+  const image = item && imageId
+    ? get("SELECT * FROM images WHERE id = ? AND item_id = ? AND COALESCE(deleted_at, '') = ''", [imageId, itemId])
+    : null;
+  return {
+    item_id: itemId || null,
+    image_id: imageId || null,
+    item_title: item?.title || "",
+    image: image ? mapImage(image) : null,
+    missing: !item || !image
+  };
+}
+
+function exhibitionPlacementRow(row) {
+  const images = all(
+    "SELECT * FROM images WHERE item_id = ? AND COALESCE(deleted_at, '') = '' ORDER BY sort_order ASC, created_at ASC",
+    [row.item_id]
+  ).map(mapImage);
+  const selectedImage = images.find((image) => image.id === row.image_id) || images[0] || null;
+  return {
+    ...row,
+    image_id: selectedImage?.id || null,
+    x: Number(row.x || 0),
+    y: Number(row.y || 0),
+    width: Number(row.width || 20),
+    height: Number(row.height || 40),
+    z_index: Number(row.z_index || 0),
+    show_label: Boolean(row.show_label),
+    frame_style: EXHIBITION_FRAME_STYLES.has(row.frame_style) ? row.frame_style : "black-gallery",
+    image: selectedImage,
+    images
+  };
+}
+
+function getExhibition(exhibitionId) {
+  const exhibition = get("SELECT * FROM exhibitions WHERE id = ?", [exhibitionId]);
+  if (!exhibition) return null;
+  const segments = all(
+    "SELECT * FROM exhibition_segments WHERE exhibition_id = ? ORDER BY segment_number ASC, created_at ASC",
+    [exhibitionId]
+  ).map((segment) => {
+    const style = parseJson(segment.style_json, {});
+    return {
+      ...segment,
+      segment_number: Number(segment.segment_number || 1),
+      style,
+      background: exhibitionBackground(style),
+      placements: all(
+      `
+        SELECT exhibition_placements.*, items.title AS item_title, items.description AS item_description,
+               items.year, countries.name AS country_name, collection_types.name AS type_name
+        FROM exhibition_placements
+        JOIN items ON items.id = exhibition_placements.item_id AND COALESCE(items.deleted_at, '') = ''
+        LEFT JOIN countries ON countries.id = items.country_id
+        LEFT JOIN collection_types ON collection_types.id = items.type_id
+        WHERE exhibition_placements.segment_id = ?
+        ORDER BY exhibition_placements.z_index ASC, exhibition_placements.created_at ASC
+      `,
+      [segment.id]
+      ).map(exhibitionPlacementRow)
+    };
+  });
+  return { ...exhibition, style: parseJson(exhibition.style_json, {}), segments };
+}
+
+function normalizeExhibitionSegments(exhibitionId) {
+  all("SELECT id FROM exhibition_segments WHERE exhibition_id = ? ORDER BY segment_number ASC, created_at ASC", [exhibitionId]).forEach((row, index) => {
+    bindAndStep("UPDATE exhibition_segments SET segment_number = ? WHERE id = ?", [index + 1, row.id]);
+  });
+}
+
+ipcMain.handle("exhibition:create", (_event, payload = {}) => {
+  const exhibitionId = id();
+  const segmentId = id();
+  const timestamp = now();
+  const title = String(payload.title || "New exhibition").trim() || "New exhibition";
+  db.exec("BEGIN TRANSACTION");
+  try {
+    bindAndStep(
+      "INSERT INTO exhibitions (id, title, description, style_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+      [exhibitionId, title, String(payload.description || ""), JSON.stringify(exhibitionStyle(payload.style)), timestamp, timestamp]
+    );
+    bindAndStep(
+      "INSERT INTO exhibition_segments (id, exhibition_id, title, segment_number, style_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [segmentId, exhibitionId, String(payload.segmentTitle || "Gallery 1"), 1, JSON.stringify(exhibitionStyle(payload.segmentStyle)), timestamp, timestamp]
+    );
+    db.exec("COMMIT");
+    saveDb();
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  return { exhibitions: exhibitionList(), exhibition: getExhibition(exhibitionId), selectedSegmentId: segmentId };
+});
+
+ipcMain.handle("exhibition:update", (_event, payload = {}) => {
+  if (!payload.id) return null;
+  run(
+    "UPDATE exhibitions SET title = ?, description = ?, style_json = ?, updated_at = ? WHERE id = ?",
+    [String(payload.title || "").trim() || "Exhibition", String(payload.description || ""), JSON.stringify(exhibitionStyle(payload.style)), now(), payload.id]
+  );
+  return getExhibition(payload.id);
+});
+
+ipcMain.handle("exhibition:delete", (_event, exhibitionId) => {
+  if (!get("SELECT id FROM exhibitions WHERE id = ?", [exhibitionId])) return exhibitionList();
+  db.exec("BEGIN TRANSACTION");
+  try {
+    bindAndStep(
+      "DELETE FROM exhibition_placements WHERE segment_id IN (SELECT id FROM exhibition_segments WHERE exhibition_id = ?)",
+      [exhibitionId]
+    );
+    bindAndStep("DELETE FROM exhibition_segments WHERE exhibition_id = ?", [exhibitionId]);
+    bindAndStep("DELETE FROM exhibitions WHERE id = ?", [exhibitionId]);
+    db.exec("COMMIT");
+    saveDb();
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  return exhibitionList();
+});
+
+ipcMain.handle("exhibition:get", (_event, exhibitionId) => getExhibition(exhibitionId));
+
+ipcMain.handle("exhibition-segment:create", (_event, payload = {}) => {
+  const exhibition = get("SELECT id FROM exhibitions WHERE id = ?", [payload.exhibitionId]);
+  if (!exhibition) throw new Error("Exhibition was not found.");
+  const segmentId = id();
+  const timestamp = now();
+  const nextNumber = Number(get("SELECT COUNT(*) AS count FROM exhibition_segments WHERE exhibition_id = ?", [payload.exhibitionId])?.count || 0) + 1;
+  run(
+    "INSERT INTO exhibition_segments (id, exhibition_id, title, segment_number, style_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    [segmentId, payload.exhibitionId, String(payload.title || `Gallery ${nextNumber}`), nextNumber, JSON.stringify(exhibitionStyle(payload.style)), timestamp, timestamp]
+  );
+  run("UPDATE exhibitions SET updated_at = ? WHERE id = ?", [timestamp, payload.exhibitionId]);
+  return { exhibition: getExhibition(payload.exhibitionId), selectedSegmentId: segmentId };
+});
+
+ipcMain.handle("exhibition-segment:update", (_event, payload = {}) => {
+  const segment = get("SELECT exhibition_id FROM exhibition_segments WHERE id = ?", [payload.id]);
+  if (!segment) return null;
+  run(
+    "UPDATE exhibition_segments SET title = ?, style_json = ?, updated_at = ? WHERE id = ?",
+    [String(payload.title || "Gallery"), JSON.stringify(exhibitionStyle(payload.style)), now(), payload.id]
+  );
+  run("UPDATE exhibitions SET updated_at = ? WHERE id = ?", [now(), segment.exhibition_id]);
+  return getExhibition(segment.exhibition_id);
+});
+
+ipcMain.handle("exhibition-segment:delete", (_event, segmentId) => {
+  const segment = get("SELECT exhibition_id FROM exhibition_segments WHERE id = ?", [segmentId]);
+  if (!segment) return null;
+  const count = Number(get("SELECT COUNT(*) AS count FROM exhibition_segments WHERE exhibition_id = ?", [segment.exhibition_id])?.count || 0);
+  if (count <= 1) throw new Error("An exhibition must keep at least one hall segment.");
+  db.exec("BEGIN TRANSACTION");
+  try {
+    bindAndStep("DELETE FROM exhibition_segments WHERE id = ?", [segmentId]);
+    normalizeExhibitionSegments(segment.exhibition_id);
+    bindAndStep("UPDATE exhibitions SET updated_at = ? WHERE id = ?", [now(), segment.exhibition_id]);
+    db.exec("COMMIT");
+    saveDb();
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  return getExhibition(segment.exhibition_id);
+});
+
+ipcMain.handle("exhibition-placement:create", (_event, payload = {}) => {
+  const segment = get("SELECT exhibition_id FROM exhibition_segments WHERE id = ?", [payload.segmentId]);
+  const item = get("SELECT id, title FROM items WHERE id = ? AND COALESCE(deleted_at, '') = ''", [payload.itemId]);
+  if (!segment || !item) throw new Error("Hall segment or item was not found.");
+  const validImage = payload.imageId
+    ? get("SELECT id FROM images WHERE id = ? AND item_id = ? AND COALESCE(deleted_at, '') = ''", [payload.imageId, payload.itemId])
+    : get("SELECT id FROM images WHERE item_id = ? AND COALESCE(deleted_at, '') = '' ORDER BY sort_order ASC, created_at ASC LIMIT 1", [payload.itemId]);
+  if (!validImage) throw new Error("This item has no available image.");
+  const placementCount = Number(get("SELECT COUNT(*) AS count FROM exhibition_placements WHERE segment_id = ?", [payload.segmentId])?.count || 0);
+  const placementId = id();
+  const timestamp = now();
+  const width = Math.max(8, Math.min(55, Number(payload.width || 19)));
+  const height = Math.max(14, Math.min(92, Number(payload.height || 40)));
+  const x = Math.max(0, Math.min(100 - width, Number(payload.x ?? 8 + (placementCount % 4) * 23)));
+  const y = Math.max(0, Math.min(100 - height, Number(payload.y ?? 8 + Math.floor(placementCount / 4) * 32)));
+  run(
+    `INSERT INTO exhibition_placements (
+      id, segment_id, item_id, image_id, x, y, width, height, z_index, frame_style,
+      label_text, show_label, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [placementId, payload.segmentId, payload.itemId, validImage.id, x, y, width, height,
+      Number(payload.zIndex ?? placementCount), EXHIBITION_FRAME_STYLES.has(payload.frameStyle) ? payload.frameStyle : "black-gallery",
+      String(payload.labelText || item.title), payload.showLabel === false ? 0 : 1, timestamp, timestamp]
+  );
+  run("UPDATE exhibitions SET updated_at = ? WHERE id = ?", [timestamp, segment.exhibition_id]);
+  return { exhibition: getExhibition(segment.exhibition_id), placementId };
+});
+
+ipcMain.handle("exhibition-placement:update", (_event, payload = {}) => {
+  const placement = get(
+    "SELECT exhibition_placements.segment_id, exhibition_segments.exhibition_id, exhibition_placements.item_id FROM exhibition_placements JOIN exhibition_segments ON exhibition_segments.id = exhibition_placements.segment_id WHERE exhibition_placements.id = ?",
+    [payload.id]
+  );
+  if (!placement) return null;
+  let imageId = payload.imageId || null;
+  if (imageId && !get("SELECT id FROM images WHERE id = ? AND item_id = ? AND COALESCE(deleted_at, '') = ''", [imageId, placement.item_id])) imageId = null;
+  const width = Math.max(8, Math.min(70, Number(payload.width || 19)));
+  const height = Math.max(14, Math.min(100, Number(payload.height || 40)));
+  const x = Math.max(0, Math.min(100 - width, Number(payload.x || 0)));
+  const y = Math.max(0, Math.min(100 - height, Number(payload.y || 0)));
+  run(
+    `UPDATE exhibition_placements SET image_id = COALESCE(?, image_id), x = ?, y = ?, width = ?, height = ?,
+       z_index = ?, frame_style = ?, label_text = ?, show_label = ?, updated_at = ? WHERE id = ?`,
+    [imageId, x, y, width, height, Number(payload.zIndex || 0),
+      EXHIBITION_FRAME_STYLES.has(payload.frameStyle) ? payload.frameStyle : "black-gallery",
+      String(payload.labelText || ""), payload.showLabel === false ? 0 : 1, now(), payload.id]
+  );
+  run("UPDATE exhibitions SET updated_at = ? WHERE id = ?", [now(), placement.exhibition_id]);
+  return getExhibition(placement.exhibition_id);
+});
+
+ipcMain.handle("exhibition-placement:duplicate", (_event, placementId) => {
+  const placement = get(
+    "SELECT exhibition_placements.*, exhibition_segments.exhibition_id FROM exhibition_placements JOIN exhibition_segments ON exhibition_segments.id = exhibition_placements.segment_id WHERE exhibition_placements.id = ?",
+    [placementId]
+  );
+  if (!placement) return null;
+  const duplicateId = id();
+  const timestamp = now();
+  run(
+    `INSERT INTO exhibition_placements (
+      id, segment_id, item_id, image_id, x, y, width, height, z_index, frame_style,
+      label_text, show_label, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [duplicateId, placement.segment_id, placement.item_id, placement.image_id,
+      Math.min(100 - Number(placement.width), Number(placement.x) + 3), Math.min(100 - Number(placement.height), Number(placement.y) + 3),
+      placement.width, placement.height, Number(placement.z_index || 0) + 1, placement.frame_style,
+      placement.label_text, placement.show_label, timestamp, timestamp]
+  );
+  run("UPDATE exhibitions SET updated_at = ? WHERE id = ?", [timestamp, placement.exhibition_id]);
+  return { exhibition: getExhibition(placement.exhibition_id), placementId: duplicateId };
+});
+
+ipcMain.handle("exhibition-placement:delete", (_event, placementId) => {
+  const placement = get(
+    "SELECT exhibition_segments.exhibition_id FROM exhibition_placements JOIN exhibition_segments ON exhibition_segments.id = exhibition_placements.segment_id WHERE exhibition_placements.id = ?",
+    [placementId]
+  );
+  if (!placement) return null;
+  run("DELETE FROM exhibition_placements WHERE id = ?", [placementId]);
+  run("UPDATE exhibitions SET updated_at = ? WHERE id = ?", [now(), placement.exhibition_id]);
+  return getExhibition(placement.exhibition_id);
+});
+
 ipcMain.handle("album:create", (_event, payload) => {
   const rowId = id();
   const timestamp = now();
@@ -4149,38 +4475,143 @@ async function loadExportWindow(html, width, height) {
   const diagnostics = await win.webContents.executeJavaScript(`
     (async () => {
       const images = Array.from(document.images);
-      const htmlImageResults = await Promise.all(images.map((image) => {
-        if (image.complete && image.naturalWidth > 0) {
-          return { src: image.currentSrc || image.src, ok: true, width: image.naturalWidth, height: image.naturalHeight };
+      const waitForImage = async (image) => {
+        if (!image.complete || image.naturalWidth <= 0) {
+          await new Promise((resolve) => {
+            image.addEventListener("load", resolve, { once: true });
+            image.addEventListener("error", resolve, { once: true });
+          });
         }
-        return new Promise((resolve) => {
-          image.addEventListener("load", () => resolve({ src: image.currentSrc || image.src, ok: true, width: image.naturalWidth, height: image.naturalHeight }), { once: true });
-          image.addEventListener("error", () => resolve({ src: image.currentSrc || image.src, ok: false, width: 0, height: 0 }), { once: true });
-        });
-      }));
+        if (image.naturalWidth > 0 && typeof image.decode === "function") {
+          try { await image.decode(); } catch {}
+        }
+        return { src: image.currentSrc || image.src, ok: image.naturalWidth > 0, width: image.naturalWidth, height: image.naturalHeight };
+      };
+      const htmlImageResults = await Promise.all(images.map(waitForImage));
       const svgImageResults = await Promise.all(Array.from(document.querySelectorAll("svg image")).map((image) => {
         const src = image.href?.baseVal || image.getAttribute("href") || "";
         return new Promise((resolve) => {
           const probe = new Image();
-          probe.onload = () => resolve({ src, ok: true, width: probe.naturalWidth, height: probe.naturalHeight });
+          probe.onload = async () => {
+            if (typeof probe.decode === "function") { try { await probe.decode(); } catch {} }
+            resolve({ src, ok: true, width: probe.naturalWidth, height: probe.naturalHeight });
+          };
           probe.onerror = () => resolve({ src, ok: false, width: 0, height: 0 });
           probe.src = src;
         });
       }));
-      const results = [...htmlImageResults, ...svgImageResults];
+      const cssUrls = new Set();
+      const urlPattern = /url\\((?:"([^"]+)"|'([^']+)'|([^\\)]+))\\)/g;
+      Array.from(document.querySelectorAll("*")).forEach((element) => {
+        const computed = getComputedStyle(element);
+        [computed.backgroundImage, computed.borderImageSource, computed.maskImage].forEach((value) => {
+          let match;
+          while ((match = urlPattern.exec(value || ""))) {
+            const url = (match[1] || match[2] || match[3] || "").trim();
+            if (url) cssUrls.add(url);
+          }
+          urlPattern.lastIndex = 0;
+        });
+      });
+      const cssAssetResults = await Promise.all(Array.from(cssUrls).map((src) => new Promise((resolve) => {
+        const probe = new Image();
+        probe.onload = async () => {
+          if (typeof probe.decode === "function") { try { await probe.decode(); } catch {} }
+          resolve({ src, ok: true, width: probe.naturalWidth, height: probe.naturalHeight });
+        };
+        probe.onerror = () => resolve({ src, ok: false, width: 0, height: 0 });
+        probe.src = src;
+      })));
+      const results = [...htmlImageResults, ...svgImageResults, ...cssAssetResults];
       if (document.fonts && document.fonts.ready) await document.fonts.ready;
       const failed = results.filter((entry) => !entry.ok);
       if (failed.length) {
         throw new Error("Export image failed to load: " + failed.map((entry) => entry.src).join(", "));
       }
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       document.documentElement.style.margin = "0";
       document.documentElement.style.overflow = "hidden";
       document.body.style.margin = "0";
       document.body.style.overflow = "hidden";
       const page = document.querySelector("[data-export-page]") || document.body;
       const rect = page.getBoundingClientRect();
+      const signature = (value) => {
+        let hash = 2166136261;
+        const text = String(value || "");
+        for (let index = 0; index < text.length; index += 1) {
+          hash ^= text.charCodeAt(index);
+          hash = Math.imul(hash, 16777619);
+        }
+        return (hash >>> 0).toString(16);
+      };
+      const scene = document.querySelector(".exhibition-hall-scene");
+      const sceneRect = scene?.getBoundingClientRect();
+      const exhibitionFrames = Array.from(document.querySelectorAll(".exhibition-placement")).map((placement) => {
+        const outer = placement.querySelector(".exhibition-frame-outer");
+        const recess = placement.querySelector(".exhibition-frame-recess");
+        const mat = placement.querySelector(".exhibition-frame-mat");
+        const shadow = placement.querySelector(".exhibition-frame-wall-shadow");
+        const glass = placement.querySelector(".exhibition-frame-glass");
+        const outerStyle = outer ? getComputedStyle(outer) : null;
+        const placementRect = placement.getBoundingClientRect();
+        const recessRect = recess?.getBoundingClientRect();
+        const borderRatio = outerStyle && sceneRect?.width ? parseFloat(outerStyle.borderTopWidth || "0") / sceneRect.width : 0;
+        const insetRatio = recessRect && sceneRect?.width ? (recessRect.left - placementRect.left) / sceneRect.width : 0;
+        const comparisons = {
+          asset: signature(outerStyle?.borderImageSource) === placement.dataset.exportExpectedAsset,
+          mat: signature(mat ? getComputedStyle(mat).backgroundColor : "") === placement.dataset.exportExpectedMat,
+          recess: (recess && getComputedStyle(recess).boxShadow !== "none" ? "present" : "none") === placement.dataset.exportExpectedRecess,
+          shadow: (shadow && getComputedStyle(shadow).boxShadow !== "none" ? "present" : "none") === placement.dataset.exportExpectedShadow,
+          glass: signature(glass ? getComputedStyle(glass).backgroundImage : "") === placement.dataset.exportExpectedGlass,
+          borderRatio: Math.abs(borderRatio - Number(placement.dataset.exportExpectedBorderRatio || 0)) < 0.004,
+          insetRatio: Math.abs(insetRatio - Number(placement.dataset.exportExpectedInsetRatio || 0)) < 0.004
+        };
+        return {
+          placementId: placement.dataset.exhibitionPlacement || "",
+          frameStyle: placement.dataset.frameStyle || "",
+          assetSignature: signature(outerStyle?.borderImageSource),
+          outerBorderTopStyle: outerStyle?.borderTopStyle || "",
+          outerBorderTopWidth: outerStyle?.borderTopWidth || "",
+          frameBorderValue: outerStyle?.getPropertyValue("--frame-border") || "",
+          sceneWidth: sceneRect?.width || 0,
+          placementWidth: placementRect.width,
+          borderRatio,
+          expectedBorderRatio: Number(placement.dataset.exportExpectedBorderRatio || 0),
+          insetRatio,
+          expectedInsetRatio: Number(placement.dataset.exportExpectedInsetRatio || 0),
+          comparisons,
+          matches: Object.values(comparisons).every(Boolean)
+        };
+      });
+      const materialState = (selector) => {
+        const element = document.querySelector(selector);
+        if (!element) return null;
+        const style = getComputedStyle(element);
+        const color = style.backgroundColor || "";
+        const alphaMatch = color.match(/rgba?\\([^,]+,[^,]+,[^,]+(?:,\\s*([\\d.]+))?\\)/i);
+        const alpha = alphaMatch?.[1] == null ? 1 : Number(alphaMatch[1]);
+        return {
+          selector,
+          opacity: style.opacity,
+          backgroundColor: color,
+          mixBlendMode: style.mixBlendMode,
+          filter: style.filter,
+          opaqueBase: style.opacity === "1" && alpha === 1 && color !== "transparent"
+        };
+      };
+      const exhibitionArchitecture = [
+        materialState(".exhibition-asset-wainscot"),
+        materialState(".exhibition-asset-chair-rail"),
+        materialState(".exhibition-asset-crown")
+      ].filter(Boolean);
       return {
         imageCount: results.length,
+        cssAssetCount: cssAssetResults.length,
+        exhibitionFrames,
+        exhibitionPlaqueCount: document.querySelectorAll(".exhibition-section-plaque").length,
+        exhibitionDecorCount: document.querySelectorAll(".exhibition-decor-piece").length,
+        exhibitionSuspensionCount: document.querySelectorAll(".exhibition-picture-suspension").length,
+        exhibitionArchitecture,
         pageWidth: Math.ceil(rect.width),
         pageHeight: Math.ceil(rect.height),
         scrollWidth: document.documentElement.scrollWidth,
@@ -4227,6 +4658,48 @@ ipcMain.handle("album-export:page-png", async (_event, payload = {}) => {
       : image.resize({ width: outputWidth, height: outputHeight, quality: "best" });
     fs.writeFileSync(filePath, outputImage.toPNG());
     return { canceled: false, filePath, diagnostics: { ...diagnostics, capturedSize, outputWidth, outputHeight } };
+  } finally {
+    if (win && !win.isDestroyed()) win.destroy();
+    if (tempFolder) fs.rmSync(tempFolder, { recursive: true, force: true });
+  }
+});
+
+ipcMain.handle("exhibition:export-segment-png", async (_event, payload = {}) => {
+  const testExportPath = process.env.COLLECTION_ARCHIVE_ALLOW_EXPORT_PATH === "1"
+    ? process.env.COLLECTION_ARCHIVE_EXHIBITION_EXPORT_PATH
+    : "";
+  const filePath = await chooseExportPath(testExportPath ? { ...payload, filePath: testExportPath } : payload, {
+    title: "Export exhibition segment as PNG",
+    defaultFilename: "exhibition-segment.png",
+    filters: [{ name: "PNG image", extensions: ["png"] }]
+  });
+  if (!filePath) return { canceled: true };
+
+  let win = null;
+  let diagnostics = null;
+  let tempFolder = null;
+  try {
+    const width = Math.max(640, Math.ceil(Number(payload.width || 1200)));
+    const height = Math.max(360, Math.ceil(Number(payload.height || 675)));
+    const loaded = await loadExportWindow(payload.html, width, height);
+    win = loaded.win;
+    diagnostics = loaded.diagnostics;
+    tempFolder = loaded.tempFolder;
+    const frameMismatch = diagnostics.exhibitionFrames?.find((entry) => !entry.matches);
+    if (frameMismatch) {
+      throw new Error(`Exhibition frame did not match preview for placement ${frameMismatch.placementId || "unknown"}: ${JSON.stringify(frameMismatch)}.`);
+    }
+    const image = await win.webContents.capturePage({ x: 0, y: 0, width, height });
+    const capturedSize = image.getSize();
+    const outputImage = capturedSize.width === width && capturedSize.height === height
+      ? image
+      : image.resize({ width, height, quality: "best" });
+    fs.writeFileSync(filePath, outputImage.toPNG());
+    return {
+      canceled: false,
+      filePath,
+      diagnostics: { ...diagnostics, capturedSize, outputWidth: width, outputHeight: height }
+    };
   } finally {
     if (win && !win.isDestroyed()) win.destroy();
     if (tempFolder) fs.rmSync(tempFolder, { recursive: true, force: true });

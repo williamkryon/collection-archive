@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300">
+  <defs>
+    <linearGradient id="wood" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#1d0d08"/><stop offset=".2" stop-color="#754128"/><stop offset=".43" stop-color="#2b140d"/><stop offset=".65" stop-color="#93583a"/><stop offset="1" stop-color="#180b07"/>
+    </linearGradient>
+    <pattern id="grain" width="34" height="34" patternUnits="userSpaceOnUse">
+      <rect width="34" height="34" fill="url(#wood)"/>
+      <path d="M-4 8c13-7 22 8 42 0M-5 23c17-10 28 11 44 1" fill="none" stroke="#d49a6b" stroke-opacity=".18" stroke-width="2"/>
+    </pattern>
+    <filter id="carve" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="2" dy="3" stdDeviation="2" flood-color="#090403" flood-opacity=".8"/>
+    </filter>
+    <g id="corner" filter="url(#carve)">
+      <path d="M5 92V5h87L76 22H25v51z" fill="url(#grain)" stroke="#110705" stroke-width="6"/>
+      <path d="M16 84V16h68L68 32H33v35z" fill="#452417" stroke="#a26845" stroke-width="3"/>
+      <circle cx="51" cy="51" r="28" fill="#2b140d" stroke="#925a3a" stroke-width="4"/>
+      <path d="M51 22l8 18 19-8-10 19 10 19-20-9-7 20-8-20-20 9 11-19-11-19 20 8z" fill="url(#wood)" stroke="#bf8158" stroke-width="3"/>
+      <circle cx="51" cy="51" r="8" fill="#160906" stroke="#b97950" stroke-width="3"/>
+      <path d="M13 89l76-76M24 91l67-67" stroke="#d39b73" stroke-opacity=".35" stroke-width="3"/>
+    </g>
+  </defs>
+  <path d="M0 0h300v92H0zM0 208h300v92H0zM0 0h92v300H0zM208 0h92v300h-92z" fill="url(#grain)"/>
+  <path d="M92 69h116v23H92zM92 208h116v23H92zM69 92h23v116H69zM208 92h23v116h-23z" fill="#1a0b07" stroke="#b16c45" stroke-width="3"/>
+  <use href="#corner"/><use href="#corner" transform="translate(300 0) rotate(90)"/>
+  <use href="#corner" transform="translate(300 300) rotate(180)"/><use href="#corner" transform="translate(0 300) rotate(270)"/>
+  <rect x="89" y="89" width="122" height="122" fill="none" stroke="#9b5b3a" stroke-width="8"/>
+  <rect x="98" y="98" width="104" height="104" fill="none" stroke="#150806" stroke-width="5"/>
+</svg>

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="120" viewBox="0 0 640 120" preserveAspectRatio="none">
+  <defs>
+    <linearGradient id="ivory" x2="0" y2="1">
+      <stop stop-color="#fffdf3"/><stop offset=".28" stop-color="#dcd3bf"/><stop offset=".42" stop-color="#fff8e8"/><stop offset=".72" stop-color="#b8aa92"/><stop offset="1" stop-color="#6c5b45"/>
+    </linearGradient>
+    <pattern id="bead" width="40" height="20" patternUnits="userSpaceOnUse"><ellipse cx="20" cy="10" rx="12" ry="6" fill="#f6ead2" stroke="#8c7a60" stroke-width="2"/></pattern>
+  </defs>
+  <path d="M0 0h640v25H0zM0 25h640v36H0zM0 61h640v19H0zM0 80h640v40H0z" fill="url(#ivory)"/>
+  <path d="M0 24h640M0 60h640M0 80h640M0 113h640" stroke="#78664e" stroke-opacity=".65" stroke-width="3"/>
+  <rect y="46" width="640" height="20" fill="url(#bead)"/>
+  <path d="M0 84q80 25 160 0t160 0 160 0 160 0v34H0z" fill="#efe4ce" fill-opacity=".65"/>
+</svg>
