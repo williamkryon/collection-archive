@@ -534,8 +534,8 @@ async function main() {
       select.dispatchEvent(new Event('change', { bubbles: true }));
       await new Promise((resolve) => setTimeout(resolve, 100));
       const zh = {
-        library: [...document.querySelectorAll('nav button')].some((button) => button.textContent.trim() === '馆藏'),
-        newItem: [...document.querySelectorAll('.sidebar-actions button')].some((button) => button.textContent.trim() === '新建藏品'),
+        library: [...document.querySelectorAll('nav button .sidebar-label')].some((label) => label.textContent.trim() === '馆藏'),
+        newItem: [...document.querySelectorAll('.sidebar-actions button .sidebar-label')].some((label) => label.textContent.trim() === '新建藏品'),
         stored: localStorage.getItem('collectionArchive.language')
       };
       return zh;
@@ -547,13 +547,13 @@ async function main() {
   const languageState = await evaluate(
     client,
     `(async () => {
-      const persisted = [...document.querySelectorAll('nav button')].some((button) => button.textContent.trim() === '馆藏');
+      const persisted = [...document.querySelectorAll('nav button .sidebar-label')].some((label) => label.textContent.trim() === '馆藏');
       document.querySelector('.language-select select').value = 'en';
       document.querySelector('.language-select select').dispatchEvent(new Event('change', { bubbles: true }));
       await new Promise((resolve) => setTimeout(resolve, 100));
       return {
         persisted,
-        englishRestored: [...document.querySelectorAll('nav button')].some((button) => button.textContent.trim() === 'Library'),
+        englishRestored: [...document.querySelectorAll('nav button .sidebar-label')].some((label) => label.textContent.trim() === 'Library'),
         storedAfterRestore: localStorage.getItem('collectionArchive.language')
       };
     })()`
@@ -859,7 +859,7 @@ async function main() {
   await evaluate(
     client,
     `(() => {
-      [...document.querySelectorAll("button")].find((button) => button.textContent.trim() === "Manage lists").click();
+      document.querySelector('.sidebar-actions button[title="Manage lists"]').click();
       return true;
     })()`
   );
@@ -939,7 +939,7 @@ async function main() {
   await evaluate(
     client,
     `(() => {
-      [...document.querySelectorAll("button")].find((button) => button.textContent.trim() === "Manage lists").click();
+      document.querySelector('.sidebar-actions button[title="Manage lists"]').click();
       return true;
     })()`
   );
@@ -1056,7 +1056,7 @@ async function main() {
   await evaluate(
     client,
     `(() => {
-      [...document.querySelectorAll("button")].find((button) => button.textContent.trim() === "New item").click();
+      document.querySelector('.sidebar-actions button[title="New item"]').click();
       return true;
     })()`
   );
@@ -1166,7 +1166,7 @@ async function main() {
     return ![...document.querySelectorAll('.trash-row')].some((entry) => entry.textContent.includes('Combobox Smoke'));
   })()`));
   await smokeStep(client, "trash restore typing: open new item form", () => evaluate(client, `(() => {
-    [...document.querySelectorAll('.sidebar-actions button')].find((button) => button.textContent.trim() === 'New item').click();
+    document.querySelector('.sidebar-actions button[title="New item"]').click();
     return true;
   })()`));
   await waitFor(client, "document.querySelector('.modal input[data-input-debug=\"Item title\"]')", "New item title input did not open after Trash restore");
@@ -1498,12 +1498,15 @@ async function main() {
       return {
         editLayout: document.querySelector('.albums-view')?.classList.contains('edit-layout'),
         listWidth: Math.round(albumList.width),
+        globalRailWidth: Math.round(document.querySelector('.sidebar').getBoundingClientRect().width),
+        hasBackToList: Boolean(document.querySelector('.album-list .back-to-list')),
         hasFocusButton: [...document.querySelectorAll("button")].some((button) => button.textContent.trim() === "Focus editor")
       };
     })()`
   );
   assert(editLayoutState.editLayout, "Edit layout did not activate");
   assert(editLayoutState.listWidth <= 90, `Edit album list should be a narrow strip, got ${editLayoutState.listWidth}px`);
+  assert(editLayoutState.globalRailWidth <= 64 && editLayoutState.hasBackToList, `Focused Album navigation did not collapse correctly: ${JSON.stringify(editLayoutState)}`);
   assert(!editLayoutState.hasFocusButton, "Focus editor button should be removed in the simplified edit layout");
   const pageSizingState = await evaluate(
     client,
@@ -2285,6 +2288,29 @@ async function main() {
   assert(sidebarState.actionInView, "Sidebar action buttons are not visible near the bottom of the viewport");
   assert(sidebarState.albumNewText === "New" && sidebarState.albumNewVisible, `Album edit mode New button is blank or hidden: ${JSON.stringify(sidebarState)}`);
   assert(sidebarState.albumNewColor === "rgb(255, 255, 255)", `Album edit mode New button text is not white: ${JSON.stringify(sidebarState)}`);
+  const chineseRailState = await evaluate(
+    client,
+    `(() => new Promise((resolve) => {
+      const select = document.querySelector('.language-select select');
+      select.value = 'zh';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      requestAnimationFrame(() => {
+        const navMarks = [...document.querySelectorAll('.sidebar nav button')].map((button) => getComputedStyle(button, '::before').content.replace(/^["']|["']$/g, ''));
+        const brandMark = document.querySelector('.brand-mark')?.textContent.trim() || '';
+        const bodyText = document.body.textContent || '';
+        select.value = 'en';
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        requestAnimationFrame(() => resolve({
+          navMarks,
+          brandMark,
+          hasEnglishAbbreviations: navMarks.some((mark) => ['LI', 'GA', 'AL', 'EX', 'TR'].includes(mark)) || brandMark === 'CA',
+          hasRawEscapes: /\\\\u2190|\\\\u00d7/.test(bodyText)
+        }));
+      });
+    }))()`
+  );
+  assert(chineseRailState.navMarks.join(",") === "馆藏,图库,册页,展览,回收" && chineseRailState.brandMark === "藏", `Chinese compact rail marks were not localized: ${JSON.stringify(chineseRailState)}`);
+  assert(!chineseRailState.hasEnglishAbbreviations && !chineseRailState.hasRawEscapes, `Chinese compact rail still shows English abbreviations or raw escapes: ${JSON.stringify(chineseRailState)}`);
   await captureScreenshot(client, "album-edit-canvas");
 
   const longRows = await evaluate(
@@ -2310,7 +2336,7 @@ async function main() {
   await evaluate(
     client,
     `(() => {
-      [...document.querySelectorAll(".sidebar-actions button")].find((button) => button.textContent.trim() === "Manage lists").click();
+      document.querySelector('.sidebar-actions button[title="Manage lists"]').click();
     })()`
   );
   await waitFor(client, "document.querySelector('.manage-modal')", "Manage Lists modal did not open");

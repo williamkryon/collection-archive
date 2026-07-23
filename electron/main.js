@@ -317,7 +317,8 @@ function execSchema(databaseWasCreated = false) {
     "album_page_templates",
     "exhibitions",
     "exhibition_segments",
-    "exhibition_placements"
+    "exhibition_placements",
+    "user_assets"
   ];
   if (!dirty) {
     dirty = expectedTables.some((name) => !tableExists(name));
@@ -586,13 +587,26 @@ function execSchema(databaseWasCreated = false) {
       height REAL NOT NULL DEFAULT 42,
       z_index INTEGER NOT NULL DEFAULT 0,
       frame_style TEXT NOT NULL DEFAULT 'black-gallery',
+      frame_thickness REAL DEFAULT NULL,
       label_text TEXT DEFAULT '',
       show_label INTEGER NOT NULL DEFAULT 1,
+      caption_size TEXT NOT NULL DEFAULT 'medium',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       FOREIGN KEY (segment_id) REFERENCES exhibition_segments(id) ON DELETE CASCADE,
       FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE,
       FOREIGN KEY (image_id) REFERENCES images(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS user_assets (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      asset_type TEXT NOT NULL,
+      source_item_id TEXT NOT NULL,
+      source_image_id TEXT NOT NULL,
+      config_json TEXT DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
     );
   `);
   const countryColumns = all("PRAGMA table_info(countries)").map((column) => column.name);
@@ -729,6 +743,16 @@ function execSchema(databaseWasCreated = false) {
       dirty = true;
     }
   });
+  const exhibitionPlacementColumns = all("PRAGMA table_info(exhibition_placements)").map((column) => column.name);
+  [
+    ["frame_thickness", "REAL DEFAULT NULL"],
+    ["caption_size", "TEXT NOT NULL DEFAULT 'medium'"]
+  ].forEach(([name, definition]) => {
+    if (!exhibitionPlacementColumns.includes(name)) {
+      db.exec(`ALTER TABLE exhibition_placements ADD COLUMN ${name} ${definition}`);
+      dirty = true;
+    }
+  });
   dirty = normalizeSortOrder("countries") || dirty;
   dirty = normalizeSortOrder("collection_types") || dirty;
   dirty = normalizeSortOrder("entity_groups") || dirty;
@@ -770,6 +794,8 @@ function createIndexes() {
     ["idx_exhibition_placements_segment", "CREATE INDEX idx_exhibition_placements_segment ON exhibition_placements(segment_id, z_index, created_at)"],
     ["idx_exhibition_placements_item", "CREATE INDEX idx_exhibition_placements_item ON exhibition_placements(item_id)"],
     ["idx_exhibition_placements_image", "CREATE INDEX idx_exhibition_placements_image ON exhibition_placements(image_id)"],
+    ["idx_user_assets_type", "CREATE INDEX idx_user_assets_type ON user_assets(asset_type, updated_at)"],
+    ["idx_user_assets_source", "CREATE INDEX idx_user_assets_source ON user_assets(source_item_id, source_image_id)"],
     ["idx_countries_sort_order", "CREATE INDEX idx_countries_sort_order ON countries(sort_order)"],
     ["idx_collection_types_sort_order", "CREATE INDEX idx_collection_types_sort_order ON collection_types(sort_order)"],
     ["idx_entity_groups_sort_order", "CREATE INDEX idx_entity_groups_sort_order ON entity_groups(sort_order)"],
@@ -1136,6 +1162,23 @@ function exhibitionList() {
   ).map((row) => ({ ...row, style: parseJson(row.style_json, {}) }));
 }
 
+function userAssetList() {
+  if (!tableExists("user_assets")) return [];
+  return all("SELECT * FROM user_assets ORDER BY updated_at DESC, created_at DESC").map((row) => {
+    const item = get("SELECT id, title FROM items WHERE id = ? AND COALESCE(deleted_at, '') = ''", [row.source_item_id]);
+    const image = item
+      ? get("SELECT * FROM images WHERE id = ? AND item_id = ? AND COALESCE(deleted_at, '') = ''", [row.source_image_id, row.source_item_id])
+      : null;
+    return {
+      ...row,
+      config: parseJson(row.config_json, {}),
+      item_title: item?.title || "",
+      image: image ? mapImage(image) : null,
+      missing: !item || !image
+    };
+  });
+}
+
 function normalizeSortOrder(table) {
   const rows = all(`SELECT id, sort_order FROM ${table} ORDER BY sort_order ASC, created_at ASC, name ASC`);
   const changedRows = rows.filter((row, index) => Number(row.sort_order) !== index);
@@ -1255,6 +1298,7 @@ function getLibrary() {
     types: manualRows("collection_types"),
     albums: albumList(),
     exhibitions: exhibitionList(),
+    userAssets: userAssetList(),
     dataFolder: paths.base
   };
 }
@@ -3294,7 +3338,69 @@ ipcMain.handle("trash:empty", () => {
   return getLibrary();
 });
 
+const USER_ASSET_TYPES = new Set(["wallpaper", "frame", "strip"]);
+
+function validatedUserAssetSource(itemId, imageId) {
+  const item = get("SELECT id FROM items WHERE id = ? AND COALESCE(deleted_at, '') = ''", [itemId]);
+  const image = item ? get("SELECT id FROM images WHERE id = ? AND item_id = ? AND COALESCE(deleted_at, '') = ''", [imageId, itemId]) : null;
+  if (!item || !image) throw new Error("Choose an available collection item image.");
+}
+
+ipcMain.handle("user-assets:list", () => userAssetList());
+
+ipcMain.handle("user-assets:create", (_event, payload = {}) => {
+  const assetType = String(payload.assetType || "");
+  if (!USER_ASSET_TYPES.has(assetType)) throw new Error("Unsupported user asset type.");
+  validatedUserAssetSource(payload.itemId, payload.imageId);
+  const assetId = id();
+  const timestamp = now();
+  run(
+    "INSERT INTO user_assets (id, name, asset_type, source_item_id, source_image_id, config_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    [assetId, String(payload.name || "User asset").trim() || "User asset", assetType, payload.itemId, payload.imageId, JSON.stringify(payload.config || {}), timestamp, timestamp]
+  );
+  return { assets: userAssetList(), assetId };
+});
+
+ipcMain.handle("user-assets:update", (_event, payload = {}) => {
+  const existing = get("SELECT * FROM user_assets WHERE id = ?", [payload.id]);
+  if (!existing) throw new Error("User asset was not found.");
+  const assetType = USER_ASSET_TYPES.has(payload.assetType) ? payload.assetType : existing.asset_type;
+  const itemId = payload.itemId || existing.source_item_id;
+  const imageId = payload.imageId || existing.source_image_id;
+  validatedUserAssetSource(itemId, imageId);
+  run(
+    "UPDATE user_assets SET name = ?, asset_type = ?, source_item_id = ?, source_image_id = ?, config_json = ?, updated_at = ? WHERE id = ?",
+    [String(payload.name ?? existing.name).trim() || "User asset", assetType, itemId, imageId, JSON.stringify(payload.config || parseJson(existing.config_json, {})), now(), payload.id]
+  );
+  return userAssetList();
+});
+
+ipcMain.handle("user-assets:delete", (_event, assetId) => {
+  run("DELETE FROM user_assets WHERE id = ?", [assetId]);
+  return userAssetList();
+});
+
 const EXHIBITION_FRAME_STYLES = new Set(["black-gallery", "dark-wood", "white-mat", "ornate-gold"]);
+
+function exhibitionFrameStyle(value) {
+  const candidate = String(value || "");
+  if (EXHIBITION_FRAME_STYLES.has(candidate)) return candidate;
+  if (candidate.startsWith("user:")) {
+    const assetId = candidate.slice(5);
+    if (get("SELECT id FROM user_assets WHERE id = ? AND asset_type = 'frame'", [assetId])) return candidate;
+  }
+  return "black-gallery";
+}
+
+function exhibitionFrameThickness(value, fallback = null) {
+  if (value === null || value === undefined || value === "") return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(2.5, Math.min(14, parsed)) : fallback;
+}
+
+function exhibitionCaptionSize(value, fallback = "medium") {
+  return ["small", "medium", "large"].includes(String(value || "")) ? String(value) : fallback;
+}
 
 function exhibitionStyle(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -3302,6 +3408,24 @@ function exhibitionStyle(value) {
 
 function exhibitionBackground(styleValue) {
   const style = exhibitionStyle(styleValue);
+  const userAssetId = style.wallTexture === "user-asset" ? String(style.userWallpaperAssetId || "") : "";
+  if (userAssetId) {
+    const asset = get("SELECT * FROM user_assets WHERE id = ? AND asset_type = 'wallpaper'", [userAssetId]);
+    const item = asset ? get("SELECT id, title FROM items WHERE id = ? AND COALESCE(deleted_at, '') = ''", [asset.source_item_id]) : null;
+    const image = item && asset
+      ? get("SELECT * FROM images WHERE id = ? AND item_id = ? AND COALESCE(deleted_at, '') = ''", [asset.source_image_id, asset.source_item_id])
+      : null;
+    return {
+      asset_id: userAssetId,
+      item_id: asset?.source_item_id || null,
+      image_id: asset?.source_image_id || null,
+      item_title: item?.title || asset?.name || "",
+      asset_name: asset?.name || "",
+      asset_config: parseJson(asset?.config_json, {}),
+      image: image ? mapImage(image) : null,
+      missing: !asset || !item || !image
+    };
+  }
   const itemId = String(style.backgroundItemId || "");
   const imageId = String(style.backgroundImageId || "");
   if (!itemId && !imageId) return null;
@@ -3335,7 +3459,9 @@ function exhibitionPlacementRow(row) {
     height: Number(row.height || 40),
     z_index: Number(row.z_index || 0),
     show_label: Boolean(row.show_label),
-    frame_style: EXHIBITION_FRAME_STYLES.has(row.frame_style) ? row.frame_style : "black-gallery",
+    frame_style: exhibitionFrameStyle(row.frame_style),
+    frame_thickness: exhibitionFrameThickness(row.frame_thickness),
+    caption_size: exhibitionCaptionSize(row.caption_size),
     image: selectedImage,
     images
   };
@@ -3494,11 +3620,12 @@ ipcMain.handle("exhibition-placement:create", (_event, payload = {}) => {
   run(
     `INSERT INTO exhibition_placements (
       id, segment_id, item_id, image_id, x, y, width, height, z_index, frame_style,
-      label_text, show_label, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      frame_thickness, label_text, show_label, caption_size, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [placementId, payload.segmentId, payload.itemId, validImage.id, x, y, width, height,
-      Number(payload.zIndex ?? placementCount), EXHIBITION_FRAME_STYLES.has(payload.frameStyle) ? payload.frameStyle : "black-gallery",
-      String(payload.labelText || item.title), payload.showLabel === false ? 0 : 1, timestamp, timestamp]
+      Number(payload.zIndex ?? placementCount), exhibitionFrameStyle(payload.frameStyle),
+      exhibitionFrameThickness(payload.frameThickness), String(payload.labelText || item.title),
+      payload.showLabel === false ? 0 : 1, exhibitionCaptionSize(payload.captionSize), timestamp, timestamp]
   );
   run("UPDATE exhibitions SET updated_at = ? WHERE id = ?", [timestamp, segment.exhibition_id]);
   return { exhibition: getExhibition(segment.exhibition_id), placementId };
@@ -3506,7 +3633,7 @@ ipcMain.handle("exhibition-placement:create", (_event, payload = {}) => {
 
 ipcMain.handle("exhibition-placement:update", (_event, payload = {}) => {
   const placement = get(
-    "SELECT exhibition_placements.segment_id, exhibition_segments.exhibition_id, exhibition_placements.item_id FROM exhibition_placements JOIN exhibition_segments ON exhibition_segments.id = exhibition_placements.segment_id WHERE exhibition_placements.id = ?",
+    "SELECT exhibition_placements.segment_id, exhibition_segments.exhibition_id, exhibition_placements.item_id, exhibition_placements.frame_thickness, exhibition_placements.caption_size FROM exhibition_placements JOIN exhibition_segments ON exhibition_segments.id = exhibition_placements.segment_id WHERE exhibition_placements.id = ?",
     [payload.id]
   );
   if (!placement) return null;
@@ -3518,10 +3645,12 @@ ipcMain.handle("exhibition-placement:update", (_event, payload = {}) => {
   const y = Math.max(0, Math.min(100 - height, Number(payload.y || 0)));
   run(
     `UPDATE exhibition_placements SET image_id = COALESCE(?, image_id), x = ?, y = ?, width = ?, height = ?,
-       z_index = ?, frame_style = ?, label_text = ?, show_label = ?, updated_at = ? WHERE id = ?`,
+       z_index = ?, frame_style = ?, frame_thickness = ?, label_text = ?, show_label = ?, caption_size = ?, updated_at = ? WHERE id = ?`,
     [imageId, x, y, width, height, Number(payload.zIndex || 0),
-      EXHIBITION_FRAME_STYLES.has(payload.frameStyle) ? payload.frameStyle : "black-gallery",
-      String(payload.labelText || ""), payload.showLabel === false ? 0 : 1, now(), payload.id]
+      exhibitionFrameStyle(payload.frameStyle),
+      exhibitionFrameThickness(payload.frameThickness, exhibitionFrameThickness(placement.frame_thickness)),
+      String(payload.labelText || ""), payload.showLabel === false ? 0 : 1,
+      exhibitionCaptionSize(payload.captionSize, exhibitionCaptionSize(placement.caption_size)), now(), payload.id]
   );
   run("UPDATE exhibitions SET updated_at = ? WHERE id = ?", [now(), placement.exhibition_id]);
   return getExhibition(placement.exhibition_id);
@@ -3538,12 +3667,12 @@ ipcMain.handle("exhibition-placement:duplicate", (_event, placementId) => {
   run(
     `INSERT INTO exhibition_placements (
       id, segment_id, item_id, image_id, x, y, width, height, z_index, frame_style,
-      label_text, show_label, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      frame_thickness, label_text, show_label, caption_size, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [duplicateId, placement.segment_id, placement.item_id, placement.image_id,
       Math.min(100 - Number(placement.width), Number(placement.x) + 3), Math.min(100 - Number(placement.height), Number(placement.y) + 3),
       placement.width, placement.height, Number(placement.z_index || 0) + 1, placement.frame_style,
-      placement.label_text, placement.show_label, timestamp, timestamp]
+      placement.frame_thickness, placement.label_text, placement.show_label, exhibitionCaptionSize(placement.caption_size), timestamp, timestamp]
   );
   run("UPDATE exhibitions SET updated_at = ? WHERE id = ?", [timestamp, placement.exhibition_id]);
   return { exhibition: getExhibition(placement.exhibition_id), placementId: duplicateId };
@@ -4691,6 +4820,11 @@ ipcMain.handle("exhibition:export-segment-png", async (_event, payload = {}) => 
     }
     const image = await win.webContents.capturePage({ x: 0, y: 0, width, height });
     const capturedSize = image.getSize();
+    if (capturedSize.width < width || capturedSize.height < height) {
+      throw new Error(`Exhibition export rendered below target at ${capturedSize.width}x${capturedSize.height}; expected at least ${width}x${height}.`);
+    }
+    // Windows display scaling can make capturePage oversample. Downsample that
+    // higher-resolution raster to the requested output, but never upscale it.
     const outputImage = capturedSize.width === width && capturedSize.height === height
       ? image
       : image.resize({ width, height, quality: "best" });

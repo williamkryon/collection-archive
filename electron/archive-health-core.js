@@ -123,6 +123,11 @@ function getAttachmentRows(db) {
   `);
 }
 
+function getUserAssetRows(db) {
+  if (!tableExists(db, "user_assets")) return [];
+  return rows(db, "SELECT id, name, asset_type, source_item_id, source_image_id FROM user_assets");
+}
+
 function addMissingFile(list, record) {
   list.push({
     kind: record.kind,
@@ -148,6 +153,7 @@ function scanArchiveHealth({ SQL, paths }) {
   let databaseInfo = null;
   let imageRows = [];
   let attachmentRows = [];
+  let userAssetRows = [];
 
   if (!fs.existsSync(paths.db)) {
     missingFiles.push({ kind: "database", expectedPath: paths.db, reason: "archive.sqlite missing" });
@@ -179,6 +185,7 @@ function scanArchiveHealth({ SQL, paths }) {
 
       imageRows = getImageRows(db);
       attachmentRows = getAttachmentRows(db);
+      userAssetRows = getUserAssetRows(db);
     } finally {
       db.close();
     }
@@ -194,6 +201,22 @@ function scanArchiveHealth({ SQL, paths }) {
       addMissingFile(missingFiles, { kind: "image", id: image.id, itemId: image.item_id, label: image.original_filename || image.stored_filename, expectedPath: image.image_path, reason: "invalid image path" });
     } else if (!safeStat(imagePath)?.isFile()) {
       addMissingFile(missingFiles, { kind: "image", id: image.id, itemId: image.item_id, label: image.original_filename || image.stored_filename, expectedPath: imagePath });
+    }
+  });
+
+  const imagesById = new Map(imageRows.map((image) => [image.id, image]));
+  userAssetRows.forEach((asset) => {
+    const source = imagesById.get(asset.source_image_id);
+    const sourcePath = source ? resolveMediaPath(source.image_path, paths.images) : null;
+    if (!source || source.item_id !== asset.source_item_id || !sourcePath || !safeStat(sourcePath)?.isFile()) {
+      addMissingFile(missingFiles, {
+        kind: "user_asset_source",
+        id: asset.id,
+        itemId: asset.source_item_id,
+        label: asset.name || asset.asset_type,
+        expectedPath: sourcePath || asset.source_image_id,
+        reason: source ? "user asset source file missing" : "user asset source image record missing"
+      });
     }
   });
 
@@ -279,6 +302,7 @@ function scanArchiveHealth({ SQL, paths }) {
       sourceImagesAvailable,
       imageRecords: imageRows.length
     },
+    userAssets: { definitions: userAssetRows.length },
     database: {
       integrityOk: Boolean(databaseInfo?.integrityOk),
       integrityMessages: databaseInfo?.integrityMessages || [],
