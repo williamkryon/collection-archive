@@ -1241,12 +1241,12 @@ async function main() {
       return {
         buttonText: newAlbumButton.innerText.trim(),
         buttonColor: getComputedStyle(newAlbumButton).color,
-        alignedWithTitle: Math.abs((buttonRect.top + buttonRect.height / 2) - (titleRect.top + titleRect.height / 2)) < 12,
+        fullWidthButton: Math.abs(buttonRect.left - titleRect.left) < 2 && buttonRect.width >= titleRect.width - 2 && buttonRect.top > titleRect.bottom,
         created: Boolean(created)
       };
     })()`
   );
-  assert(albumCreateUi.buttonText === "New album" && albumCreateUi.alignedWithTitle, `Albums page New album button is not beside the title: ${JSON.stringify(albumCreateUi)}`);
+  assert(albumCreateUi.buttonText === "New album" && albumCreateUi.fullWidthButton, `Albums page New album button does not match the expanded list structure: ${JSON.stringify(albumCreateUi)}`);
   assert(albumCreateUi.buttonColor === "rgb(255, 255, 255)", `Albums page New album text is not white: ${JSON.stringify(albumCreateUi)}`);
   assert(albumCreateUi.created, `Albums page New album button did not create an album: ${JSON.stringify(albumCreateUi)}`);
   await waitFor(client, "Boolean(window.archiveAPI && document.querySelector('.app'))", "App did not reload after temporary album cleanup");
@@ -1268,11 +1268,11 @@ async function main() {
   const defaultPreview = await evaluate(
     client,
     `(() => ({
-      cleanPreview: Boolean(document.querySelector('.image-only-preview')),
       textCount: document.querySelectorAll('.placement-text').length,
-      pageLabel: document.querySelector('.album-page header span')?.textContent || '',
-      pageTitle: document.querySelector('.album-page header h2')?.textContent || '',
+      hasPageHeader: Boolean(document.querySelector('.album-page > header')),
       canvasWidth: Math.round(document.querySelector('.album-canvas').getBoundingClientRect().width),
+      hasSimplePreviewToggle: [...document.querySelectorAll("button")].some((button) => /Simple Preview|Clean preview|简洁预览/.test(button.textContent)),
+      toolbarText: document.querySelector('.album-toolbar')?.textContent || '',
       previewWrapper: (() => {
         const page = document.querySelector('.album-page');
         const styles = getComputedStyle(page);
@@ -1280,27 +1280,29 @@ async function main() {
           borderTopWidth: styles.borderTopWidth,
           backgroundColor: styles.backgroundColor,
           boxShadow: styles.boxShadow,
-          headerVisible: getComputedStyle(page.querySelector('header')).display !== 'none'
+          headerVisible: Boolean(page.querySelector(':scope > header'))
         };
       })()
     }))()`
   );
-  assert(defaultPreview.cleanPreview, "Clean preview should be the default");
-  assert(defaultPreview.textCount === 0, "Clean preview should hide item metadata by default");
-  assert(defaultPreview.pageLabel === "Page 1" && defaultPreview.pageTitle === "First page", `Unexpected page heading: ${defaultPreview.pageLabel} ${defaultPreview.pageTitle}`);
+  assert(!defaultPreview.hasSimplePreviewToggle, `Simple/Clean preview controls should be removed: ${JSON.stringify(defaultPreview)}`);
+  assert(defaultPreview.textCount === 2, "Album Preview should show designed placement text");
+  assert(!defaultPreview.hasPageHeader, `Album page should not render a duplicate page heading row: ${JSON.stringify(defaultPreview)}`);
   assert(defaultPreview.canvasWidth > 300, "Album canvas did not render at a visible size");
+  assert(!/Move up|Move down|Page Actions|Add page|Delete page/.test(defaultPreview.toolbarText), `Preview toolbar should not contain edit-only page controls: ${defaultPreview.toolbarText}`);
   assert(defaultPreview.previewWrapper.borderTopWidth === "0px", `Preview still shows an outer page border: ${JSON.stringify(defaultPreview.previewWrapper)}`);
 
   const previewExportLayout = await evaluate(
     client,
     `(() => {
-      const selectorRow = document.querySelector('.album-page-selector');
-      const selectorRect = selectorRow.querySelector('.album-page-select').getBoundingClientRect();
-      const exportPageButton = [...selectorRow.querySelectorAll('button')].find((button) => button.textContent.trim() === 'Export page');
+      const toolbar = document.querySelector('.album-toolbar');
+      const selectorRect = toolbar.querySelector('.album-page-select').getBoundingClientRect();
+      const exportPageButton = [...toolbar.querySelectorAll('button')].find((button) => button.textContent.trim() === 'Export page');
       const exportPageRect = exportPageButton.getBoundingClientRect();
       const toolbarText = document.querySelector('.album-toolbar-actions')?.textContent || '';
       return {
-        hasExportPageInSelector: Boolean(exportPageButton),
+        hasOldSelectorRow: Boolean(document.querySelector('.album-page-selector')),
+        hasExportPageInToolbar: Boolean(exportPageButton),
         exportPageNearSelector: Math.abs((exportPageRect.top + exportPageRect.height / 2) - (selectorRect.top + selectorRect.height / 2)) < 12,
         hasPdfQuality: Boolean(document.querySelector('.album-toolbar-actions .pdf-quality-select')),
         hasPdfExport: toolbarText.includes('Export PDF'),
@@ -1308,9 +1310,31 @@ async function main() {
       };
     })()`
   );
-  assert(previewExportLayout.hasExportPageInSelector && previewExportLayout.exportPageNearSelector, `Export page should sit beside the preview page selector: ${JSON.stringify(previewExportLayout)}`);
-  assert(previewExportLayout.hasPdfQuality && previewExportLayout.hasPdfExport, `Preview mode missing PDF export group: ${JSON.stringify(previewExportLayout)}`);
-  assert(!previewExportLayout.exportPageInMainToolbar, `Export page should not remain in the main preview toolbar: ${JSON.stringify(previewExportLayout)}`);
+  assert(!previewExportLayout.hasOldSelectorRow && previewExportLayout.hasExportPageInToolbar && previewExportLayout.exportPageNearSelector, `Export page should sit beside the preview page selector in the compact toolbar: ${JSON.stringify(previewExportLayout)}`);
+  assert(!previewExportLayout.hasPdfQuality && previewExportLayout.hasPdfExport, `Preview mode should show Export PDF without a permanent quality selector: ${JSON.stringify(previewExportLayout)}`);
+  assert(previewExportLayout.exportPageInMainToolbar, `Export page should live in the compact preview toolbar: ${JSON.stringify(previewExportLayout)}`);
+  const pdfQualityPopup = await evaluate(
+    client,
+    `(async () => {
+      const exportPdf = [...document.querySelectorAll('.album-toolbar button')].find((button) => button.textContent.trim() === 'Export PDF');
+      exportPdf.click();
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      const menu = document.querySelector('.floating-toolbar-menu.pdf-quality-menu');
+      const rect = menu?.getBoundingClientRect();
+      const labels = [...(menu?.querySelectorAll('button') || [])].map((button) => button.textContent.trim());
+      const cancel = labels.includes('Cancel');
+      [...document.querySelectorAll('.floating-toolbar-menu.pdf-quality-menu button')].find((button) => button.textContent.trim() === 'Cancel')?.click();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      return {
+        open: Boolean(menu),
+        labels,
+        cancel,
+        inViewport: rect ? rect.left >= 0 && rect.top >= 0 && rect.right <= window.innerWidth && rect.bottom <= window.innerHeight : false,
+        closed: !document.querySelector('.floating-toolbar-menu.pdf-quality-menu')
+      };
+    })()`
+  );
+  assert(pdfQualityPopup.open && pdfQualityPopup.cancel && pdfQualityPopup.inViewport && pdfQualityPopup.closed, `PDF quality menu did not open/cancel cleanly: ${JSON.stringify(pdfQualityPopup)}`);
   assert(defaultPreview.previewWrapper.boxShadow === "none", `Preview still shows an outer page shadow: ${defaultPreview.previewWrapper.boxShadow}`);
   assert(!defaultPreview.previewWrapper.headerVisible, "Preview should not show the outer page header wrapper");
   const singlePagePreview = await evaluate(
@@ -1320,8 +1344,7 @@ async function main() {
       const initial = {
         pageCount: document.querySelectorAll('.album-page').length,
         placementCount: document.querySelectorAll('.album-placement').length,
-        label: document.querySelector('.album-page header span')?.textContent || '',
-        title: document.querySelector('.album-page header h2')?.textContent || ''
+        hasHeader: Boolean(document.querySelector('.album-page > header'))
       };
       selector.value = 'page-two';
       selector.dispatchEvent(new Event('change', { bubbles: true }));
@@ -1329,8 +1352,8 @@ async function main() {
       const second = {
         pageCount: document.querySelectorAll('.album-page').length,
         placementCount: document.querySelectorAll('.album-placement').length,
-        label: document.querySelector('.album-page header span')?.textContent || '',
-        title: document.querySelector('.album-page header h2')?.textContent || ''
+        selectedPageTitle: document.querySelector('.album-page-select option:checked')?.textContent || '',
+        hasHeader: Boolean(document.querySelector('.album-page > header'))
       };
       selector.value = 'page-one';
       selector.dispatchEvent(new Event('change', { bubbles: true }));
@@ -1338,28 +1361,70 @@ async function main() {
       const back = {
         pageCount: document.querySelectorAll('.album-page').length,
         placementCount: document.querySelectorAll('.album-placement').length,
-        label: document.querySelector('.album-page header span')?.textContent || '',
-        title: document.querySelector('.album-page header h2')?.textContent || ''
+        hasHeader: Boolean(document.querySelector('.album-page > header'))
       };
       return { initial, second, back };
     })()`
   );
   assert(singlePagePreview.initial.pageCount === 1, `Preview should render one selected page, got ${singlePagePreview.initial.pageCount}`);
+  assert(!singlePagePreview.initial.hasHeader && !singlePagePreview.second.hasHeader && !singlePagePreview.back.hasHeader, `Preview should not render duplicate page heading rows: ${JSON.stringify(singlePagePreview)}`);
   assert(singlePagePreview.initial.placementCount === 2, `First preview page should show two placements, got ${singlePagePreview.initial.placementCount}`);
   assert(singlePagePreview.second.pageCount === 1, `Switching preview pages should still render one page, got ${singlePagePreview.second.pageCount}`);
   assert(singlePagePreview.second.placementCount === 0, `Second preview page should replace the first page, got ${singlePagePreview.second.placementCount} placements`);
-  assert(singlePagePreview.second.label === "Page 2" && singlePagePreview.second.title === "Second page", `Preview page switch failed: ${singlePagePreview.second.label} ${singlePagePreview.second.title}`);
+  assert(singlePagePreview.second.selectedPageTitle === "Second page", `Preview page switch failed: ${JSON.stringify(singlePagePreview.second)}`);
   assert(singlePagePreview.back.pageCount === 1 && singlePagePreview.back.placementCount === 2, "Switching preview back to Page 1 did not restore the selected page");
-  await captureScreenshot(client, "album-clean-preview");
-  await evaluate(client, `localStorage.setItem("archiveDebugMedia", "1")`);
-
-  await evaluate(
+  const previewStepperState = await evaluate(
     client,
-    `(() => {
-      [...document.querySelectorAll("button")].find((button) => button.textContent.trim() === "Designed page").click();
+    `(async () => {
+      const stepper = document.querySelector('.album-preview-page-stepper');
+      const next = stepper?.querySelector('button:last-child');
+      next?.click();
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const afterNext = {
+        selected: document.querySelector('.album-page-select option:checked')?.textContent || '',
+        label: document.querySelector('.album-preview-page-stepper span')?.textContent || '',
+        placementCount: document.querySelectorAll('.album-placement').length
+      };
+      const previous = document.querySelector('.album-preview-page-stepper button:first-child');
+      previous?.click();
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      return {
+        exists: Boolean(stepper),
+        afterNext,
+        afterPrevious: {
+          selected: document.querySelector('.album-page-select option:checked')?.textContent || '',
+          label: document.querySelector('.album-preview-page-stepper span')?.textContent || '',
+          placementCount: document.querySelectorAll('.album-placement').length
+        }
+      };
     })()`
   );
-  await waitFor(client, "!document.querySelector('.image-only-preview')", "Designed page preview did not activate");
+  assert(previewStepperState.exists, "Preview mode missing floating page stepper");
+  assert(previewStepperState.afterNext.selected === "Second page" && previewStepperState.afterNext.label === "2/2", `Preview stepper next did not switch pages: ${JSON.stringify(previewStepperState)}`);
+  assert(previewStepperState.afterPrevious.selected === "First page" && previewStepperState.afterPrevious.label === "1/2" && previewStepperState.afterPrevious.placementCount === 2, `Preview stepper previous did not return to Page 1: ${JSON.stringify(previewStepperState)}`);
+  const previewWheelZoom = await evaluate(
+    client,
+    `(async () => {
+      const wrap = document.querySelector('.album-preview-wrap');
+      const canvas = document.querySelector('.album-canvas');
+      const beforeWidth = Math.round(canvas.getBoundingClientRect().width);
+      const rect = wrap.getBoundingClientRect();
+      const allowed = wrap.dispatchEvent(new WheelEvent('wheel', {
+        bubbles: true,
+        cancelable: true,
+        ctrlKey: true,
+        deltaY: -220,
+        clientX: rect.left + rect.width / 2,
+        clientY: rect.top + rect.height / 2
+      }));
+      await new Promise((resolve) => setTimeout(resolve, 220));
+      const afterWidth = Math.round(canvas.getBoundingClientRect().width);
+      return { allowed, beforeWidth, afterWidth };
+    })()`
+  );
+  assert(!previewWheelZoom.allowed && previewWheelZoom.afterWidth > previewWheelZoom.beforeWidth, `Ctrl+wheel did not zoom Album Preview or prevent browser zoom: ${JSON.stringify(previewWheelZoom)}`);
+  await captureScreenshot(client, "album-preview");
+  await evaluate(client, `localStorage.setItem("archiveDebugMedia", "1")`);
   const designedPreview = await evaluate(
     client,
     `(() => {
@@ -1375,8 +1440,8 @@ async function main() {
       };
     })()`
   );
-  assert(designedPreview.textCount === 2, "Designed page preview should show placement text");
-  assert(!designedPreview.overlaps, "Designed page text overlaps placement images");
+  assert(designedPreview.textCount === 2, "Album Preview should show placement text");
+  assert(!designedPreview.overlaps, "Album Preview text overlaps placement images");
   await evaluate(client, "document.querySelector('.placement-image-button').click()");
   await waitFor(
     client,
@@ -1411,53 +1476,6 @@ async function main() {
   assert(designedViewer.closeVisible, `Designed preview viewer Close button is not visible: ${JSON.stringify(designedViewer)}`);
   assert(!designedViewer.notFound, `Designed preview showed missing image: ${designedViewer.notFound}`);
   assertNoRuntimeTypeErrors(client, "Designed preview debug viewer");
-  await evaluate(client, `[...document.querySelectorAll("button")].find((button) => button.textContent.trim() === "Close").click()`);
-
-  await evaluate(
-    client,
-    `(async () => {
-      const preview = [...document.querySelectorAll("button")].find((button) => button.textContent.trim() === "Preview");
-      preview?.click();
-      await new Promise((resolve) => setTimeout(resolve, 150));
-      const cleanPreview = [...document.querySelectorAll("button")].find((button) => button.textContent.trim() === "Clean preview");
-      if (!cleanPreview) throw new Error("Clean preview toggle not found after switching to Preview");
-      cleanPreview.click();
-    })()`
-  );
-  await waitFor(client, "document.querySelector('.image-only-preview')", "Clean preview did not reactivate");
-
-  await evaluate(client, "document.querySelector('.placement-image-button').click()");
-  await waitFor(
-    client,
-    "(() => { const img = [...document.querySelectorAll('.viewer .zoom-canvas img')].find((entry) => ((entry.getAttribute('data-media-src') || entry.getAttribute('src') || '').includes('album-smoke-image-2.png'))) || document.querySelector('.viewer .zoom-canvas img'); return img && img.naturalWidth > 0 && img.getBoundingClientRect().width > 4; })()",
-    "Clean preview click did not open a visible viewer image"
-  );
-  const cleanViewer = await evaluate(
-    client,
-    `(() => {
-      const image = [...document.querySelectorAll('.viewer .zoom-canvas img')].find((entry) => ((entry.getAttribute('data-media-src') || entry.getAttribute('src') || '').includes('album-smoke-image-2.png'))) || document.querySelector('.viewer .zoom-canvas img');
-      const textBox = document.querySelector('.text-placement');
-      textBox?.click();
-      return {
-        src: image?.getAttribute('data-media-src') || image?.getAttribute('src') || '',
-        naturalWidth: image?.naturalWidth || 0,
-        rectWidth: Math.round(image?.getBoundingClientRect().width || 0),
-        rectHeight: Math.round(image?.getBoundingClientRect().height || 0),
-        zoomLabel: document.querySelector('.viewer .zoom-controls span')?.textContent || '',
-        closeVisible: Boolean(document.querySelector('.viewer .viewer-close')?.getBoundingClientRect().width),
-        viewerCountAfterTextClick: document.querySelectorAll('.viewer').length,
-        notFound: document.querySelector('.viewer .large-placeholder')?.textContent || ''
-      };
-    })()`
-  );
-  assert(cleanViewer.src.includes('/images/') || cleanViewer.src.includes('archive://local/images/'), `Clean preview viewer did not use a full image URL: ${cleanViewer.src}`);
-  assert(cleanViewer.src.includes('album-smoke-image-2.png'), `Clean preview opened the wrong placement image: ${cleanViewer.src}`);
-  assert(cleanViewer.rectWidth > 4 && cleanViewer.rectHeight > 4, `Clean preview viewer image rendered too small: ${JSON.stringify(cleanViewer)}`);
-  assert(cleanViewer.zoomLabel !== "10%", `Clean preview viewer opened at minimum zoom: ${JSON.stringify(cleanViewer)}`);
-  assert(cleanViewer.closeVisible, "Clean preview viewer Close button is not visible");
-  assert(!cleanViewer.notFound, `Clean preview showed missing image: ${cleanViewer.notFound}`);
-  assert(cleanViewer.viewerCountAfterTextClick === 1, "Text box click should not open another image viewer");
-  assertNoRuntimeTypeErrors(client, "Clean preview debug viewer");
   await evaluate(client, `document.querySelector('.viewer .zoom-canvas img').dispatchEvent(new Event('error', { bubbles: true }))`);
   await waitFor(client, "document.querySelector('.viewer .large-placeholder') || document.querySelector('.viewer .zoom-canvas img')", "Viewer did not respond to simulated image error");
   await evaluate(client, `document.querySelector('.viewer .zoom-canvas img')?.dispatchEvent(new Event('error', { bubbles: true }))`);
@@ -1477,20 +1495,46 @@ async function main() {
   const addPicker = await evaluate(
     client,
     `(() => ({
-      nativeItemSelectCount: [...document.querySelectorAll('.album-controls select')].filter((select) => [...select.options].some((option) => option.textContent.includes('Multi Image Test'))).length,
+      nativeItemSelectCount: [...document.querySelectorAll('.album-toolbar select')].filter((select) => [...select.options].some((option) => option.textContent.includes('Multi Image Test'))).length,
       hasAddButton: [...document.querySelectorAll('button')].some((button) => button.textContent.trim() === 'Add item'),
-      pageSelectorInAddRow: Boolean(document.querySelector('form.album-page-row .album-page-select')),
+      pageSelectorInToolbar: Boolean(document.querySelector('.album-edit-toolbar .album-page-select')),
+      hasOldAddPageRow: Boolean(document.querySelector('form.album-page-row') || document.querySelector('.album-page-row')),
       duplicateTopPageTitle: Boolean([...document.querySelectorAll('.album-toolbar input')].find((input) => input.placeholder === 'Page title')),
       editActionBarText: document.querySelector('.page-action-bar')?.textContent || '',
-      hasPageOrderControls: document.querySelectorAll('form.album-page-row .page-order-controls button').length === 2
+      hasPageOrderControls: document.querySelectorAll('.album-edit-toolbar .page-order-controls button').length === 2,
+      toolbarRows: document.querySelectorAll('.album-toolbar .album-header-row, .album-toolbar .album-page-row').length
     }))()`
   );
   assert(addPicker.nativeItemSelectCount === 0, "Album edit mode still renders a giant native item select");
   assert(addPicker.hasAddButton, "Album edit mode missing Add item button");
-  assert(addPicker.pageSelectorInAddRow, "Page selector should share the compact Add page row in Edit mode");
+  assert(addPicker.pageSelectorInToolbar && !addPicker.hasOldAddPageRow && addPicker.toolbarRows === 0, `Page selector should live in the single compact Album toolbar: ${JSON.stringify(addPicker)}`);
   assert(!addPicker.duplicateTopPageTitle, "Edit header should not show a duplicate Page title input");
   assert(addPicker.hasPageOrderControls, "Edit page row missing page move controls");
   assert(!/Export page|Export PDF|PDF quality/.test(addPicker.editActionBarText), `Edit action bar should not show export controls: ${JSON.stringify(addPicker)}`);
+  const pageActionsPopup = await evaluate(
+    client,
+    `(async () => {
+      const button = [...document.querySelectorAll('.album-edit-toolbar button')].find((entry) => entry.textContent.trim() === 'Page actions');
+      if (!button) return { found: false };
+      button.scrollIntoView({ block: 'nearest', inline: 'end' });
+      button.click();
+      await new Promise((resolve) => setTimeout(resolve, 160));
+      const menu = document.querySelector('.floating-toolbar-menu.page-actions-menu');
+      const rect = menu?.getBoundingClientRect();
+      const position = menu ? getComputedStyle(menu).position : '';
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      return {
+        found: true,
+        open: Boolean(menu),
+        position,
+        inViewport: rect ? rect.left >= 0 && rect.top >= 0 && rect.right <= window.innerWidth && rect.bottom <= window.innerHeight : false,
+        hasCopyControls: Boolean(menu?.querySelector('.page-copy-controls')),
+        closed: !document.querySelector('.floating-toolbar-menu.page-actions-menu')
+      };
+    })()`
+  );
+  assert(pageActionsPopup.found && pageActionsPopup.open && pageActionsPopup.position === "fixed" && pageActionsPopup.inViewport && pageActionsPopup.hasCopyControls && pageActionsPopup.closed, `Page Actions popup should be fixed and viewport-clamped: ${JSON.stringify(pageActionsPopup)}`);
   const editLayoutState = await evaluate(
     client,
     `(() => {
@@ -1574,7 +1618,7 @@ async function main() {
         width: Math.round(refitCanvas.width),
         height: Math.round(refitCanvas.height),
         noHorizontalOverflow: wrap.scrollWidth <= wrap.clientWidth + 3,
-        usefulSize: Math.round(refitCanvas.width) >= Math.min(620, wrap.clientWidth - 24),
+        fullPageVisible: refitCanvas.width <= wrap.clientWidth + 3 && refitCanvas.height <= wrap.clientHeight + 3,
         normalWheelAllowed,
         ctrlWheelAllowed,
         ctrlWheelZoomed: afterCtrlWheelWidth > beforeWheelWidth,
@@ -1594,7 +1638,7 @@ async function main() {
   assert(pageSizingState.orientationDropdowns === 0, "Page settings still shows a separate Orientation dropdown");
   assert(Math.abs(pageSizingState.width - pageSizingState.height) <= 2, `Square paper preset did not produce a square canvas: ${pageSizingState.width} x ${pageSizingState.height}`);
   assert(pageSizingState.noHorizontalOverflow, "Fit page left unnecessary horizontal overflow");
-  assert(pageSizingState.usefulSize, `Fit page over-shrank the canvas: ${pageSizingState.width}px`);
+  assert(pageSizingState.fullPageVisible, `Fit page should show the whole page by default: ${JSON.stringify(pageSizingState)}`);
   assert(pageSizingState.normalWheelAllowed, "Normal wheel events should not be intercepted by the editor viewport");
   assert(!pageSizingState.ctrlWheelAllowed, "Ctrl+wheel should be handled by the editor viewport");
   assert(pageSizingState.ctrlWheelZoomed, "Ctrl+wheel did not zoom the edit canvas");
@@ -1996,7 +2040,7 @@ async function main() {
       })()`
     )
   );
-  await waitForStep(client, "text usability: Preview loaded", "document.querySelector('.image-only-preview') || document.querySelector('.album-preview-page')", "Preview mode did not load");
+  await waitForStep(client, "text usability: Preview loaded", "document.querySelector('.album-canvas') && !document.querySelector('.album-edit-toolbar') && !document.querySelector('.page-settings-panel')", "Preview mode did not load");
   await smokeStep(client, "text usability: switch back to Edit", () =>
     evaluate(
       client,
@@ -2237,18 +2281,18 @@ async function main() {
       const preview = [...document.querySelectorAll("button")].find((button) => button.textContent.trim() === "Preview");
       preview?.click();
       await new Promise((resolve) => setTimeout(resolve, 150));
-      const cleanPreview = [...document.querySelectorAll("button")].find((button) => button.textContent.trim() === "Clean preview");
-      if (!cleanPreview) throw new Error("Clean preview toggle not found after switching to Preview");
-      cleanPreview.click();
+      return true;
     })()`
   );
-  await waitFor(client, "document.querySelector('.image-only-preview')", "Clean preview did not reactivate after text smoke");
-  const cleanTextState = await evaluate(client, `(() => ({
+  await waitFor(client, "document.querySelector('.album-canvas') && !document.querySelector('.album-edit-toolbar') && !document.querySelector('.page-settings-panel')", "Preview did not reactivate after text smoke");
+  const previewTextState = await evaluate(client, `(() => ({
     textBoxes: document.querySelectorAll('.text-placement .album-text-content').length,
-    metadata: document.querySelectorAll('.placement-text').length
+    metadata: document.querySelectorAll('.placement-text').length,
+    hasSimplePreviewToggle: [...document.querySelectorAll("button")].some((button) => /Simple Preview|Clean preview|简洁预览/.test(button.textContent))
   }))()`);
-  assert(cleanTextState.textBoxes > 0, "Clean preview should show text boxes");
-  assert(cleanTextState.metadata === 0, "Clean preview should hide item metadata/card text");
+  assert(previewTextState.textBoxes > 0, "Preview should show text boxes");
+  assert(previewTextState.metadata > 0, "Preview should show designed item metadata/card text");
+  assert(!previewTextState.hasSimplePreviewToggle, "Simple/Clean preview controls should not return after text smoke");
   await evaluate(
     client,
     `(() => {
@@ -2272,12 +2316,15 @@ async function main() {
       const lastAction = document.querySelector('.sidebar-actions button:last-child').getBoundingClientRect();
       const albumNewButton = document.querySelector('.album-list-header button');
       const albumNewRect = albumNewButton.getBoundingClientRect();
+      const albumNewSymbol = getComputedStyle(albumNewButton, '::before').content.replace(/^["']|["']$/g, '');
       return {
         actions,
         sidebarHeight: Math.round(sidebar.height),
         viewportHeight: window.innerHeight,
         actionInView: lastAction.bottom <= window.innerHeight + 1,
         albumNewText: albumNewButton.innerText.trim(),
+        albumNewTitle: albumNewButton.getAttribute('title'),
+        albumNewSymbol,
         albumNewColor: getComputedStyle(albumNewButton).color,
         albumNewVisible: albumNewRect.width > 20 && albumNewRect.height > 20
       };
@@ -2286,7 +2333,7 @@ async function main() {
   assert(JSON.stringify(sidebarState.actions) === JSON.stringify(["New item", "Manage lists", "Data folder"]), `Sidebar actions are not reduced: ${JSON.stringify(sidebarState)}`);
   assert(Math.abs(sidebarState.sidebarHeight - sidebarState.viewportHeight) <= 2, "Sidebar is not constrained to viewport height");
   assert(sidebarState.actionInView, "Sidebar action buttons are not visible near the bottom of the viewport");
-  assert(sidebarState.albumNewText === "New" && sidebarState.albumNewVisible, `Album edit mode New button is blank or hidden: ${JSON.stringify(sidebarState)}`);
+  assert(sidebarState.albumNewTitle === "New album" && sidebarState.albumNewSymbol === "+" && sidebarState.albumNewVisible, `Album collapsed rail New button is not a compact + action: ${JSON.stringify(sidebarState)}`);
   assert(sidebarState.albumNewColor === "rgb(255, 255, 255)", `Album edit mode New button text is not white: ${JSON.stringify(sidebarState)}`);
   const chineseRailState = await evaluate(
     client,

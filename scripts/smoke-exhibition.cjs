@@ -279,6 +279,13 @@ async function main() {
   await evaluate(client, `(() => { document.querySelector('[data-manage-assets]').click(); return true; })()`);
   await waitFor(client, "document.querySelector('.asset-workshop-modal [data-asset-workshop]')", "Asset Workshop modal did not open from Exhibition");
   await evaluate(client, `(() => {
+    [...document.querySelectorAll('.asset-workshop-list button')].find((button) => button.textContent.includes('New asset')).click();
+    return true;
+  })()`);
+  await waitFor(client, "document.querySelector('.exhibition-picker')", "New asset did not open the source picker directly");
+  await evaluate(client, `(() => { document.querySelector('.exhibition-picker footer .secondary').click(); return true; })()`);
+  await waitFor(client, "!document.querySelector('.exhibition-picker')", "Asset Workshop source picker did not close after direct-new check");
+  await evaluate(client, `(() => {
     const input = document.querySelector('.asset-workshop-controls > label input');
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
     setter.call(input, 'Smoke Wallpaper');
@@ -410,6 +417,7 @@ async function main() {
   await evaluate(client, `(() => { document.querySelector('[data-close-asset-workshop]').click(); return true; })()`);
   await waitFor(client, "!document.querySelector('.asset-workshop-modal')", "Asset Workshop modal did not close");
   await waitFor(client, `document.querySelector('[data-exhibition-segment="${setup.firstSegmentId}"]')`, "First hall segment did not load");
+  await waitFor(client, "document.querySelector('.exhibition-scene-wrap')?.dataset.layoutReady === 'true'", "Exhibition scene was exposed before its initial Fit layout completed");
   const returnedFromWorkshop = await evaluate(client, `(() => ({ segment: document.querySelector('.exhibition-segment-nav select').value, zoom: document.querySelector('.exhibition-scene-wrap').dataset.zoom }))()`);
   assert(returnedFromWorkshop.segment === reopenedWorkshopReturnState.segment && Number(returnedFromWorkshop.zoom) > 0, `Closing Asset Workshop did not preserve the Exhibition segment or left an invalid zoom: ${JSON.stringify({ reopenedWorkshopReturnState, returnedFromWorkshop })}`);
 
@@ -421,7 +429,10 @@ async function main() {
     hasFloorControl: Boolean(document.querySelector('.exhibition-inspector option[value="parquet"]')),
     assetPack: document.querySelector('.exhibition-hall-scene')?.dataset.exhibitionAssetPack,
     sceneSize: [document.querySelector('.exhibition-hall-scene')?.dataset.sceneWidth, document.querySelector('.exhibition-hall-scene')?.dataset.sceneHeight],
-    assetLayers: ['.exhibition-asset-wall', '.exhibition-asset-crown', '.exhibition-asset-wainscot', '.exhibition-asset-chair-rail', '.exhibition-asset-light-wash', '.exhibition-asset-sconces'].every((selector) => Boolean(document.querySelector(selector))),
+    assetLayers: ['.exhibition-asset-wall', '.exhibition-asset-crown', '.exhibition-asset-wainscot', '.exhibition-asset-chair-rail', '.exhibition-asset-light-wash'].every((selector) => Boolean(document.querySelector(selector))),
+    integratedWallAssembly: document.querySelector('.exhibition-wall-assembly')?.dataset.wallAssembly || '',
+    integratedWallParts: ['.exhibition-asset-wall', '.exhibition-asset-crown', '.exhibition-asset-wainscot', '.exhibition-asset-chair-rail', '.exhibition-wall-cohesion'].every((selector) => Boolean(document.querySelector('.exhibition-wall-assembly > ' + selector))),
+    removedDecorationLayers: ['.exhibition-asset-sconces', '.exhibition-template-architecture', '.exhibition-section-plaque', '.exhibition-decor-piece', '.exhibition-picture-suspension'].every((selector) => !document.querySelector(selector)),
     paintedWallColor: getComputedStyle(document.querySelector('.exhibition-asset-wall')).backgroundColor,
     hasPlainOption: Boolean(document.querySelector('.exhibition-inspector option[value="plain"]')),
     segmentTemplate: document.querySelector('.exhibition-hall-scene')?.dataset.segmentTemplate,
@@ -442,24 +453,25 @@ async function main() {
   assert(initialState.hasPlainOption && initialState.paintedWallColor === "rgb(213, 197, 168)", `Plain wall did not expose the selected wall color: ${JSON.stringify(initialState)}`);
   assert(!initialState.hasFloorElement && !initialState.hasFloorControl && !initialState.wallClass.includes("floor-"), `Legacy floor data was not ignored: ${JSON.stringify(initialState)}`);
   assert(initialState.assetPack === "victorian-cabinet-hall" && initialState.sceneSize.join("x") === "1920x1080", `Victorian asset pack or canonical scene size was missing: ${JSON.stringify(initialState)}`);
-  assert(initialState.segmentTemplate === "horizontal" && initialState.templateOptions.join(",") === "horizontal,vertical,square,monumental,arch", `Legacy segment did not fall back to the complete template set: ${JSON.stringify(initialState)}`);
-  assert(initialState.assetLayers, `Victorian hall asset layers were incomplete: ${JSON.stringify(initialState)}`);
+  assert(initialState.segmentTemplate === "horizontal" && initialState.templateOptions.join(",") === "horizontal,vertical,square,monumental", `Legacy segment did not fall back to the supported template set: ${JSON.stringify(initialState)}`);
+  assert(initialState.assetLayers && initialState.removedDecorationLayers, `Focused wall layers were incomplete or removed decorations still rendered: ${JSON.stringify(initialState)}`);
   assert(initialState.hasInspector, `Edit mode inspector was missing: ${JSON.stringify(initialState)}`);
   assert(!initialState.overflow, `Exhibition view caused horizontal overflow: ${JSON.stringify(initialState)}`);
   assert(initialState.globalRailWidth <= 64 && initialState.listRailWidth <= 72 && initialState.hasBackToList, `Focused Exhibition rails were not compact: ${JSON.stringify(initialState)}`);
-  assert(initialState.inspectorTabs.join(',') === 'Hall,Exhibit,Segments,Export', `Context inspector tabs were incomplete: ${JSON.stringify(initialState)}`);
+  assert(initialState.inspectorTabs.join(',') === 'Wall,Exhibit,Segments,Export', `Context inspector tabs were incomplete: ${JSON.stringify(initialState)}`);
   assert(initialState.inspectorCollapseButtons === 1 && initialState.inspectorHeaderCloseButtons === 0, `Exhibition inspector has duplicate collapse controls: ${JSON.stringify(initialState)}`);
   assert(!initialState.rawEscapesVisible, `Raw escaped Unicode text is visible in Exhibition: ${JSON.stringify(initialState)}`);
   assert(!/Manage assets|Add segment|Delete segment|Export segment|Export scale/.test(initialState.toolbarText), `Low-frequency actions leaked into the Exhibition toolbar: ${JSON.stringify(initialState)}`);
-  const expandedRails = await evaluate(client, `(() => {
+  const expandedRails = await evaluate(client, `(async () => {
     document.querySelector('.sidebar-rail-toggle').click();
     document.querySelector('.exhibition-list .rail-toggle').click();
-    return new Promise((resolve) => requestAnimationFrame(() => resolve({
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    return {
       global: Math.round(document.querySelector('.sidebar').getBoundingClientRect().width),
       secondary: Math.round(document.querySelector('.exhibition-list').getBoundingClientRect().width),
       globalStored: sessionStorage.getItem('archive.workspaceNavExpanded'),
       secondaryStored: sessionStorage.getItem('archive.exhibitionListExpanded')
-    })));
+    };
   })()`);
   assert(expandedRails.global > initialState.globalRailWidth && expandedRails.secondary > initialState.listRailWidth && expandedRails.globalStored === '1' && expandedRails.secondaryStored === '1', `Exhibition rail expansion did not persist for the session: ${JSON.stringify(expandedRails)}`);
   await evaluate(client, `(() => { document.querySelector('.sidebar-rail-toggle').click(); document.querySelector('.exhibition-list .rail-toggle').click(); return true; })()`);
@@ -471,14 +483,14 @@ async function main() {
     return option.value;
   })()`);
   await waitFor(client, "document.querySelector('.exhibition-hall-scene')?.classList.contains('wall-user-asset') && document.querySelector('.exhibition-user-wallpaper')", "Workshop wallpaper was not applied to the active Exhibition draft");
-  await evaluate(client, `(() => { [...document.querySelectorAll('.exhibition-inspector button')].find((button) => button.textContent.includes('Save hall')).click(); return true; })()`);
+  await evaluate(client, `(() => { [...document.querySelectorAll('.exhibition-toolbar-actions button')].find((button) => button.textContent.includes('Save')).click(); return true; })()`);
   await sleep(350);
   const persistedWorkshopWallpaper = await evaluate(client, `(async () => (await window.archiveAPI.getExhibition(${JSON.stringify(setup.exhibitionId)})).segments.find((segment) => segment.id === ${JSON.stringify(setup.firstSegmentId)})?.style?.userWallpaperAssetId)()`);
   assert(persistedWorkshopWallpaper === workshopAsset.id, `Workshop wallpaper selection did not persist on the segment: ${persistedWorkshopWallpaper}`);
   await evaluate(client, `(() => { const select = document.querySelector('.exhibition-inspector select'); const wall = [...document.querySelectorAll('.exhibition-inspector select')].find((entry) => [...entry.options].some((option) => option.value === 'plain')); wall.value = 'plain'; wall.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
   await waitFor(client, "document.querySelector('.exhibition-hall-scene')?.classList.contains('wall-plain')", "Exhibition did not return to the plain wall after Workshop asset verification");
   await evaluate(client, `(() => {
-    const select = [...document.querySelectorAll('.exhibition-user-asset-selectors select')].find((entry) => entry.querySelector('option[value="user:${workshopPresentationAssets.wainscotId}"]'));
+    const select = [...document.querySelectorAll('.exhibition-lower-wall-controls select')].find((entry) => entry.querySelector('option[value="user:${workshopPresentationAssets.wainscotId}"]'));
     select.value = 'user:${workshopPresentationAssets.wainscotId}';
     select.dispatchEvent(new Event('change', { bubbles: true }));
     return true;
@@ -563,64 +575,45 @@ async function main() {
   assert(Math.abs(wheelAnchorBefore.logicalX - wheelAnchorAfter.logicalX) < 2 && Math.abs(wheelAnchorBefore.logicalY - wheelAnchorAfter.logicalY) < 2, `Wheel zoom did not keep the cursor anchor stable: ${JSON.stringify({ wheelAnchorBefore, wheelAnchorAfter })}`);
   await evaluate(client, `(() => { document.querySelector('[data-canvas-action="fit"]').click(); return true; })()`);
 
-  const artDirectionOptions = await evaluate(client, `(() => {
-    const values = [...document.querySelectorAll('.exhibition-inspector option')].map((option) => option.value);
+  const wallSystemOptions = await evaluate(client, `(() => {
+    const options = [...document.querySelectorAll('.exhibition-inspector option')];
+    const values = options.map((option) => option.value);
+    const classicalLabels = options
+      .filter((option) => ['classical-tuscan','classical-doric','classical-ionic','classical-corinthian','classical-composite'].includes(option.value))
+      .map((option) => option.textContent.trim());
     return {
-      themeCount: ['victorian-cabinet','william-morris','dark-walnut','white-museum','gilded-age','east-asian'].filter((value) => values.includes(value)).length,
-      railCount: ['none','simple-white','dark-walnut','carved-mahogany','black-gold','brass','art-nouveau'].filter((value) => values.includes(value)).length,
-      wainscotCount: ['none','low-wood','tall-wood','walnut-square','carved-mahogany','green-fabric','burgundy-fabric','white-classical','black-museum'].filter((value) => values.includes(value)).length,
-      corniceCount: ['none','simple-crown','victorian-plaster','dentil','gilded-classical','dark-wood','art-nouveau','east-asian-beam','modern-recess'].filter((value) => values.includes(value)).length,
-      placeholderDecorCount: ['small-plant','tall-palm','plant-stand','wooden-bench','leather-bench','velvet-bench','rope-barrier','sculpture-pedestal'].filter((value) => values.includes(value)).length,
-      renderedDecorCount: document.querySelectorAll('.exhibition-decor-piece').length
+      hasWallSystem: Boolean(document.querySelector('[data-wall-system]')),
+      wallSourceCount: ['plain','plaster','linen','wallpaper','collection'].filter((value) => values.includes(value)).length,
+      mouldingCount: ['none','simple-white','dark-walnut','carved-mahogany','brass'].filter((value) => values.includes(value)).length,
+      wainscotCount: ['none','low-wood','walnut-square','carved-mahogany','green-fabric','burgundy-fabric','white-classical','black-museum'].filter((value) => values.includes(value)).length,
+      upperStripCount: ['none','simple-crown','gilded-classical','dark-wood','classical-tuscan','classical-doric','classical-ionic','classical-corinthian','classical-composite'].filter((value) => values.includes(value)).length,
+      classicalLabels,
+      customWallpaperVisible: options.some((option) => option.textContent.includes('Smoke Wallpaper')),
+      customWainscotVisible: options.some((option) => option.value === 'user:${workshopPresentationAssets.wainscotId}'),
+      removedOptions: ['arch','gilded-age','upper-left','double-cord','small-plant','tall-palm','wooden-bench'].filter((value) => values.includes(value)),
+      duplicateBackgroundButtons: [...document.querySelectorAll('.exhibition-background-controls button')].filter((button) => button.textContent.includes('Choose background from collection')).length
     };
   })()`);
-  assert(artDirectionOptions.themeCount === 6 && artDirectionOptions.railCount === 7 && artDirectionOptions.wainscotCount === 9 && artDirectionOptions.corniceCount === 9, `Expanded architectural/theme options were incomplete: ${JSON.stringify(artDirectionOptions)}`);
-  assert(artDirectionOptions.placeholderDecorCount === 0 && artDirectionOptions.renderedDecorCount === 0, `Placeholder decor leaked into the normal UI or Minimal hall: ${JSON.stringify(artDirectionOptions)}`);
-
+  assert(wallSystemOptions.hasWallSystem && wallSystemOptions.wallSourceCount === 5 && wallSystemOptions.mouldingCount === 5 && wallSystemOptions.wainscotCount === 8 && wallSystemOptions.upperStripCount === 9, `Grouped top/middle/lower wall controls were incomplete: ${JSON.stringify(wallSystemOptions)}`);
+  assert(wallSystemOptions.classicalLabels.length === 5 && wallSystemOptions.classicalLabels.every((label) => /entablature/i.test(label) && !/cornice/i.test(label)), `Classical upper-strip labels regressed: ${JSON.stringify(wallSystemOptions.classicalLabels)}`);
+  assert(wallSystemOptions.customWallpaperVisible && wallSystemOptions.customWainscotVisible && wallSystemOptions.removedOptions.length === 0 && wallSystemOptions.duplicateBackgroundButtons === 0, `Custom materials or removed legacy controls were wrong: ${JSON.stringify(wallSystemOptions)}`);
   await evaluate(client, `(() => {
-    const select = document.querySelector('.exhibition-inspector option[value="gilded-age"]')?.parentElement;
-    select.value = 'gilded-age';
+    const controls = document.querySelector('.exhibition-upper-strip-controls');
+    controls.open = true;
+    const select = controls.querySelector('select');
+    select.value = 'classical-doric';
     select.dispatchEvent(new Event('change', { bubbles: true }));
+    const range = controls.querySelector('input[type="range"]');
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(range, '15');
+    range.dispatchEvent(new Event('input', { bubbles: true }));
+    range.dispatchEvent(new Event('change', { bubbles: true }));
     return true;
   })()`);
-  await waitFor(client, "document.querySelector('.exhibition-hall-scene')?.classList.contains('trim-black-gold') && document.querySelector('.exhibition-hall-scene')?.classList.contains('wainscot-burgundy-fabric') && document.querySelector('.exhibition-hall-scene')?.classList.contains('ceiling-gilded-classical') && document.querySelector('.exhibition-hall-scene')?.classList.contains('density-curated') && !document.querySelector('.exhibition-decor-piece')", "Restrained Gilded Age theme bundle did not apply its coordinated draft");
-
-  await evaluate(client, `(() => {
-    const plaque = [...document.querySelectorAll('.exhibition-control-section')].find((section) => section.querySelector('summary')?.textContent.includes('Plaque'));
-    plaque.querySelector('input[type="checkbox"]').click();
-    return true;
-  })()`);
-  await waitFor(client, "[...document.querySelectorAll('.exhibition-control-section')].find((section) => section.querySelector('option[value=\"upper-left\"]'))?.querySelector('textarea')", "Plaque content controls did not open");
-
-  await evaluate(client, `(() => {
-    const sections = [...document.querySelectorAll('.exhibition-control-section')];
-    const plaque = sections.find((section) => section.querySelector('option[value="upper-left"]'));
-    const caption = sections.find((section) => section.querySelector('option[value="beside"]'));
-    const setValue = (element, value) => {
-      const prototype = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-      Object.getOwnPropertyDescriptor(prototype, 'value').set.call(element, value);
-      element.dispatchEvent(new Event('input', { bubbles: true }));
-    };
-    setValue(plaque.querySelectorAll('input:not([type="checkbox"])')[0], 'Treasures of the Long Hall');
-    setValue(plaque.querySelectorAll('input:not([type="checkbox"])')[1], 'Section I');
-    setValue(plaque.querySelector('textarea'), 'A concise introduction for visitors.');
-    const choose = (scope, value) => {
-      const select = scope.querySelector('option[value="' + value + '"]')?.parentElement;
-      if (!select) throw new Error('Missing art-direction option: ' + value);
-      select.value = value;
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-    };
-    choose(plaque, 'upper-left');
-    choose(plaque, 'hanging');
-    choose(caption, 'beside');
-    choose(caption, 'brass');
-    choose(caption, 'double-cord');
-    return true;
-  })()`);
-  await waitFor(client, "document.querySelector('.exhibition-section-plaque.plaque-hanging.plaque-upper-left')?.textContent.includes('Treasures of the Long Hall') && !document.querySelector('.exhibition-decor-piece') && document.querySelector('.exhibition-decor-unavailable')?.textContent.includes('Placeholder artwork stays hidden')", "Plaque or placeholder-decor suppression did not render from the active draft");
+  await waitFor(client, "document.querySelector('.exhibition-hall-scene')?.classList.contains('ceiling-classical-doric') && document.querySelector('.exhibition-hall-scene')?.style.getPropertyValue('--upper-trim-height') === '15%'", "Adjustable upper strip did not update the active scene");
 
   const inspectorScroll = await evaluate(client, `(() => {
     const inspector = document.querySelector('.exhibition-inspector-scroll');
+    document.querySelector('.exhibition-ambient-light-controls').open = true;
     const brightness = document.querySelector('.exhibition-brightness-control');
     brightness.scrollIntoView({ block: 'end' });
     const inspectorRect = inspector.getBoundingClientRect();
@@ -652,8 +645,8 @@ async function main() {
   }
 
   await evaluate(client, `(() => {
-    const select = [...document.querySelectorAll('.exhibition-inspector select')].find((entry) => entry.querySelector('option[value="custom"]'));
-    select.value = 'custom';
+    const select = [...document.querySelectorAll('.exhibition-inspector select')].find((entry) => entry.querySelector('option[value="collection"]'));
+    select.value = 'collection';
     select.dispatchEvent(new Event('change', { bubbles: true }));
     return true;
   })()`);
@@ -670,12 +663,12 @@ async function main() {
   })()`);
   await waitFor(client, "document.querySelector('.exhibition-picker-images button[data-image-id=\"image-exhibition-back\"]')?.classList.contains('active')", "Exact background image was not selected");
   await evaluate(client, "(() => { document.querySelector('.exhibition-picker footer .primary').click(); return true; })()");
-  await waitFor(client, "document.querySelector('.exhibition-custom-wallpaper.wallpaper-tile') && document.querySelector('.exhibition-wallpaper-preload')?.src.includes('exhibition-back.png') && document.querySelector('.exhibition-hall-scene')?.classList.contains('density-minimal') && document.querySelector('.exhibition-hall-scene')?.classList.contains('trim-dark-walnut') && document.querySelector('.exhibition-hall-scene')?.classList.contains('ceiling-simple-crown')", "Selected collection image did not render with museum-restraint defaults");
-  const inspectMaterialSet = async (anchorOption, values, selector, classPrefix) => {
+  await waitFor(client, "document.querySelector('.exhibition-custom-wallpaper.wallpaper-tile') && document.querySelector('.exhibition-wallpaper-preload')?.src.includes('exhibition-back.png') && document.querySelector('.exhibition-hall-scene')?.classList.contains('trim-dark-walnut') && document.querySelector('.exhibition-hall-scene')?.classList.contains('ceiling-classical-doric') && !document.querySelector('.exhibition-decor-piece')", "Selected collection image did not render while preserving the other wall layers");
+  const inspectMaterialSet = async (controlSelector, values, selector, classPrefix) => {
     const results = [];
     for (const value of values) {
       await evaluate(client, `(() => {
-        const select = document.querySelector('.exhibition-inspector option[value="${anchorOption}"]')?.parentElement;
+        const select = document.querySelector('${controlSelector}');
         select.value = '${value}';
         select.dispatchEvent(new Event('change', { bubbles: true }));
         return true;
@@ -689,16 +682,76 @@ async function main() {
     return results;
   };
   const materialOpacity = {
-    wainscoting: await inspectMaterialSet('burgundy-fabric', ['low-wood','tall-wood','walnut-square','carved-mahogany','green-fabric','burgundy-fabric','white-classical','black-museum'], '.exhibition-asset-wainscot', 'wainscot-'),
-    rails: await inspectMaterialSet('black-gold', ['simple-white','dark-walnut','carved-mahogany','black-gold','brass','art-nouveau'], '.exhibition-asset-chair-rail', 'trim-'),
-    cornices: await inspectMaterialSet('gilded-classical', ['simple-crown','victorian-plaster','dentil','gilded-classical','dark-wood','art-nouveau','east-asian-beam','modern-recess'], '.exhibition-asset-crown', 'ceiling-')
+    wainscoting: await inspectMaterialSet('[data-wainscoting-style]', ['low-wood','walnut-square','carved-mahogany','green-fabric','burgundy-fabric','white-classical','black-museum'], '.exhibition-asset-wainscot', 'wainscot-'),
+    rails: await inspectMaterialSet('[data-wall-moulding-style]', ['simple-white','dark-walnut','carved-mahogany','brass'], '.exhibition-asset-chair-rail', 'trim-'),
+    upperStrips: await inspectMaterialSet('[data-upper-strip-style]', ['simple-crown','gilded-classical','dark-wood','classical-tuscan','classical-doric','classical-ionic','classical-corinthian','classical-composite'], '.exhibition-asset-crown', 'ceiling-')
   };
-  for (const [anchorOption, value, classPrefix] of [['burgundy-fabric', 'burgundy-fabric', 'wainscot-'], ['black-gold', 'dark-walnut', 'trim-'], ['gilded-classical', 'simple-crown', 'ceiling-']]) {
-    await evaluate(client, `(() => { const select = document.querySelector('.exhibition-inspector option[value="${anchorOption}"]')?.parentElement; select.value = '${value}'; select.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+  for (const [controlSelector, value, classPrefix] of [['[data-wainscoting-style]', 'burgundy-fabric', 'wainscot-'], ['[data-wall-moulding-style]', 'dark-walnut', 'trim-'], ['[data-upper-strip-style]', 'simple-crown', 'ceiling-']]) {
+    await evaluate(client, `(() => { const select = document.querySelector('${controlSelector}'); select.value = '${value}'; select.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
     await waitFor(client, `document.querySelector('.exhibition-hall-scene')?.classList.contains('${classPrefix}${value}')`, `${value} material did not settle`);
   }
-  const materialFailures = [...materialOpacity.wainscoting, ...materialOpacity.rails, ...materialOpacity.cornices].filter((entry) => entry.opacity !== '1' || entry.backgroundColor === 'rgba(0, 0, 0, 0)' || entry.backgroundColor === 'transparent' || entry.mixBlendMode !== 'normal' || entry.filter.includes('opacity'));
+  const materialFailures = [...materialOpacity.wainscoting, ...materialOpacity.rails, ...materialOpacity.upperStrips].filter((entry) => entry.opacity !== '1' || entry.backgroundColor === 'rgba(0, 0, 0, 0)' || entry.backgroundColor === 'transparent' || entry.mixBlendMode !== 'normal' || entry.filter.includes('opacity'));
   assert(materialFailures.length === 0, `Architectural material allowed wallpaper bleed-through: ${JSON.stringify(materialFailures)}`);
+  const classicalEntablatureAssets = [];
+  for (const value of ['classical-tuscan', 'classical-doric', 'classical-ionic', 'classical-corinthian', 'classical-composite']) {
+    await evaluate(client, `(() => { const select = document.querySelector('[data-upper-strip-style]'); select.value = '${value}'; select.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+    await waitFor(client, `document.querySelector('.classical-entablature')?.dataset.classicalEntablature === '${value.replace('classical-', '')}'`, `${value} did not render its classical entablature asset`);
+    const structure = await evaluate(client, `(() => {
+      const crown = document.querySelector('.exhibition-asset-crown');
+      const profile = crown.querySelector('.classical-entablature');
+      const computed = getComputedStyle(profile);
+      return {
+        renderer: profile.dataset.entablatureRenderer,
+        parts: profile.dataset.entablatureParts,
+        assetGeneration: profile.dataset.assetGeneration,
+        backgroundImage: computed.backgroundImage,
+        backgroundRepeat: computed.backgroundRepeat,
+        backgroundSize: computed.backgroundSize,
+        heightRatio: crown.getBoundingClientRect().height / document.querySelector('.exhibition-hall-scene').getBoundingClientRect().height,
+        hasDepthShadow: getComputedStyle(crown).filter.includes('drop-shadow') && computed.filter.includes('drop-shadow'),
+        preloadedAssetCount: [...document.querySelectorAll('.exhibition-export-asset-preloads img')].filter((image) => image.src.includes('entablature') && image.complete && image.naturalWidth > 0).length
+      };
+    })()`);
+    assert(structure.renderer === 'architectural-texture' && structure.parts === 'cornice frieze architrave' && structure.assetGeneration === 'continuous-v3' && structure.backgroundImage.includes('entablature') && structure.backgroundRepeat === 'repeat-x' && structure.backgroundSize === 'auto 100%' && structure.heightRatio >= 0.13 && structure.hasDepthShadow && structure.preloadedAssetCount > 0, `${value} entablature asset rendering was incorrect: ${JSON.stringify(structure)}`);
+    classicalEntablatureAssets.push(structure.backgroundImage);
+  }
+  assert(new Set(classicalEntablatureAssets).size === 5, `Classical orders did not use five distinct entablature assets: ${classicalEntablatureAssets.length}`);
+  await evaluate(client, `(() => { const select = document.querySelector('[data-upper-strip-style]'); select.value = 'simple-crown'; select.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+  await waitFor(client, "document.querySelector('.exhibition-hall-scene')?.classList.contains('ceiling-simple-crown')", "Continuous built-in architecture did not settle");
+  const architectureContinuity = await evaluate(client, `(() => {
+    const read = (selector) => {
+      const element = document.querySelector(selector);
+      const style = getComputedStyle(element);
+      return {
+        mode: element.dataset.architectureContinuity,
+        backgroundRepeat: style.backgroundRepeat,
+        backgroundSize: style.backgroundSize,
+        backgroundPosition: style.backgroundPosition
+      };
+    };
+    return {
+      upper: read('.exhibition-asset-crown'),
+      rail: read('.exhibition-asset-chair-rail'),
+      wainscot: read('.exhibition-asset-wainscot')
+    };
+  })()`);
+  assert(architectureContinuity.upper.mode === 'seamless-modules' && architectureContinuity.upper.backgroundRepeat === 'repeat-x' && architectureContinuity.upper.backgroundSize === 'auto 100%', `Built-in upper strip did not use its seamless architectural module: ${JSON.stringify(architectureContinuity)}`);
+  assert(architectureContinuity.rail.mode === 'seamless-modules' && architectureContinuity.rail.backgroundRepeat === 'repeat-x' && architectureContinuity.rail.backgroundSize === 'auto 100%', `Built-in wall moulding did not use its seamless architectural module: ${JSON.stringify(architectureContinuity)}`);
+  assert(architectureContinuity.wainscot.mode === 'complete-panels' && architectureContinuity.wainscot.backgroundRepeat.includes('round') && architectureContinuity.wainscot.backgroundSize === 'auto 100%', `Built-in wainscoting did not finish on complete panel modules: ${JSON.stringify(architectureContinuity)}`);
+  assert(initialState.integratedWallAssembly === 'integrated-v1' && initialState.integratedWallParts, `Upper strip, wall surface, moulding, and wainscoting were not rendered as one integrated wall assembly: ${JSON.stringify(initialState)}`);
+  const wallCohesion = await evaluate(client, `(() => {
+    const layer = document.querySelector('.exhibition-wall-cohesion');
+    const crown = document.querySelector('.exhibition-asset-crown');
+    const wainscot = document.querySelector('.exhibition-asset-wainscot');
+    return {
+      lighting: layer?.dataset.wallLighting || '',
+      overlay: getComputedStyle(layer).backgroundImage,
+      upperTransition: getComputedStyle(crown, '::before').backgroundImage,
+      lowerTransitionHeight: getComputedStyle(wainscot, '::before').height
+    };
+  })()`);
+  assert(wallCohesion.lighting === 'shared' && wallCohesion.overlay !== 'none' && wallCohesion.upperTransition !== 'none' && parseFloat(wallCohesion.lowerTransitionHeight) > 0, `Integrated wall transitions were missing: ${JSON.stringify(wallCohesion)}`);
+  await waitFor(client, "document.querySelector('.exhibition-hall-scene')?.classList.contains('ceiling-simple-crown')", "Cornice test did not restore the restrained hall style");
   await evaluate(client, `(() => {
     const scale = document.querySelector('.exhibition-tile-controls input[type="range"]');
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(scale, '55');
@@ -708,7 +761,7 @@ async function main() {
   })()`);
   await waitFor(client, "document.querySelector('.exhibition-hall-scene')?.style.getPropertyValue('--wallpaper-scale') === '55%'", "Tile pattern scale did not update the hall preview");
   await evaluate(client, `(() => {
-    [...document.querySelectorAll('.exhibition-inspector button')].find((button) => button.textContent.includes('Save hall')).click();
+    [...document.querySelectorAll('.exhibition-toolbar-actions button')].find((button) => button.textContent.includes('Save')).click();
     return true;
   })()`);
   await waitFor(client, "document.querySelector('.exhibition-custom-wallpaper.wallpaper-tile')", "Custom wallpaper disappeared after saving the segment");
@@ -736,13 +789,12 @@ async function main() {
   await waitFor(client, "document.querySelectorAll('.exhibition-placement').length === 1 && document.querySelector('.exhibition-inspector select option[value=" + JSON.stringify("ornate-gold") + "]')", "Exhibit was not added and selected");
   const exhibitPresentation = await evaluate(client, `(() => ({
     captionClass: document.querySelector('.exhibition-wall-label')?.className || '',
-    suspensionClass: document.querySelector('.exhibition-picture-suspension')?.className || '',
+    frameStyle: document.querySelector('.exhibition-placement')?.dataset.frameStyle || '',
     decorCount: document.querySelectorAll('.exhibition-decor-piece').length,
-    plaqueText: document.querySelector('.exhibition-section-plaque')?.textContent || ''
+    oldLayerCount: document.querySelectorAll('.exhibition-section-plaque, .exhibition-picture-suspension, .exhibition-asset-sconces').length
   }))()`);
-  assert(exhibitPresentation.captionClass.includes('caption-brass') && exhibitPresentation.captionClass.includes('caption-position-beside'), `Caption presentation did not apply: ${JSON.stringify(exhibitPresentation)}`);
-  assert(exhibitPresentation.suspensionClass.includes('suspension-double-cord'), `Picture-rail suspension did not apply: ${JSON.stringify(exhibitPresentation)}`);
-  assert(exhibitPresentation.decorCount === 0 && exhibitPresentation.plaqueText.includes('Treasures of the Long Hall'), `Placeholder decor returned behind the exhibit: ${JSON.stringify(exhibitPresentation)}`);
+  assert(exhibitPresentation.captionClass.includes('caption-white-museum') && exhibitPresentation.captionClass.includes('caption-position-below'), `Caption did not use the focused below-exhibit presentation: ${JSON.stringify(exhibitPresentation)}`);
+  assert(exhibitPresentation.decorCount === 0 && exhibitPresentation.oldLayerCount === 0, `Removed hall decoration layers returned behind the exhibit: ${JSON.stringify(exhibitPresentation)}`);
 
   const sceneEmptyPoint = await evaluate(client, `(() => {
     const rect = document.querySelector('.exhibition-hall-scene').getBoundingClientRect();
@@ -774,7 +826,7 @@ async function main() {
   })()`);
   assert(placementHit.placementReceivesPointer, `Hall overlays blocked exhibit pointer events: ${JSON.stringify(placementHit)}`);
   await clickAt(client, placementHit.x, placementHit.y);
-  await waitFor(client, "document.querySelector('.exhibition-placement')?.classList.contains('selected') && document.querySelector('.exhibition-inspector')?.textContent.includes('Exhibit settings')", "Real pointer click did not select the exhibit");
+  await waitFor(client, "document.querySelector('.exhibition-placement')?.classList.contains('selected') && document.querySelector('[data-exhibit-controls]')", "Real pointer click did not select the exhibit");
   const selectedBeforeWorkshop = await evaluate(client, `(() => ({ placement: document.querySelector('.exhibition-placement.selected')?.dataset.exhibitionPlacement, segment: document.querySelector('.exhibition-segment-nav select').value, zoom: document.querySelector('.exhibition-scene-wrap').dataset.zoom }))()`);
   await evaluate(client, `(() => { document.querySelector('[data-manage-assets]').click(); return true; })()`);
   await waitFor(client, "document.querySelector('.asset-workshop-modal [data-asset-workshop]')", "Asset Workshop modal did not open with a selected exhibit");
@@ -784,7 +836,7 @@ async function main() {
   assert(JSON.stringify(selectedAfterWorkshop) === JSON.stringify(selectedBeforeWorkshop), `Asset Workshop modal did not preserve selected exhibit/segment/zoom: ${JSON.stringify({ selectedBeforeWorkshop, selectedAfterWorkshop })}`);
 
   await evaluate(client, `(() => {
-    const select = [...document.querySelectorAll('.exhibition-user-asset-selectors select')].find((entry) => entry.querySelector('option[value="user:${workshopPresentationAssets.frameId}"]'));
+    const select = [...document.querySelectorAll('.exhibition-frame-controls select')].find((entry) => entry.querySelector('option[value="user:${workshopPresentationAssets.frameId}"]'));
     select.value = 'user:${workshopPresentationAssets.frameId}';
     select.dispatchEvent(new Event('change', { bubbles: true }));
     return true;
@@ -816,9 +868,29 @@ async function main() {
   for (const [frameStyle, expectedThickness] of Object.entries(builtInFrameDefaults)) {
     await evaluate(client, `(() => { const select = document.querySelector('.exhibition-inspector option[value="${frameStyle}"]').parentElement; select.value = '${frameStyle}'; select.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
     await waitFor(client, `document.querySelector('.exhibition-placement')?.dataset.frameStyle === '${frameStyle}'`, `Built-in frame ${frameStyle} did not render`);
-    const builtInState = await evaluate(client, `(() => { const placement = document.querySelector('.exhibition-placement'); const mat = placement.querySelector('.exhibition-art-mat'); const border = parseFloat(getComputedStyle(placement.querySelector('.exhibition-frame-outer')).borderTopWidth); return { thickness: Number(mat.dataset.frameThickness), ratio: border / Math.min(placement.offsetWidth, placement.offsetHeight) }; })()`);
-    assert(Math.abs(builtInState.thickness - expectedThickness) < .05 && Math.abs(builtInState.ratio - expectedThickness / 100) < .012, `Built-in frame ${frameStyle} lost its intended proportion: ${JSON.stringify(builtInState)}`);
+    const builtInState = await evaluate(client, `(() => { const placement = document.querySelector('.exhibition-placement'); const mat = placement.querySelector('.exhibition-art-mat'); const outer = placement.querySelector('.exhibition-frame-outer'); const border = parseFloat(getComputedStyle(outer).borderTopWidth); return { thickness: Number(mat.dataset.frameThickness), ratio: border / Math.min(placement.offsetWidth, placement.offsetHeight), generation: mat.dataset.frameGeneration, image: getComputedStyle(outer).borderImageSource }; })()`);
+    assert(Math.abs(builtInState.thickness - expectedThickness) < .05 && Math.abs(builtInState.ratio - expectedThickness / 100) < .012 && builtInState.generation === 'realistic-v2' && builtInState.image.includes('.webp'), `Built-in frame ${frameStyle} lost its intended realistic presentation: ${JSON.stringify(builtInState)}`);
   }
+  await evaluate(client, `(() => { const select = document.querySelector('.exhibition-inspector select[data-frame-style]'); select.value = 'none'; select.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+  await waitFor(client, "document.querySelector('.exhibition-art-mat.frame-none') && getComputedStyle(document.querySelector('.exhibition-art-mat.frame-none .exhibition-frame-outer')).display === 'none' && getComputedStyle(document.querySelector('.exhibition-art-mat.frame-none .exhibition-frame-wall-shadow')).display === 'none' && getComputedStyle(document.querySelector('.exhibition-art-mat.frame-none .exhibition-frame-image')).backgroundColor === 'rgba(0, 0, 0, 0)' && !document.querySelector('[data-placement-frame-thickness]')", "No-frame exhibit option left a presentation layer or gray backing visible");
+  await evaluate(client, `(() => { const select = document.querySelector('.exhibition-inspector select[data-frame-style]'); select.value = 'white-mat'; select.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+  await waitFor(client, "document.querySelector('[data-placement-frame-thickness]')", "Frame controls did not return after leaving the no-frame option");
+
+  await evaluate(client, `(() => { const select = document.querySelector('[data-display-support-control]'); select.value = 'walnut-wall-shelf'; select.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+  await waitFor(client, "document.querySelector('.exhibition-placement[data-support-style=\"walnut-wall-shelf\"] .exhibition-display-support img')", "Walnut display furniture did not render with the selected exhibit");
+  await evaluate(client, `(() => { const select = document.querySelector('[data-support-scale-control]'); select.value = 'large'; select.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+  await sleep(500);
+  const displaySupportState = await evaluate(client, `(() => ({
+    control: document.querySelector('[data-support-scale-control]')?.value || '',
+    placement: document.querySelector('.exhibition-placement')?.dataset.supportStyle || '',
+    rendered: Number(document.querySelector('.exhibition-display-support')?.dataset.supportScale || 0),
+    source: document.querySelector('.exhibition-display-support img')?.getAttribute('src') || ''
+  }))()`);
+  assert(displaySupportState.control === "large" && displaySupportState.placement === "walnut-wall-shelf" && Math.abs(displaySupportState.rendered - 1.22) < .01 && displaySupportState.source.includes("walnut-wall-shelf"), `Display furniture size did not update: ${JSON.stringify(displaySupportState)}`);
+  await evaluate(client, `(() => { const button = document.querySelector('.exhibition-nudge-pad .nudge-down'); button.click(); button.click(); return true; })()`);
+  await waitFor(client, "document.querySelector('.exhibition-object-layer')?.dataset.exhibitOffset === '0,4'", "Exhibit-only nudge did not move the exhibit layer independently");
+  const furnitureNudgeState = await evaluate(client, `(() => ({ objectTransform: getComputedStyle(document.querySelector('.exhibition-object-layer')).transform, supportTransform: getComputedStyle(document.querySelector('.exhibition-display-support')).transform }))()`);
+  assert(furnitureNudgeState.objectTransform !== 'none' && furnitureNudgeState.supportTransform.includes('matrix'), `Exhibit/furniture transform layers were not independent: ${JSON.stringify(furnitureNudgeState)}`);
 
   for (const [size, expectedThickness] of Object.entries({ small: 4.5, medium: 7, large: 10.5 })) {
     await evaluate(client, `(() => { const select = document.querySelector('[data-placement-frame-thickness]'); select.value = '${size}'; select.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
@@ -860,17 +932,20 @@ async function main() {
     const outer = document.querySelector('.exhibition-frame-outer');
     const style = getComputedStyle(outer);
     const clone = placement.cloneNode(true);
+    const cloneOuter = clone.querySelector('.exhibition-frame-outer');
     return {
       hasLayeredFrame: Boolean(outer && document.querySelector('.exhibition-frame-recess') && document.querySelector('.exhibition-frame-mat') && document.querySelector('.exhibition-frame-glass')),
       borderImageSource: style.borderImageSource,
-      clonedFrameAsset: clone.style.getPropertyValue('--frame-asset'),
-      currentFrameAsset: placement.style.getPropertyValue('--frame-asset'),
+      clonedFrameAsset: clone.querySelector('.exhibition-art-mat').style.getPropertyValue('--frame-asset'),
+      currentFrameAsset: document.querySelector('.exhibition-art-mat').style.getPropertyValue('--frame-asset'),
+      generation: document.querySelector('.exhibition-art-mat').dataset.frameGeneration,
+      cloneHasFrameLayer: Boolean(cloneOuter),
       matColor: getComputedStyle(document.querySelector('.exhibition-frame-mat')).backgroundColor,
       pointerEvents: style.pointerEvents
     };
   })()`);
-  assert(frameState.hasLayeredFrame && frameState.borderImageSource.includes("data:image/svg+xml;base64"), `White mat frame did not use the local 9-slice asset: ${JSON.stringify(frameState)}`);
-  assert(frameState.currentFrameAsset === frameState.clonedFrameAsset, `Preview/export clone did not share the current frame mapping: ${JSON.stringify(frameState)}`);
+  assert(frameState.hasLayeredFrame && frameState.generation === 'realistic-v2' && frameState.borderImageSource.includes('warm-white-mat-9slice') && frameState.borderImageSource.includes('.webp'), `White mat frame did not use the realistic local 9-slice asset: ${JSON.stringify(frameState)}`);
+  assert(frameState.cloneHasFrameLayer && frameState.currentFrameAsset === frameState.clonedFrameAsset, `Preview/export clone did not share the current frame mapping: ${JSON.stringify(frameState)}`);
   assert(frameState.matColor === "rgb(251, 250, 244)", `White mat frame did not use a warm-white mat: ${JSON.stringify(frameState)}`);
   assert(frameState.pointerEvents === "none", `Frame artwork intercepted exhibit interaction: ${JSON.stringify(frameState)}`);
 
@@ -887,7 +962,7 @@ async function main() {
   await waitFor(client, "window.__lastExhibitionExportResult?.diagnostics?.exhibitionFrames?.[0]?.matches === true", "White mat export frame audit did not pass");
   const whiteDiagnostics = await evaluate(client, "(() => window.__lastExhibitionExportResult.diagnostics)()");
   assert(whiteDiagnostics.cssAssetCount > 0 && whiteDiagnostics.exhibitionFrames[0].frameStyle === "white-mat", `White mat export diagnostics were incomplete: ${JSON.stringify(whiteDiagnostics)}`);
-  assert(whiteDiagnostics.exhibitionPlaqueCount === 1 && whiteDiagnostics.exhibitionDecorCount === 0 && whiteDiagnostics.exhibitionSuspensionCount === 1, `Export included placeholder decor or omitted curated hall layers: ${JSON.stringify(whiteDiagnostics)}`);
+  assert(whiteDiagnostics.exhibitionPlaqueCount === 0 && whiteDiagnostics.exhibitionDecorCount === 0 && whiteDiagnostics.exhibitionSuspensionCount === 0, `Export reintroduced removed hall decoration layers: ${JSON.stringify(whiteDiagnostics)}`);
   assert(whiteDiagnostics.exhibitionArchitecture?.length === 3 && whiteDiagnostics.exhibitionArchitecture.every((entry) => entry.opaqueBase && entry.mixBlendMode === 'normal' && !entry.filter.includes('opacity')), `Export architectural materials were not opaque: ${JSON.stringify(whiteDiagnostics.exhibitionArchitecture)}`);
   fs.copyFileSync(exportPath, whiteFrameExportPath);
 
@@ -944,13 +1019,13 @@ async function main() {
   await waitFor(client, "document.querySelector('.exhibition-template-select')", "Segment template settings did not return after clearing exhibit selection");
   await evaluate(client, `(() => {
     const select = document.querySelector('.exhibition-template-select');
-    select.value = 'arch';
+    select.value = 'monumental';
     select.dispatchEvent(new Event('change', { bubbles: true }));
     return true;
   })()`);
-  await waitFor(client, "document.querySelector('.exhibition-hall-scene')?.dataset.segmentTemplate === 'arch' && document.querySelector('.exhibition-template-architecture') && getComputedStyle(document.querySelector('.exhibition-template-architecture')).display !== 'none' && document.querySelectorAll('.exhibition-placement').length === 1", "Arch template did not render its dedicated structure with the existing exhibit");
-  await evaluate(client, `(() => { [...document.querySelectorAll('.exhibition-inspector button')].find((button) => button.textContent.includes('Save hall')).click(); return true; })()`);
-  await waitFor(client, "document.querySelector('.exhibition-hall-scene')?.dataset.sceneWidth === '1600' && document.querySelector('.exhibition-hall-scene')?.dataset.sceneHeight === '1400'", "Arch template canonical scene dimensions were not retained after save");
+  await waitFor(client, "document.querySelector('.exhibition-hall-scene')?.dataset.segmentTemplate === 'monumental' && !document.querySelector('.exhibition-template-architecture') && document.querySelectorAll('.exhibition-placement').length === 1", "Monumental template did not render with the existing exhibit or the removed Arch layer returned");
+  await evaluate(client, `(() => { [...document.querySelectorAll('.exhibition-toolbar-actions button')].find((button) => button.textContent.includes('Save')).click(); return true; })()`);
+  await waitFor(client, "document.querySelector('.exhibition-hall-scene')?.dataset.sceneWidth === '2400' && document.querySelector('.exhibition-hall-scene')?.dataset.sceneHeight === '1080'", "Monumental template canonical scene dimensions were not retained after save");
 
   await evaluate(client, `(() => {
     document.querySelector('.exhibition-scene-wrap').click();
@@ -964,11 +1039,28 @@ async function main() {
   await evaluate(client, `(() => { document.querySelector('button[aria-label="Previous segment"]').click(); return true; })()`);
   await waitFor(client, `document.querySelector('[data-exhibition-segment="${setup.firstSegmentId}"]')`, "Previous segment navigation failed");
   await evaluate(client, `(() => {
-    const view = document.querySelector('.exhibition-toolbar .segmented-control button:last-child');
+    const view = document.querySelector('.exhibition-toolbar .mode-toggle button:last-child');
     view.click();
     return true;
   })()`);
   await waitFor(client, "document.querySelector('.exhibition-hall-scene.is-viewing') && document.querySelector('.exhibition-inspector [data-inspector-panel=\"export\"]:not([hidden])')", "View mode did not open the focused Export inspector");
+  const visitZoomState = await evaluate(client, `(async () => {
+    const viewport = document.querySelector('.exhibition-scene-wrap');
+    const scene = document.querySelector('.exhibition-hall-scene');
+    const before = Number(viewport.dataset.zoom);
+    const rect = scene.getBoundingClientRect();
+    const clientX = rect.left + rect.width * 0.45;
+    const clientY = rect.top + rect.height * 0.45;
+    const allowed = viewport.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, ctrlKey: true, deltaY: -160, clientX, clientY }));
+    await new Promise((resolve) => setTimeout(resolve, 220));
+    return {
+      allowed,
+      before,
+      after: Number(viewport.dataset.zoom),
+      editZoomControlsVisible: Boolean(document.querySelector('.exhibition-canvas-controls'))
+    };
+  })()`);
+  assert(!visitZoomState.allowed && visitZoomState.after > visitZoomState.before && !visitZoomState.editZoomControlsVisible, `Visit mode Ctrl+wheel zoom failed or exposed edit zoom controls: ${JSON.stringify(visitZoomState)}`);
   const visitPoint = await evaluate(client, `(() => {
     const rect = document.querySelector('.exhibition-placement').getBoundingClientRect();
     return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
@@ -1037,7 +1129,7 @@ async function main() {
 
   fs.rmSync(exportPath, { force: true });
   await evaluate(client, `(() => { const select = document.querySelector('.exhibition-export-controls select'); select.value = '4'; select.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
-  await waitFor(client, "document.querySelector('.exhibition-export-controls')?.textContent.includes('6400') && document.querySelector('.exhibition-export-controls')?.textContent.includes('5600')", "4x export dimensions were not shown");
+  await waitFor(client, "document.querySelector('.exhibition-export-controls')?.textContent.includes('9600') && document.querySelector('.exhibition-export-controls')?.textContent.includes('4320')", "4x export dimensions were not shown");
   await evaluate(client, `(() => {
     window.__lastExhibitionExportResult = null;
     const button = [...document.querySelectorAll('.exhibition-export-controls button')].find((entry) => entry.textContent.includes('Export segment'));
@@ -1048,7 +1140,7 @@ async function main() {
   await waitFor(client, "window.__lastExhibitionExportResult?.diagnostics?.exhibitionFrames?.[0]?.matches === true", "Final real export frame audit did not pass");
   assert(fs.statSync(exportPath).size > 100, `Exported segment PNG was empty: ${exportPath}`);
   const dimensions = pngDimensions(exportPath);
-  assert(dimensions.width === 6400 && dimensions.height === 5600, `Arch template 4x export dimensions were wrong: ${JSON.stringify(dimensions)}`);
+  assert(dimensions.width === 9600 && dimensions.height === 4320, `Monumental template 4x export dimensions were wrong: ${JSON.stringify(dimensions)}`);
 
   await evaluate(client, "(() => { window.location.reload(); return true; })()");
   await waitFor(client, "document.querySelector('.app') && !document.querySelector('.startup-screen')", "App did not reopen for persistence check");
@@ -1064,6 +1156,10 @@ async function main() {
       frameStyle: placement?.frame_style,
       frameThickness: placement?.frame_thickness,
       captionSize: placement?.caption_size,
+      supportStyle: placement?.support_style,
+      supportScale: placement?.support_scale,
+      exhibitOffsetX: placement?.exhibit_offset_x,
+      exhibitOffsetY: placement?.exhibit_offset_y,
       x: placement?.x,
       width: placement?.width,
       backgroundImageId: value.segments[0].background?.image?.id,
@@ -1077,15 +1173,15 @@ async function main() {
   assert(persisted.itemId === "item-exhibition" && persisted.imageId === "image-exhibition-back", `Item/image references changed: ${JSON.stringify(persisted)}`);
   assert(persisted.frameStyle === "white-mat", `White mat frame style did not persist: ${JSON.stringify(persisted)}`);
   assert(Number(persisted.frameThickness) === 10.5 && persisted.captionSize === "large", `Per-exhibit frame/caption sizing did not persist: ${JSON.stringify(persisted)}`);
+  assert(persisted.supportStyle === "walnut-wall-shelf" && Math.abs(Number(persisted.supportScale) - 1.22) < .01, `Display furniture did not persist with the exhibit: ${JSON.stringify(persisted)}`);
+  assert(Number(persisted.exhibitOffsetX) === 0 && Number(persisted.exhibitOffsetY) === 4, `Exhibit-only furniture alignment did not persist: ${JSON.stringify(persisted)}`);
   assert(persisted.x > 8 && persisted.width > 19, `Exhibit move/resize did not persist: ${JSON.stringify(persisted)}`);
   assert(persisted.firstStyle.wallTexture === "custom" && persisted.firstStyle.wallColor === "#76523a", `First segment custom wall draft did not persist independently: ${JSON.stringify(persisted)}`);
-  assert(persisted.firstStyle.segmentTemplate === "arch" && (!persisted.secondStyle.segmentTemplate || persisted.secondStyle.segmentTemplate === "horizontal"), `Segment template persistence or legacy fallback was wrong: ${JSON.stringify(persisted)}`);
+  assert(persisted.firstStyle.segmentTemplate === "monumental" && (!persisted.secondStyle.segmentTemplate || persisted.secondStyle.segmentTemplate === "horizontal"), `Segment template persistence or legacy fallback was wrong: ${JSON.stringify(persisted)}`);
   assert(persisted.firstStyle.backgroundItemId === "item-exhibition" && persisted.firstStyle.backgroundImageId === "image-exhibition-back", `Exact collection background references did not persist: ${JSON.stringify(persisted)}`);
   assert(persisted.firstStyle.backgroundMode === "tile" && Number(persisted.firstStyle.backgroundScale) === 55, `Custom wallpaper tile settings did not persist: ${JSON.stringify(persisted)}`);
-  assert(persisted.firstStyle.themeId === "gilded-age" && persisted.firstStyle.trimStyle === "dark-walnut" && persisted.firstStyle.wainscoting === "burgundy-fabric" && persisted.firstStyle.ceilingStyle === "simple-crown", `Wallpaper restraint did not persist over the theme architecture: ${JSON.stringify(persisted.firstStyle)}`);
-  assert(persisted.firstStyle.plaqueEnabled && persisted.firstStyle.plaqueTitle === "Treasures of the Long Hall" && persisted.firstStyle.plaqueStyle === "hanging", `Exhibition plaque did not persist: ${JSON.stringify(persisted.firstStyle)}`);
-  assert(persisted.firstStyle.captionPosition === "beside" && persisted.firstStyle.captionStyle === "brass" && persisted.firstStyle.suspensionStyle === "double-cord", `Caption/suspension choices did not persist: ${JSON.stringify(persisted.firstStyle)}`);
-  assert(persisted.firstStyle.decorationDensity === "minimal" && persisted.firstStyle.decorations.length === 2 && persisted.firstStyle.decorations.every((decor) => decor.type === "none" && !decor.visible), `Placeholder decor or wallpaper density did not persist safely: ${JSON.stringify(persisted.firstStyle)}`);
+  assert(persisted.firstStyle.trimStyle === "dark-walnut" && persisted.firstStyle.wainscoting === "burgundy-fabric" && persisted.firstStyle.ceilingStyle === "simple-crown" && Number(persisted.firstStyle.upperTrimHeight) === 7.5, `Top/middle/lower wall structure did not persist: ${JSON.stringify(persisted.firstStyle)}`);
+  assert(persisted.firstStyle.captionStyle === "white-museum", `Focused exhibit-label presentation did not persist: ${JSON.stringify(persisted.firstStyle)}`);
   assert(persisted.backgroundImageId === "image-exhibition-back" && !persisted.backgroundMissing, `Persisted collection background did not resolve its exact image: ${JSON.stringify(persisted)}`);
   assert(persisted.secondStyle.wallTexture === "wallpaper" && persisted.secondStyle.wallColor === "#bfc9bd", `Second segment style did not persist independently: ${JSON.stringify(persisted)}`);
 

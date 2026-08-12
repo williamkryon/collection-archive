@@ -702,7 +702,7 @@ async function main() {
           resolve({
             placements,
             canvas: Boolean(document.querySelector('.album-canvas')),
-            imageOnly: Boolean(document.querySelector('.image-only-preview'))
+            previewCanvas: Boolean(document.querySelector('.album-preview-wrap .album-page-preview'))
           });
           return;
         }

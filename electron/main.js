@@ -13,6 +13,7 @@ const sharp = require("sharp");
 const archiveHealth = require("./archive-health-core");
 const backupRestore = require("./backup-restore-core");
 const { imageDisplayUrls } = require("./thumbnail-fallback-core");
+const { generateCutoutFiles, normalizeCutoutSettings } = require("./image-cutout-core");
 
 let db;
 let SQL;
@@ -397,6 +398,12 @@ function execSchema(databaseWasCreated = false) {
       size_bytes INTEGER NOT NULL,
       mime_type TEXT NOT NULL,
       note TEXT DEFAULT '',
+      cutout_image_path TEXT DEFAULT '',
+      cutout_mask_path TEXT DEFAULT '',
+      cutout_thumbnail_path TEXT DEFAULT '',
+      cutout_enabled INTEGER DEFAULT 0,
+      cutout_settings_json TEXT DEFAULT '{}',
+      cutout_updated_at TEXT DEFAULT '',
       sort_order INTEGER DEFAULT 0,
       deleted_at TEXT DEFAULT '',
       deleted_reason TEXT DEFAULT '',
@@ -591,6 +598,10 @@ function execSchema(databaseWasCreated = false) {
       label_text TEXT DEFAULT '',
       show_label INTEGER NOT NULL DEFAULT 1,
       caption_size TEXT NOT NULL DEFAULT 'medium',
+      support_style TEXT NOT NULL DEFAULT 'none',
+      support_scale REAL NOT NULL DEFAULT 1,
+      exhibit_offset_x REAL NOT NULL DEFAULT 0,
+      exhibit_offset_y REAL NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       FOREIGN KEY (segment_id) REFERENCES exhibition_segments(id) ON DELETE CASCADE,
@@ -727,10 +738,20 @@ function execSchema(databaseWasCreated = false) {
     }
   });
   const imageColumns = all("PRAGMA table_info(images)").map((column) => column.name);
-  if (!imageColumns.includes("note")) {
-    db.exec("ALTER TABLE images ADD COLUMN note TEXT DEFAULT ''");
-    dirty = true;
-  }
+  [
+    ["note", "TEXT DEFAULT ''"],
+    ["cutout_image_path", "TEXT DEFAULT ''"],
+    ["cutout_mask_path", "TEXT DEFAULT ''"],
+    ["cutout_thumbnail_path", "TEXT DEFAULT ''"],
+    ["cutout_enabled", "INTEGER DEFAULT 0"],
+    ["cutout_settings_json", "TEXT DEFAULT '{}'"],
+    ["cutout_updated_at", "TEXT DEFAULT ''"]
+  ].forEach(([name, definition]) => {
+    if (!imageColumns.includes(name)) {
+      db.exec(`ALTER TABLE images ADD COLUMN ${name} ${definition}`);
+      dirty = true;
+    }
+  });
   const attachmentColumns = all("PRAGMA table_info(item_attachments)").map((column) => column.name);
   [
     ["source_url", "TEXT DEFAULT ''"],
@@ -746,7 +767,11 @@ function execSchema(databaseWasCreated = false) {
   const exhibitionPlacementColumns = all("PRAGMA table_info(exhibition_placements)").map((column) => column.name);
   [
     ["frame_thickness", "REAL DEFAULT NULL"],
-    ["caption_size", "TEXT NOT NULL DEFAULT 'medium'"]
+    ["caption_size", "TEXT NOT NULL DEFAULT 'medium'"],
+    ["support_style", "TEXT NOT NULL DEFAULT 'none'"],
+    ["support_scale", "REAL NOT NULL DEFAULT 1"],
+    ["exhibit_offset_x", "REAL NOT NULL DEFAULT 0"],
+    ["exhibit_offset_y", "REAL NOT NULL DEFAULT 0"]
   ].forEach(([name, definition]) => {
     if (!exhibitionPlacementColumns.includes(name)) {
       db.exec(`ALTER TABLE exhibition_placements ADD COLUMN ${name} ${definition}`);
@@ -872,14 +897,47 @@ function enqueueThumbnailRegeneration(row) {
   }, 250);
 }
 
+function enqueueCutoutThumbnailRegeneration(row) {
+  const pendingKey = `cutout:${row?.id || ""}`;
+  if (!row?.id || !row.cutout_image_path || !row.cutout_thumbnail_path || pendingThumbnailRegeneration.has(pendingKey)) return;
+  pendingThumbnailRegeneration.add(pendingKey);
+  setTimeout(async () => {
+    try {
+      const current = get("SELECT * FROM images WHERE id = ? AND COALESCE(deleted_at, '') = ''", [row.id]);
+      if (!current) return;
+      const urls = imageDisplayUrls(current, paths);
+      if (urls.cutoutThumbnailMissing) {
+        await regenerateCutoutThumbnailFile(current);
+      }
+    } catch (error) {
+      console.warn("[images:cutout] lazy thumbnail regeneration failed", {
+        imageId: row.id,
+        message: error.message || String(error)
+      });
+    } finally {
+      pendingThumbnailRegeneration.delete(pendingKey);
+    }
+  }, 250);
+}
+
 function mapImage(row) {
   const urls = imageDisplayUrls(row, paths);
   if (urls.thumbnailMissing) enqueueThumbnailRegeneration(row);
+  if (urls.cutoutThumbnailMissing) enqueueCutoutThumbnailRegeneration(row);
   return {
     ...row,
     url: urls.url,
     thumbnailUrl: urls.thumbnailUrl,
+    originalUrl: urls.originalUrl,
+    originalThumbnailUrl: urls.originalThumbnailUrl,
+    cutoutUrl: urls.cutoutUrl,
+    cutoutThumbnailUrl: urls.cutoutThumbnailUrl,
+    cutoutAvailable: urls.cutoutAvailable,
+    cutoutEnabled: urls.cutoutEnabled,
+    cutoutMissing: urls.cutoutMissing,
+    cutoutSettings: parseJson(row.cutout_settings_json, {}),
     thumbnailMissing: urls.thumbnailMissing,
+    cutoutThumbnailMissing: urls.cutoutThumbnailMissing,
     imageMissing: urls.imageMissing
   };
 }
@@ -936,18 +994,37 @@ function normalizeLabelCardPayload(payload = {}) {
   };
 }
 
-function mapItem(row) {
+function mapItem(row, mediaStateCache = null) {
   const coverUrls = row.cover_thumbnail_path
-    ? imageDisplayUrls({ image_path: row.cover_image_path, thumbnail_path: row.cover_thumbnail_path }, paths)
+    ? imageDisplayUrls({
+        image_path: row.cover_image_path,
+        thumbnail_path: row.cover_thumbnail_path,
+        cutout_image_path: row.cover_cutout_image_path,
+        cutout_thumbnail_path: row.cover_cutout_thumbnail_path,
+        cutout_enabled: row.cover_cutout_enabled
+      }, paths, mediaStateCache)
     : { url: null, thumbnailUrl: null, thumbnailMissing: false, imageMissing: false };
   if (coverUrls.thumbnailMissing) {
     enqueueThumbnailRegeneration({ id: row.cover_id, image_path: row.cover_image_path, thumbnail_path: row.cover_thumbnail_path });
+  }
+  if (coverUrls.cutoutThumbnailMissing) {
+    enqueueCutoutThumbnailRegeneration({
+      id: row.cover_id,
+      cutout_image_path: row.cover_cutout_image_path,
+      cutout_thumbnail_path: row.cover_cutout_thumbnail_path
+    });
   }
   const cover = row.cover_thumbnail_path
     ? {
         id: row.cover_id,
         url: coverUrls.url,
         thumbnailUrl: coverUrls.thumbnailUrl,
+        originalUrl: coverUrls.originalUrl,
+        originalThumbnailUrl: coverUrls.originalThumbnailUrl,
+        cutoutUrl: coverUrls.cutoutUrl,
+        cutoutThumbnailUrl: coverUrls.cutoutThumbnailUrl,
+        cutoutAvailable: coverUrls.cutoutAvailable,
+        cutoutEnabled: coverUrls.cutoutEnabled,
         thumbnailMissing: coverUrls.thumbnailMissing,
         imageMissing: coverUrls.imageMissing,
         width: row.cover_width,
@@ -1086,6 +1163,9 @@ function itemPage(options = {}, galleryOnly = false) {
         cover.id AS cover_id,
         cover.image_path AS cover_image_path,
         cover.thumbnail_path AS cover_thumbnail_path,
+        cover.cutout_image_path AS cover_cutout_image_path,
+        cover.cutout_thumbnail_path AS cover_cutout_thumbnail_path,
+        cover.cutout_enabled AS cover_cutout_enabled,
         cover.width AS cover_width,
         cover.height AS cover_height,
         cover.aspect_ratio AS cover_aspect_ratio
@@ -1111,7 +1191,8 @@ function itemPage(options = {}, galleryOnly = false) {
     ms: Math.round((performance.now() - rowsStarted) * 10) / 10,
     rows: items.length
   });
-  const mapped = items.map(mapItem);
+  const mediaStateCache = new Map();
+  const mapped = items.map((row) => mapItem(row, mediaStateCache));
   perfTrace("db.itemPage.end", {
     traceId,
     traceSource,
@@ -1365,7 +1446,7 @@ function linkedItemsFor(column, idValue) {
 }
 
 function imageFilesForItem(itemId) {
-  return all("SELECT image_path, thumbnail_path FROM images WHERE item_id = ?", [itemId]);
+  return all("SELECT * FROM images WHERE item_id = ?", [itemId]);
 }
 
 function cleanupItemImages(images) {
@@ -1696,10 +1777,29 @@ async function regenerateThumbnailFile(imageRow) {
   return mapImage(get("SELECT * FROM images WHERE id = ?", [imageRow.id]));
 }
 
+async function regenerateCutoutThumbnailFile(imageRow) {
+  if (!imageRow?.cutout_image_path || !imageRow?.cutout_thumbnail_path) {
+    throw new Error("Image record has no cutout thumbnail paths");
+  }
+  const sourcePath = path.resolve(imageRow.cutout_image_path);
+  const thumbnailPath = path.resolve(imageRow.cutout_thumbnail_path);
+  if (!isInside(paths.images, sourcePath) || !fs.existsSync(sourcePath)) {
+    throw new Error("Cutout image file is missing");
+  }
+  if (!isInside(paths.thumbs, thumbnailPath)) {
+    throw new Error("Cutout thumbnail path is outside the data folder");
+  }
+  await sharp(sourcePath, { failOn: "none" })
+    .resize({ width: 460, height: 460, fit: "inside", withoutEnlargement: true })
+    .png({ compressionLevel: 9 })
+    .toFile(thumbnailPath);
+  return mapImage(get("SELECT * FROM images WHERE id = ?", [imageRow.id]));
+}
+
 function deleteFileIfUnreferenced(filePath, column) {
   if (!filePath) return false;
 
-  const folder = column === "thumbnail_path" ? paths.thumbs : paths.images;
+  const folder = ["thumbnail_path", "cutout_thumbnail_path"].includes(column) ? paths.thumbs : paths.images;
   const resolved = path.resolve(filePath);
   if (!isInside(folder, resolved)) {
     console.warn("[images:cleanup] refused path outside media folder", { column, filePath });
@@ -1719,7 +1819,10 @@ function deleteFileIfUnreferenced(filePath, column) {
 function cleanupImageFiles(image) {
   return {
     imageDeleted: deleteFileIfUnreferenced(image.image_path, "image_path"),
-    thumbnailDeleted: deleteFileIfUnreferenced(image.thumbnail_path, "thumbnail_path")
+    thumbnailDeleted: deleteFileIfUnreferenced(image.thumbnail_path, "thumbnail_path"),
+    cutoutDeleted: deleteFileIfUnreferenced(image.cutout_image_path, "cutout_image_path"),
+    cutoutMaskDeleted: deleteFileIfUnreferenced(image.cutout_mask_path, "cutout_mask_path"),
+    cutoutThumbnailDeleted: deleteFileIfUnreferenced(image.cutout_thumbnail_path, "cutout_thumbnail_path")
   };
 }
 
@@ -3150,6 +3253,75 @@ ipcMain.handle("images:regenerate-item-thumbnails", async (_event, itemId) => {
   return getItemForRenderer(itemId);
 });
 
+ipcMain.handle("images:generate-cutout", async (_event, payload = {}) => {
+  const imageId = payload.imageId || payload.id;
+  const image = get("SELECT * FROM images WHERE id = ? AND COALESCE(deleted_at, '') = ''", [imageId]);
+  if (!image) throw new Error("Image not found");
+
+  const sourcePath = path.resolve(image.image_path);
+  if (!isInside(paths.images, sourcePath) || !fs.existsSync(sourcePath)) {
+    throw new Error("Source image file is missing");
+  }
+
+  const outputPath = path.join(paths.images, `${image.id}-cutout.png`);
+  const maskPath = path.join(paths.images, `${image.id}-cutout-mask.png`);
+  const thumbnailPath = path.join(paths.thumbs, `${image.id}-cutout.png`);
+  const settings = normalizeCutoutSettings(payload.settings || payload);
+  const result = await generateCutoutFiles({
+    sourcePath,
+    outputPath,
+    maskPath,
+    thumbnailPath,
+    settings
+  });
+
+  run(
+    `UPDATE images
+     SET cutout_image_path = ?, cutout_mask_path = ?, cutout_thumbnail_path = ?,
+         cutout_enabled = 1, cutout_settings_json = ?, cutout_updated_at = ?
+     WHERE id = ?`,
+    [outputPath, maskPath, thumbnailPath, JSON.stringify(result.settings), now(), image.id]
+  );
+  run("UPDATE items SET updated_at = ? WHERE id = ?", [now(), image.item_id]);
+  return {
+    item: getItemForRenderer(image.item_id),
+    removedRatio: result.removedRatio
+  };
+});
+
+ipcMain.handle("images:set-cutout-enabled", (_event, payload = {}) => {
+  const imageId = payload.imageId || payload.id;
+  const image = get("SELECT * FROM images WHERE id = ? AND COALESCE(deleted_at, '') = ''", [imageId]);
+  if (!image) throw new Error("Image not found");
+  const enabled = Boolean(payload.enabled);
+  if (enabled) {
+    const cutoutPath = path.resolve(image.cutout_image_path || "");
+    if (!image.cutout_image_path || !isInside(paths.images, cutoutPath) || !fs.existsSync(cutoutPath)) {
+      throw new Error("Cutout image is missing");
+    }
+  }
+  run("UPDATE images SET cutout_enabled = ? WHERE id = ?", [enabled ? 1 : 0, image.id]);
+  run("UPDATE items SET updated_at = ? WHERE id = ?", [now(), image.item_id]);
+  return getItemForRenderer(image.item_id);
+});
+
+ipcMain.handle("images:delete-cutout", (_event, imageId) => {
+  const image = get("SELECT * FROM images WHERE id = ? AND COALESCE(deleted_at, '') = ''", [imageId]);
+  if (!image) throw new Error("Image not found");
+  run(
+    `UPDATE images
+     SET cutout_image_path = '', cutout_mask_path = '', cutout_thumbnail_path = '',
+         cutout_enabled = 0, cutout_settings_json = '{}', cutout_updated_at = ''
+     WHERE id = ?`,
+    [image.id]
+  );
+  deleteFileIfUnreferenced(image.cutout_image_path, "cutout_image_path");
+  deleteFileIfUnreferenced(image.cutout_mask_path, "cutout_mask_path");
+  deleteFileIfUnreferenced(image.cutout_thumbnail_path, "cutout_thumbnail_path");
+  run("UPDATE items SET updated_at = ? WHERE id = ?", [now(), image.item_id]);
+  return getItemForRenderer(image.item_id);
+});
+
 ipcMain.handle("images:replace", async (_event, imageId) => {
   const existing = get("SELECT * FROM images WHERE id = ?", [imageId]);
   if (!existing) {
@@ -3189,7 +3361,9 @@ ipcMain.handle("images:replace", async (_event, imageId) => {
     `
       UPDATE images
       SET original_filename = ?, stored_filename = ?, image_path = ?, thumbnail_path = ?,
-          width = ?, height = ?, aspect_ratio = ?, size_bytes = ?, mime_type = ?
+          width = ?, height = ?, aspect_ratio = ?, size_bytes = ?, mime_type = ?,
+          cutout_image_path = '', cutout_mask_path = '', cutout_thumbnail_path = '',
+          cutout_enabled = 0, cutout_settings_json = '{}', cutout_updated_at = ''
       WHERE id = ?
     `,
     [
@@ -3380,7 +3554,8 @@ ipcMain.handle("user-assets:delete", (_event, assetId) => {
   return userAssetList();
 });
 
-const EXHIBITION_FRAME_STYLES = new Set(["black-gallery", "dark-wood", "white-mat", "ornate-gold"]);
+const EXHIBITION_FRAME_STYLES = new Set(["none", "black-gallery", "dark-wood", "white-mat", "ornate-gold"]);
+const EXHIBITION_SUPPORT_STYLES = new Set(["none", "walnut-wall-shelf", "limestone-pedestal"]);
 
 function exhibitionFrameStyle(value) {
   const candidate = String(value || "");
@@ -3400,6 +3575,23 @@ function exhibitionFrameThickness(value, fallback = null) {
 
 function exhibitionCaptionSize(value, fallback = "medium") {
   return ["small", "medium", "large"].includes(String(value || "")) ? String(value) : fallback;
+}
+
+function exhibitionSupportStyle(value, fallback = "none") {
+  const candidate = String(value || "");
+  return EXHIBITION_SUPPORT_STYLES.has(candidate) ? candidate : fallback;
+}
+
+function exhibitionSupportScale(value, fallback = 1) {
+  if (value === null || value === undefined || value === "") return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(0.65, Math.min(1.4, parsed)) : fallback;
+}
+
+function exhibitionExhibitOffset(value, fallback = 0) {
+  if (value === null || value === undefined || value === "") return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(-40, Math.min(40, parsed)) : fallback;
 }
 
 function exhibitionStyle(value) {
@@ -3462,6 +3654,10 @@ function exhibitionPlacementRow(row) {
     frame_style: exhibitionFrameStyle(row.frame_style),
     frame_thickness: exhibitionFrameThickness(row.frame_thickness),
     caption_size: exhibitionCaptionSize(row.caption_size),
+    support_style: exhibitionSupportStyle(row.support_style),
+    support_scale: exhibitionSupportScale(row.support_scale),
+    exhibit_offset_x: exhibitionExhibitOffset(row.exhibit_offset_x),
+    exhibit_offset_y: exhibitionExhibitOffset(row.exhibit_offset_y),
     image: selectedImage,
     images
   };
@@ -3620,12 +3816,15 @@ ipcMain.handle("exhibition-placement:create", (_event, payload = {}) => {
   run(
     `INSERT INTO exhibition_placements (
       id, segment_id, item_id, image_id, x, y, width, height, z_index, frame_style,
-      frame_thickness, label_text, show_label, caption_size, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      frame_thickness, label_text, show_label, caption_size, support_style, support_scale,
+      exhibit_offset_x, exhibit_offset_y, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [placementId, payload.segmentId, payload.itemId, validImage.id, x, y, width, height,
       Number(payload.zIndex ?? placementCount), exhibitionFrameStyle(payload.frameStyle),
       exhibitionFrameThickness(payload.frameThickness), String(payload.labelText || item.title),
-      payload.showLabel === false ? 0 : 1, exhibitionCaptionSize(payload.captionSize), timestamp, timestamp]
+      payload.showLabel === false ? 0 : 1, exhibitionCaptionSize(payload.captionSize),
+      exhibitionSupportStyle(payload.supportStyle), exhibitionSupportScale(payload.supportScale),
+      exhibitionExhibitOffset(payload.exhibitOffsetX), exhibitionExhibitOffset(payload.exhibitOffsetY), timestamp, timestamp]
   );
   run("UPDATE exhibitions SET updated_at = ? WHERE id = ?", [timestamp, segment.exhibition_id]);
   return { exhibition: getExhibition(segment.exhibition_id), placementId };
@@ -3633,7 +3832,7 @@ ipcMain.handle("exhibition-placement:create", (_event, payload = {}) => {
 
 ipcMain.handle("exhibition-placement:update", (_event, payload = {}) => {
   const placement = get(
-    "SELECT exhibition_placements.segment_id, exhibition_segments.exhibition_id, exhibition_placements.item_id, exhibition_placements.frame_thickness, exhibition_placements.caption_size FROM exhibition_placements JOIN exhibition_segments ON exhibition_segments.id = exhibition_placements.segment_id WHERE exhibition_placements.id = ?",
+    "SELECT exhibition_placements.segment_id, exhibition_segments.exhibition_id, exhibition_placements.item_id, exhibition_placements.frame_thickness, exhibition_placements.caption_size, exhibition_placements.support_style, exhibition_placements.support_scale, exhibition_placements.exhibit_offset_x, exhibition_placements.exhibit_offset_y FROM exhibition_placements JOIN exhibition_segments ON exhibition_segments.id = exhibition_placements.segment_id WHERE exhibition_placements.id = ?",
     [payload.id]
   );
   if (!placement) return null;
@@ -3645,12 +3844,17 @@ ipcMain.handle("exhibition-placement:update", (_event, payload = {}) => {
   const y = Math.max(0, Math.min(100 - height, Number(payload.y || 0)));
   run(
     `UPDATE exhibition_placements SET image_id = COALESCE(?, image_id), x = ?, y = ?, width = ?, height = ?,
-       z_index = ?, frame_style = ?, frame_thickness = ?, label_text = ?, show_label = ?, caption_size = ?, updated_at = ? WHERE id = ?`,
+       z_index = ?, frame_style = ?, frame_thickness = ?, label_text = ?, show_label = ?, caption_size = ?,
+       support_style = ?, support_scale = ?, exhibit_offset_x = ?, exhibit_offset_y = ?, updated_at = ? WHERE id = ?`,
     [imageId, x, y, width, height, Number(payload.zIndex || 0),
       exhibitionFrameStyle(payload.frameStyle),
       exhibitionFrameThickness(payload.frameThickness, exhibitionFrameThickness(placement.frame_thickness)),
       String(payload.labelText || ""), payload.showLabel === false ? 0 : 1,
-      exhibitionCaptionSize(payload.captionSize, exhibitionCaptionSize(placement.caption_size)), now(), payload.id]
+      exhibitionCaptionSize(payload.captionSize, exhibitionCaptionSize(placement.caption_size)),
+      exhibitionSupportStyle(payload.supportStyle, exhibitionSupportStyle(placement.support_style)),
+      exhibitionSupportScale(payload.supportScale, exhibitionSupportScale(placement.support_scale)),
+      exhibitionExhibitOffset(payload.exhibitOffsetX, exhibitionExhibitOffset(placement.exhibit_offset_x)),
+      exhibitionExhibitOffset(payload.exhibitOffsetY, exhibitionExhibitOffset(placement.exhibit_offset_y)), now(), payload.id]
   );
   run("UPDATE exhibitions SET updated_at = ? WHERE id = ?", [now(), placement.exhibition_id]);
   return getExhibition(placement.exhibition_id);
@@ -3667,12 +3871,15 @@ ipcMain.handle("exhibition-placement:duplicate", (_event, placementId) => {
   run(
     `INSERT INTO exhibition_placements (
       id, segment_id, item_id, image_id, x, y, width, height, z_index, frame_style,
-      frame_thickness, label_text, show_label, caption_size, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      frame_thickness, label_text, show_label, caption_size, support_style, support_scale,
+      exhibit_offset_x, exhibit_offset_y, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [duplicateId, placement.segment_id, placement.item_id, placement.image_id,
       Math.min(100 - Number(placement.width), Number(placement.x) + 3), Math.min(100 - Number(placement.height), Number(placement.y) + 3),
       placement.width, placement.height, Number(placement.z_index || 0) + 1, placement.frame_style,
-      placement.frame_thickness, placement.label_text, placement.show_label, exhibitionCaptionSize(placement.caption_size), timestamp, timestamp]
+      placement.frame_thickness, placement.label_text, placement.show_label, exhibitionCaptionSize(placement.caption_size),
+      exhibitionSupportStyle(placement.support_style), exhibitionSupportScale(placement.support_scale),
+      exhibitionExhibitOffset(placement.exhibit_offset_x), exhibitionExhibitOffset(placement.exhibit_offset_y), timestamp, timestamp]
   );
   run("UPDATE exhibitions SET updated_at = ? WHERE id = ?", [timestamp, placement.exhibition_id]);
   return { exhibition: getExhibition(placement.exhibition_id), placementId: duplicateId };

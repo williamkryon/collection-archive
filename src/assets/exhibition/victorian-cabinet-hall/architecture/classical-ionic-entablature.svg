@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <linearGradient id="stone" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#fffefa"/><stop offset=".3" stop-color="#ebe7de"/><stop offset=".68" stop-color="#aaa49a"/><stop offset="1" stop-color="#f4f1ea"/>
+    </linearGradient>
+    <linearGradient id="curve" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#fff"/><stop offset=".22" stop-color="#f4f1ea"/><stop offset=".55" stop-color="#bbb5aa"/><stop offset=".75" stop-color="#77736c"/><stop offset="1" stop-color="#e8e4dc"/>
+    </linearGradient>
+    <linearGradient id="soffit" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#625f5a"/><stop offset=".48" stop-color="#908c84"/><stop offset="1" stop-color="#d8d4cc"/>
+    </linearGradient>
+    <linearGradient id="frieze" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#aca69d"/><stop offset=".1" stop-color="#e8e4dc"/><stop offset=".5" stop-color="#faf7f1"/><stop offset=".9" stop-color="#d0cac0"/><stop offset="1" stop-color="#908a81"/>
+    </linearGradient>
+    <linearGradient id="dentil" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#fffefa"/><stop offset=".42" stop-color="#ddd9d0"/><stop offset=".72" stop-color="#918c84"/><stop offset="1" stop-color="#c9c4bb"/>
+    </linearGradient>
+    <filter id="cast" x="-10%" y="-10%" width="120%" height="145%">
+      <feDropShadow dx="0" dy="7" stdDeviation="6" flood-color="#383632" flood-opacity=".48"/>
+    </filter>
+    <g id="dentilUnit">
+      <rect width="58" height="38" fill="url(#dentil)" stroke="#77736c"/>
+      <path d="M8 7h38v24H8z" fill="none" stroke="#fff" stroke-opacity=".72"/>
+      <path d="M58 0l10 8v30H58z" fill="#716c65" opacity=".72"/>
+    </g>
+  </defs>
+  <g>
+    <!-- Cornice and dentil bed mould -->
+    <rect width="1200" height="9" fill="#fcfbf6"/>
+    <rect y="9" width="1200" height="9" fill="#b8b3a9"/>
+    <path d="M0 18h1200v30c-15 0-23 8-26 20H26C23 56 15 48 0 48z" fill="url(#curve)"/>
+    <rect x="-1" y="48" width="1202" height="8" fill="#faf8f2" stroke="#7c7770"/>
+    <rect x="-1" y="56" width="1202" height="35" fill="url(#stone)" stroke="#817c74"/>
+    <rect y="91" width="1200" height="22" fill="url(#soffit)"/>
+    <rect x="-1" y="113" width="1202" height="9" fill="#eeeae2" stroke="#817c74"/>
+    <use href="#dentilUnit" x="66" y="122"/><use href="#dentilUnit" x="216" y="122"/><use href="#dentilUnit" x="366" y="122"/><use href="#dentilUnit" x="516" y="122"/>
+    <use href="#dentilUnit" x="666" y="122"/><use href="#dentilUnit" x="816" y="122"/><use href="#dentilUnit" x="966" y="122"/><use href="#dentilUnit" x="1116" y="122"/>
+    <rect x="-1" y="160" width="1202" height="9" fill="#f7f5ee" stroke="#817c74"/>
+
+    <!-- Continuous, gently pulvinated frieze -->
+    <rect x="-1" y="169" width="1202" height="83" fill="url(#frieze)" stroke="#8a847b"/>
+    <path d="M0 178h1200M0 242h1200" stroke="#fff" stroke-opacity=".55"/>
+
+    <!-- Three graduated architrave fasciae -->
+    <rect x="-1" y="252" width="1202" height="12" fill="#f7f4ed" stroke="#817c74"/>
+    <rect x="-1" y="264" width="1202" height="28" fill="url(#stone)" stroke="#8a847b"/>
+    <rect x="-1" y="292" width="1202" height="27" fill="url(#stone)" stroke="#817c74"/>
+    <rect x="-1" y="319" width="1202" height="27" fill="url(#stone)" stroke="#77716a"/>
+    <path d="M0 267h1200M0 295h1200M0 322h1200" stroke="#fff" stroke-opacity=".58"/>
+    <rect y="346" width="1200" height="14" fill="#c2bcb2"/>
+  </g>
+</svg>

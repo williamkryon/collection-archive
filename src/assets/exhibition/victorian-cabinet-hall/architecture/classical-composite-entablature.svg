@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="440" viewBox="0 0 1200 440" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <linearGradient id="stone" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#fffdf7"/><stop offset=".3" stop-color="#eee5d7"/><stop offset=".67" stop-color="#b6a893"/><stop offset="1" stop-color="#f5ecdf"/>
+    </linearGradient>
+    <linearGradient id="curve" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#fffef9"/><stop offset=".2" stop-color="#f8eee0"/><stop offset=".54" stop-color="#c7b79f"/><stop offset=".73" stop-color="#826f56"/><stop offset="1" stop-color="#eadbc7"/>
+    </linearGradient>
+    <linearGradient id="soffit" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#50483f"/><stop offset=".42" stop-color="#776b5c"/><stop offset="1" stop-color="#c5b9a8"/>
+    </linearGradient>
+    <linearGradient id="frieze" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#9c8c77"/><stop offset=".1" stop-color="#ddcfbd"/><stop offset=".5" stop-color="#f8eee1"/><stop offset=".9" stop-color="#c6b49c"/><stop offset="1" stop-color="#796a58"/>
+    </linearGradient>
+    <linearGradient id="block" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#fffaf1"/><stop offset=".4" stop-color="#dacbb7"/><stop offset=".72" stop-color="#8d7659"/><stop offset="1" stop-color="#eee1cf"/>
+    </linearGradient>
+    <linearGradient id="dentil" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#fffaf1"/><stop offset=".48" stop-color="#d2c1a8"/><stop offset="1" stop-color="#79644b"/>
+    </linearGradient>
+    <filter id="cast" x="-10%" y="-10%" width="120%" height="150%">
+      <feDropShadow dx="0" dy="9" stdDeviation="7" flood-color="#2d2822" flood-opacity=".56"/>
+    </filter>
+    <g id="supportBlock">
+      <path d="M8 0h146v14H0z" fill="#fbf5eb" stroke="#75624b"/>
+      <path d="M16 14h130v19H13z" fill="#c8b79d" stroke="#75624b"/>
+      <path d="M24 33h114l-13 39H36z" fill="url(#block)" stroke="#67543f" stroke-width="1.5"/>
+      <path d="M38 42h86M34 55h94" stroke="#fff" stroke-opacity=".58"/>
+      <path d="M42 72h78v9H35z" fill="#846f55"/>
+    </g>
+    <g id="largeDentil">
+      <rect width="64" height="43" fill="url(#dentil)" stroke="#756149"/>
+      <path d="M10 8h42v27H10z" fill="none" stroke="#fff" stroke-opacity=".62"/>
+      <path d="M64 0l11 8v35H64z" fill="#6f5b44"/>
+    </g>
+    <g id="leaf">
+      <path d="M0 42c20-4 34-18 45-42 10 24 25 38 45 42-18 5-33 2-45-11C33 44 18 47 0 42z" fill="#826f58"/>
+      <path d="M45 4v49M19 36c12-5 21-15 26-28m26 28C59 31 50 21 45 8" fill="none" stroke="#f9efe1" stroke-width="3" stroke-opacity=".54"/>
+    </g>
+  </defs>
+  <g>
+    <!-- Heavy Composite cornice with broad support blocks -->
+    <rect width="1200" height="9" fill="#fffaf1"/>
+    <rect y="9" width="1200" height="9" fill="#bda98a"/>
+    <path d="M0 18h1200v32c-16 0-25 9-28 22H28C25 59 16 50 0 50z" fill="url(#curve)"/>
+    <rect x="-1" y="50" width="1202" height="9" fill="#fcf5ea" stroke="#756149"/>
+    <rect x="-1" y="59" width="1202" height="39" fill="url(#stone)" stroke="#78654d"/>
+    <rect y="98" width="1200" height="34" fill="url(#soffit)"/>
+    <use href="#supportBlock" x="78" y="101"/><use href="#supportBlock" x="478" y="101"/><use href="#supportBlock" x="878" y="101"/>
+    <rect x="-1" y="182" width="1202" height="8" fill="#f5ecdf" stroke="#78654d"/>
+    <use href="#largeDentil" x="68" y="190"/><use href="#largeDentil" x="268" y="190"/><use href="#largeDentil" x="468" y="190"/>
+    <use href="#largeDentil" x="668" y="190"/><use href="#largeDentil" x="868" y="190"/><use href="#largeDentil" x="1068" y="190"/>
+    <rect x="-1" y="233" width="1202" height="10" fill="#fbf4e9" stroke="#78654d"/>
+
+    <!-- Deep, pulvinated Composite frieze -->
+    <rect x="-1" y="243" width="1202" height="91" fill="url(#frieze)" stroke="#78654d"/>
+    <use href="#leaf" x="155" y="266" opacity=".34"/><use href="#leaf" x="555" y="266" opacity=".34"/><use href="#leaf" x="955" y="266" opacity=".34"/>
+    <path d="M0 252h1200M0 325h1200" stroke="#fff" stroke-opacity=".46"/>
+
+    <!-- Broad two-band Composite architrave -->
+    <rect x="-1" y="334" width="1202" height="13" fill="#fcf5ea" stroke="#78654d"/>
+    <rect x="-1" y="347" width="1202" height="39" fill="url(#stone)" stroke="#837057"/>
+    <rect x="-1" y="386" width="1202" height="38" fill="url(#stone)" stroke="#756149"/>
+    <path d="M0 350h1200M0 389h1200" stroke="#fff" stroke-opacity=".54"/>
+    <path d="M0 424h1200v16H0z" fill="url(#curve)"/>
+  </g>
+</svg>

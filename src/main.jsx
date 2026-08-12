@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
-import { EXHIBITION_DECOR_ASSETS, EXHIBITION_SEGMENT_TEMPLATES, VICTORIAN_CABINET_HALL, cssAssetUrl, exhibitionDecorPresentation, exhibitionFramePresentation, exhibitionSegmentTemplate } from "./exhibitionAssets";
+import { EXHIBITION_SEGMENT_TEMPLATES, VICTORIAN_CABINET_HALL, cssAssetUrl, exhibitionFramePresentation, exhibitionSegmentTemplate } from "./exhibitionAssets";
 
 const api = window.archiveAPI;
 let pdfJsPromise = null;
@@ -162,6 +163,7 @@ const translations = {
     allTypes: "All types",
     year: "Year",
     tagsComma: "Tags, comma-separated",
+    tagFilterPlaceholder: "Tags, comma-separated",
     multiTagsHint: "Use commas for multiple tags",
     clearFilters: "Clear filters",
     selectedCount: "{count} selected",
@@ -184,6 +186,23 @@ const translations = {
     imageNote: "Image note",
     imageNotePlaceholder: "front, back, seller photo, needs rescan...",
     imageNoteSaved: "Image note saved.",
+    nonDestructiveCutout: "Non-destructive cutout",
+    cutoutHelp: "Creates a transparent derivative without changing the original image.",
+    cutoutMethod: "Cutout method",
+    flatItemCutout: "Flat item (fast)",
+    objectCutout: "Object / artifact (AI)",
+    flatItemCutoutHelp: "Best for stamps, coins, scans, and even photo backgrounds.",
+    objectCutoutHelp: "Local AI segmentation for ceramics and irregular objects. Nothing is uploaded.",
+    cutoutSensitivity: "Background sensitivity",
+    automaticCutout: "Auto cutout",
+    regenerateCutout: "Regenerate cutout",
+    cutoutProcessing: "Removing background...",
+    originalImage: "Original",
+    cutoutImage: "Cutout",
+    deleteCutout: "Delete cutout",
+    cutoutReady: "Cutout created. {percent}% of the connected background was removed.",
+    cutoutDeleted: "Cutout deleted. The original image is unchanged.",
+    cutoutFailed: "Cutout failed: {message}",
     technicalDetails: "Technical details",
     attachments: "Attachments",
     addAttachment: "Add attachment",
@@ -395,8 +414,8 @@ const translations = {
     deleteExhibition: "Delete exhibition",
     chooseExhibition: "Choose an exhibition",
     createExhibitionPrompt: "Create an exhibition hall to begin curating.",
-    editHall: "Edit hall",
-    viewHall: "View hall",
+    editHall: "Edit",
+    viewHall: "Visit",
     hallSegment: "Hall segment",
     addSegment: "Add segment",
     deleteSegment: "Delete segment",
@@ -427,7 +446,16 @@ const translations = {
     noWainscoting: "None",
     panelWainscoting: "Classic panels",
     woodWainscoting: "Wood panels",
-    ceilingStyle: "Upper Cornice / Ceiling Trim",
+    ceilingStyle: "Upper decorative strip",
+    upperTrimThickness: "Upper strip thickness",
+    wallSurface: "Middle wall surface",
+    lowerWall: "Lower wall",
+    wallMoulding: "Wall moulding",
+    wallSystem: "Wall structure",
+    wallSystemHint: "Build the wall from an upper strip, a central surface, and a lower wainscot with moulding.",
+    ambientLighting: "Ambient lighting",
+    builtIn: "Built-in",
+    collection: "Collection",
     plainCeiling: "Plain",
     crownCeiling: "Crown molding",
     cofferedCeiling: "Coffered",
@@ -456,14 +484,19 @@ const translations = {
     medium: "Medium",
     high: "High",
     noCornice: "None",
-    simpleCrownMolding: "Plain white cornice",
+    simpleCrownMolding: "Plain plaster strip",
     victorianPlasterCornice: "Victorian plaster cornice",
     dentilCornice: "Dentil cornice",
-    gildedClassicalCornice: "Gilded classical cornice",
-    carvedDarkWoodCornice: "Plain carved wood cornice",
+    gildedClassicalCornice: "Thin gilded strip",
+    carvedDarkWoodCornice: "Dark wood strip",
     artNouveauFrieze: "Art Nouveau floral frieze",
     eastAsianTimberBeam: "East Asian timber beam",
     modernShadowRecess: "Modern shadow-light recess",
+    tuscanEntablature: "Tuscan entablature",
+    doricEntablature: "Doric entablature",
+    ionicEntablature: "Ionic entablature",
+    corinthianEntablature: "Corinthian entablature",
+    compositeEntablature: "Composite entablature",
     curatedTheme: "Curated theme",
     themeBundle: "Theme bundle",
     themeOverrideHint: "Theme choices set a balanced starting point. Individual controls can still be adjusted.",
@@ -538,7 +571,7 @@ const translations = {
     missingExhibitionBackground: "The selected collection background is missing. Choose another image or return to the painted wall.",
     addExhibit: "Add exhibit",
     exhibitSettings: "Exhibit settings",
-    hallTab: "Hall",
+    hallTab: "Wall",
     exhibitTab: "Exhibit",
     segmentsTab: "Segments",
     exportTab: "Export",
@@ -551,6 +584,24 @@ const translations = {
     plaqueAndCaptions: "Plaque & captions",
     saveWorkspace: "Save",
     frameStyle: "Frame style",
+    noFrame: "No frame",
+    displayFurniture: "Display furniture",
+    noDisplayFurniture: "None",
+    walnutWallShelf: "Dark walnut wall shelf",
+    limestonePedestal: "Limestone pedestal",
+    furnitureSize: "Furniture size",
+    furnitureHelp: "The support stays with this exhibit and is included in export.",
+    exhibitAdjustment: "Exhibit adjustment",
+    exhibitAdjustmentHelp: "Fine-tune the exhibit over its support without moving the furniture.",
+    moveExhibitUp: "Move exhibit up",
+    moveExhibitDown: "Move exhibit down",
+    moveExhibitLeft: "Move exhibit left",
+    moveExhibitRight: "Move exhibit right",
+    resetExhibitPosition: "Reset exhibit position",
+    artwork: "Artwork",
+    frameAndMount: "Frame & mount",
+    sizeAndLayer: "Size & layer",
+    exhibitCaption: "Exhibit label",
     frameWidth: "Frame width",
     frameHeight: "Frame height",
     layer: "Layer",
@@ -596,8 +647,6 @@ const translations = {
     pageDuplicated: "Page duplicated.",
     pageCopied: "Page copied to album.",
     digitalAlbum: "Digital album",
-    designedPage: "Designed page",
-    cleanPreview: "Clean preview",
     exportPage: "Export page",
     exportPdf: "Export PDF",
     pdfQuality: "PDF quality",
@@ -718,6 +767,7 @@ const translations = {
     allTypes: "全部类型",
     year: "年份",
     tagsComma: "标签，用逗号分隔",
+    tagFilterPlaceholder: "标签，可用逗号隔开",
     multiTagsHint: "多个标签请用逗号分隔",
     clearFilters: "清除筛选",
     noIssuingEntity: "无发行实体",
@@ -741,6 +791,23 @@ const translations = {
     metadata: "元数据",
     replaceImage: "替换图片",
     removeImage: "删除图片",
+    nonDestructiveCutout: "非破坏式自动抠图",
+    cutoutHelp: "生成透明衍生图，原始图片永远不会被修改。",
+    cutoutMethod: "抠图方式",
+    flatItemCutout: "平面藏品（快速）",
+    objectCutout: "立体器物（智能）",
+    flatItemCutoutHelp: "适合邮票、钱币、扫描图和均匀照片背景。",
+    objectCutoutHelp: "使用本地 AI 识别陶瓷和不规则器物；图片不会上传。",
+    cutoutSensitivity: "背景识别灵敏度",
+    automaticCutout: "自动抠图",
+    regenerateCutout: "重新抠图",
+    cutoutProcessing: "正在移除背景...",
+    originalImage: "原图",
+    cutoutImage: "抠图",
+    deleteCutout: "删除抠图",
+    cutoutReady: "抠图已生成，移除了 {percent}% 的连通背景。",
+    cutoutDeleted: "抠图已删除，原始图片未改变。",
+    cutoutFailed: "抠图失败：{message}",
     saveChanges: "保存更改",
     albumsTitle: "册页",
     newAlbum: "新建册页",
@@ -763,8 +830,6 @@ const translations = {
     pageDuplicated: "页面已复制。",
     pageCopied: "页面已拷贝到册页。",
     digitalAlbum: "数字册页",
-    designedPage: "设计页面",
-    cleanPreview: "简洁预览",
     exportPage: "导出页面",
     exportPdf: "导出 PDF",
     pdfQuality: "PDF 质量",
@@ -1113,8 +1178,8 @@ translations.zh.saveHall = "\u4fdd\u5b58\u5c55\u5385";
 translations.zh.deleteExhibition = "\u5220\u9664\u5c55\u89c8";
 translations.zh.chooseExhibition = "\u9009\u62e9\u5c55\u89c8";
 translations.zh.createExhibitionPrompt = "\u521b\u5efa\u5c55\u5385\u4ee5\u5f00\u59cb\u7b56\u5c55\u3002";
-translations.zh.editHall = "\u7f16\u8f91\u5c55\u5385";
-translations.zh.viewHall = "\u53c2\u89c2\u5c55\u5385";
+translations.zh.editHall = "\u7f16\u8f91";
+translations.zh.viewHall = "\u53c2\u89c2";
 translations.zh.hallSegment = "\u5c55\u5385\u533a\u6bb5";
 translations.zh.addSegment = "\u6dfb\u52a0\u533a\u6bb5";
 translations.zh.deleteSegment = "\u5220\u9664\u533a\u6bb5";
@@ -1156,8 +1221,17 @@ translations.zh.wallSconces = "\u58c1\u706f";
 translations.zh.galleryLights = "\u753b\u5eca\u5c04\u706f";
 translations.zh.lightWarmth = "\u706f\u5149\u8272\u6e29";
 translations.zh.lightBrightness = "\u706f\u5149\u4eae\u5ea6";
-translations.zh.trimStyle = "\u5899\u9762\u9970\u6761 / \u6302\u753b\u8f68";
-translations.zh.ceilingStyle = "\u4e0a\u90e8\u6a90\u53e3 / \u9876\u90e8\u9970\u6761";
+translations.zh.trimStyle = "\u5899\u9762\u9970\u6761";
+translations.zh.ceilingStyle = "\u4e0a\u90e8\u9970\u6761";
+translations.zh.upperTrimThickness = "\u4e0a\u90e8\u9970\u6761\u7c97\u7ec6";
+translations.zh.wallSurface = "\u4e2d\u90e8\u5899\u9762";
+translations.zh.lowerWall = "\u4e0b\u90e8\u5899\u9762";
+translations.zh.wallMoulding = "\u5899\u9762\u9970\u6761";
+translations.zh.wallSystem = "\u5899\u9762\u7ed3\u6784";
+translations.zh.wallSystemHint = "\u6309\u4e0a\u90e8\u9970\u6761\u3001\u4e2d\u90e8\u5899\u9762\u3001\u4e0b\u90e8\u62a4\u5899\u677f\u4e0e\u5899\u9762\u9970\u6761\u5206\u5c42\u8bbe\u7f6e\u3002";
+translations.zh.ambientLighting = "\u73af\u5883\u706f\u5149";
+translations.zh.builtIn = "\u5185\u7f6e";
+translations.zh.collection = "\u9986\u85cf";
 translations.zh.simpleWhiteRail = "\u7b80\u7ea6\u767d\u8272\u6302\u753b\u8f68";
 translations.zh.darkWalnutRail = "\u7d20\u96c5\u6df1\u8272\u6728\u6302\u753b\u8f68";
 translations.zh.carvedMahoganyRail = "\u96d5\u82b1\u7ea2\u6728\u6302\u753b\u8f68";
@@ -1177,14 +1251,19 @@ translations.zh.low = "\u4f4e";
 translations.zh.medium = "\u4e2d";
 translations.zh.high = "\u9ad8";
 translations.zh.noCornice = "\u65e0";
-translations.zh.simpleCrownMolding = "\u7d20\u767d\u6a90\u53e3";
+translations.zh.simpleCrownMolding = "\u7d20\u767d\u9970\u6761";
 translations.zh.victorianPlasterCornice = "\u7ef4\u591a\u5229\u4e9a\u7070\u6ce5\u6a90\u53e3";
 translations.zh.dentilCornice = "\u9f7f\u9970\u6a90\u53e3";
-translations.zh.gildedClassicalCornice = "\u9540\u91d1\u53e4\u5178\u6a90\u53e3";
-translations.zh.carvedDarkWoodCornice = "\u7d20\u96c5\u96d5\u82b1\u6728\u6a90\u53e3";
+translations.zh.gildedClassicalCornice = "\u9540\u91d1\u7ec6\u9970\u6761";
+translations.zh.carvedDarkWoodCornice = "\u6df1\u8272\u6728\u9970\u6761";
 translations.zh.artNouveauFrieze = "\u65b0\u827a\u672f\u82b1\u5349\u6a90\u9970";
 translations.zh.eastAsianTimberBeam = "\u4e1c\u4e9a\u6728\u6881";
 translations.zh.modernShadowRecess = "\u73b0\u4ee3\u6697\u69fd\u706f\u5e26";
+translations.zh.tuscanEntablature = "\u6258\u65af\u5361\u7eb3\u5f0f\u67f1\u4e0a\u6963\u6784";
+translations.zh.doricEntablature = "\u591a\u7acb\u514b\u5f0f\u67f1\u4e0a\u6963\u6784";
+translations.zh.ionicEntablature = "\u7231\u5965\u5c3c\u5f0f\u67f1\u4e0a\u6963\u6784";
+translations.zh.corinthianEntablature = "\u79d1\u6797\u65af\u5f0f\u67f1\u4e0a\u6963\u6784";
+translations.zh.compositeEntablature = "\u6df7\u5408\u5f0f\u67f1\u4e0a\u6963\u6784";
 translations.zh.curatedTheme = "\u7b56\u5c55\u4e3b\u9898";
 translations.zh.themeBundle = "\u4e3b\u9898\u5957\u88c5";
 translations.zh.themeOverrideHint = "\u4e3b\u9898\u63d0\u4f9b\u534f\u8c03\u7684\u8d77\u70b9\uff0c\u4ecd\u53ef\u5355\u72ec\u8c03\u6574\u5404\u9879\u8bbe\u7f6e\u3002";
@@ -1259,7 +1338,7 @@ translations.zh.verticalOffset = "\u5782\u76f4\u504f\u79fb";
 translations.zh.missingExhibitionBackground = "\u6240\u9009\u85cf\u54c1\u80cc\u666f\u5df2\u4e22\u5931\u3002\u8bf7\u9009\u62e9\u5176\u4ed6\u56fe\u7247\uff0c\u6216\u6062\u590d\u4e3a\u6d82\u6599\u5899\u3002";
 translations.zh.addExhibit = "\u6dfb\u52a0\u5c55\u54c1";
 translations.zh.exhibitSettings = "\u5c55\u54c1\u8bbe\u7f6e";
-translations.zh.hallTab = "\u5c55\u5385";
+translations.zh.hallTab = "\u5899\u9762";
 translations.zh.exhibitTab = "\u5c55\u54c1";
 translations.zh.segmentsTab = "\u533a\u6bb5";
 translations.zh.exportTab = "\u5bfc\u51fa";
@@ -1272,6 +1351,24 @@ translations.zh.lighting = "\u706f\u5149";
 translations.zh.plaqueAndCaptions = "\u6807\u9898\u724c\u4e0e\u5c55\u7b7e";
 translations.zh.saveWorkspace = "\u4fdd\u5b58";
 translations.zh.frameStyle = "\u753b\u6846\u6837\u5f0f";
+translations.zh.noFrame = "\u65e0\u753b\u6846";
+translations.zh.displayFurniture = "\u9648\u5217\u5bb6\u5177";
+translations.zh.noDisplayFurniture = "\u65e0";
+translations.zh.walnutWallShelf = "\u6df1\u80e1\u6843\u6728\u58c1\u67b6";
+translations.zh.limestonePedestal = "\u77f3\u8d28\u53f0\u5ea7";
+translations.zh.furnitureSize = "\u5bb6\u5177\u5927\u5c0f";
+translations.zh.furnitureHelp = "\u9648\u5217\u652f\u6491\u4f1a\u8ddf\u968f\u5c55\u54c1\u79fb\u52a8\uff0c\u5e76\u4e00\u540c\u5bfc\u51fa\u3002";
+translations.zh.exhibitAdjustment = "\u5c55\u54c1\u5fae\u8c03";
+translations.zh.exhibitAdjustmentHelp = "\u53ea\u5fae\u8c03\u5c55\u54c1\u4e0e\u5bb6\u5177\u7684\u76f8\u5bf9\u4f4d\u7f6e\uff0c\u4e0d\u79fb\u52a8\u58c1\u67b6\u6216\u53f0\u5ea7\u3002";
+translations.zh.moveExhibitUp = "\u5c55\u54c1\u4e0a\u79fb";
+translations.zh.moveExhibitDown = "\u5c55\u54c1\u4e0b\u79fb";
+translations.zh.moveExhibitLeft = "\u5c55\u54c1\u5de6\u79fb";
+translations.zh.moveExhibitRight = "\u5c55\u54c1\u53f3\u79fb";
+translations.zh.resetExhibitPosition = "\u5c55\u54c1\u5f52\u4f4d";
+translations.zh.artwork = "\u5c55\u54c1\u56fe\u50cf";
+translations.zh.frameAndMount = "\u753b\u6846";
+translations.zh.sizeAndLayer = "\u5c3a\u5bf8\u4e0e\u5c42\u7ea7";
+translations.zh.exhibitCaption = "\u5c55\u7b7e";
 translations.zh.frameWidth = "\u753b\u6846\u5bbd\u5ea6";
 translations.zh.frameHeight = "\u753b\u6846\u9ad8\u5ea6";
 translations.zh.layer = "\u5c42\u7ea7";
@@ -1372,7 +1469,7 @@ Object.assign(translations.en, {
   squarePreview: "Square",
   stripTarget: "Architecture target",
   rail: "Rail",
-  cornice: "Cornice",
+  cornice: "Upper strip",
   fixedLeft: "Fixed left end",
   fixedRight: "Fixed right end",
   stripThickness: "Strip thickness",
@@ -1424,7 +1521,7 @@ Object.assign(translations.zh, {
   squarePreview: "\u65b9\u5f62",
   stripTarget: "\u5efa\u7b51\u9970\u6761\u7528\u9014",
   rail: "\u6302\u753b\u8f68",
-  cornice: "\u6a90\u53e3",
+  cornice: "\u4e0a\u90e8\u9970\u6761",
   fixedLeft: "\u56fa\u5b9a\u5de6\u7aef",
   fixedRight: "\u56fa\u5b9a\u53f3\u7aef",
   stripThickness: "\u9970\u6761\u539a\u5ea6",
@@ -1987,7 +2084,7 @@ function ZoomableImageViewer({ image, src, alt, width, height, initialMode = "fi
       />
       <div
         ref={containerRef}
-        className="zoom-canvas"
+        className={`zoom-canvas ${image?.cutoutEnabled ? "transparent-preview" : ""}`}
         data-mode={mode}
         data-fit-ready={fitReady ? "true" : "false"}
         data-can-drag={canDrag ? "true" : "false"}
@@ -2161,6 +2258,83 @@ function StartupScreen({ status, error, onRetry }) {
         )}
       </section>
     </main>
+  );
+}
+
+function FloatingToolbarMenu({ label, title, className = "", buttonClassName = "secondary compact", children }) {
+  const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState({ top: 0, left: 0, maxHeight: 320 });
+  const triggerRef = useRef(null);
+  const panelRef = useRef(null);
+
+  const updatePosition = useCallback(() => {
+    const trigger = triggerRef.current;
+    const panel = panelRef.current;
+    if (!trigger || !panel) return;
+    const margin = 10;
+    const triggerRect = trigger.getBoundingClientRect();
+    const panelRect = panel.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const fitsBelow = triggerRect.bottom + 6 + panelRect.height <= viewportHeight - margin;
+    const top = fitsBelow ? triggerRect.bottom + 6 : Math.max(margin, triggerRect.top - panelRect.height - 6);
+    const left = Math.min(Math.max(margin, triggerRect.left), Math.max(margin, viewportWidth - panelRect.width - margin));
+    setPosition({ top, left, maxHeight: Math.max(160, viewportHeight - top - margin) });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) return undefined;
+    updatePosition();
+    const frame = window.requestAnimationFrame(updatePosition);
+    return () => window.cancelAnimationFrame(frame);
+  }, [open, updatePosition]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeOnOutside = (event) => {
+      if (triggerRef.current?.contains(event.target) || panelRef.current?.contains(event.target)) return;
+      setOpen(false);
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    document.addEventListener("pointerdown", closeOnOutside, true);
+    document.addEventListener("keydown", closeOnEscape, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+      document.removeEventListener("pointerdown", closeOnOutside, true);
+      document.removeEventListener("keydown", closeOnEscape, true);
+    };
+  }, [open, updatePosition]);
+
+  return (
+    <>
+      <button
+        type="button"
+        ref={triggerRef}
+        className={buttonClassName}
+        title={title || label}
+        aria-label={title || label}
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        {label}
+      </button>
+      {open && createPortal(
+        <div
+          ref={panelRef}
+          className={`floating-toolbar-menu ${className}`}
+          style={{ top: position.top, left: position.left, maxHeight: position.maxHeight }}
+          role="menu"
+        >
+          {typeof children === "function" ? children({ close: () => setOpen(false) }) : children}
+        </div>,
+        document.body
+      )}
+    </>
   );
 }
 
@@ -3367,6 +3541,47 @@ function ArchiveApp() {
     setDetail(await api.getItem(itemId));
   }
 
+  async function generateImageCutout(imageId, settings) {
+    try {
+      const result = await api.generateImageCutout({ imageId, settings });
+      if (result?.item) setDetail(result.item);
+      await refresh();
+      setItemsVersion((version) => version + 1);
+      setMessage(t("cutoutReady", "", { percent: Math.round(Number(result?.removedRatio || 0) * 100) }));
+      return result?.item || null;
+    } catch (error) {
+      setMessage(t("cutoutFailed", "", { message: error.message || String(error) }));
+      throw error;
+    }
+  }
+
+  async function setImageCutoutEnabled(imageId, enabled) {
+    try {
+      const updated = await api.setImageCutoutEnabled({ imageId, enabled });
+      if (updated) setDetail(updated);
+      await refresh();
+      setItemsVersion((version) => version + 1);
+      return updated;
+    } catch (error) {
+      setMessage(t("cutoutFailed", "", { message: error.message || String(error) }));
+      throw error;
+    }
+  }
+
+  async function deleteImageCutout(imageId) {
+    try {
+      const updated = await api.deleteImageCutout(imageId);
+      if (updated) setDetail(updated);
+      await refresh();
+      setItemsVersion((version) => version + 1);
+      setMessage(t("cutoutDeleted"));
+      return updated;
+    } catch (error) {
+      setMessage(t("cutoutFailed", "", { message: error.message || String(error) }));
+      throw error;
+    }
+  }
+
   async function updateImageNote(payload) {
     const updated = await api.updateImageNote(payload);
     if (updated) {
@@ -3688,6 +3903,9 @@ function ArchiveApp() {
             onReplaceImage={replaceImage}
             onReorderImages={reorderImages}
             onUpdateImageNote={updateImageNote}
+            onGenerateImageCutout={generateImageCutout}
+            onSetImageCutoutEnabled={setImageCutoutEnabled}
+            onDeleteImageCutout={deleteImageCutout}
             onCreateLabelCard={createLabelCard}
             onUpdateLabelCard={updateLabelCard}
             onDeleteLabelCard={deleteLabelCard}
@@ -4130,8 +4348,7 @@ function FilterBar({ library, filters, setFilters }) {
         </select>
         <input data-input-debug="Library year filter" value={filters.year} onChange={(event) => update({ year: event.target.value })} placeholder={t("year")} />
         <label className="filter-tag-field">
-          <input data-input-debug="Library tag filter" value={filters.tag} onChange={(event) => update({ tag: event.target.value })} placeholder={t("tagsComma")} aria-label={t("tagsComma")} />
-          <span>{t("multiTagsHint")}</span>
+          <input data-input-debug="Library tag filter" value={filters.tag} onChange={(event) => update({ tag: event.target.value })} placeholder={t("tagFilterPlaceholder")} aria-label={t("tagFilterPlaceholder")} />
         </label>
         <button type="button" className="secondary clear-filters" disabled={!hasFilters} onClick={clearFilters}>{t("clearFilters")}</button>
       </div>
@@ -4204,12 +4421,16 @@ function GalleryView({ items, total, loading, onLoadMore, onOpenItem, onToggleFa
   );
 }
 
-function DetailView({ detail, countries, types, onBack, onAddImages, onStartPhoneUpload, onRemoveImage, onReplaceImage, onReorderImages, onUpdateImageNote, onCreateLabelCard, onUpdateLabelCard, onDeleteLabelCard, onExportLabelCard, onAddAttachment, onAddWebpageAttachment, onUpdateAttachment, onOpenAttachment, onOpenAttachmentSource, onRemoveAttachment, onUpdate, onToggleFavorite, onDeleteItem }) {
+function DetailView({ detail, countries, types, onBack, onAddImages, onStartPhoneUpload, onRemoveImage, onReplaceImage, onReorderImages, onUpdateImageNote, onGenerateImageCutout, onSetImageCutoutEnabled, onDeleteImageCutout, onCreateLabelCard, onUpdateLabelCard, onDeleteLabelCard, onExportLabelCard, onAddAttachment, onAddWebpageAttachment, onUpdateAttachment, onOpenAttachment, onOpenAttachmentSource, onRemoveAttachment, onUpdate, onToggleFavorite, onDeleteItem }) {
   const { t } = useI18n();
   const [activeImage, setActiveImage] = useState(0);
   const [editing, setEditing] = useState(false);
   const [dragImageId, setDragImageId] = useState("");
   const [imageNoteDraft, setImageNoteDraft] = useState("");
+  const [cutoutMethod, setCutoutMethod] = useState("flat");
+  const [cutoutSensitivity, setCutoutSensitivity] = useState(55);
+  const [cutoutBusy, setCutoutBusy] = useState(false);
+  const [cutoutError, setCutoutError] = useState("");
 
   useEffect(() => {
     setActiveImage(0);
@@ -4226,6 +4447,9 @@ function DetailView({ detail, countries, types, onBack, onAddImages, onStartPhon
 
   useEffect(() => {
     setImageNoteDraft(image?.note || "");
+    setCutoutMethod(image?.cutoutSettings?.method === "object" ? "object" : "flat");
+    setCutoutSensitivity(Number(image?.cutoutSettings?.sensitivity || 55));
+    setCutoutError("");
   }, [image?.id, image?.note]);
 
   useEffect(() => {
@@ -4282,6 +4506,45 @@ function DetailView({ detail, countries, types, onBack, onAddImages, onStartPhon
     const nextActiveIndex = nextImages.findIndex((entry) => entry.id === activeImageId);
     setActiveImage(Math.max(0, nextActiveIndex));
     setDragImageId("");
+  }
+
+  async function generateCutout() {
+    if (!image || cutoutBusy) return;
+    setCutoutBusy(true);
+    setCutoutError("");
+    try {
+      await onGenerateImageCutout(image.id, { method: cutoutMethod, sensitivity: cutoutSensitivity, edgeSoftness: 0.8 });
+    } catch (error) {
+      setCutoutError(error.message || String(error));
+    } finally {
+      setCutoutBusy(false);
+    }
+  }
+
+  async function toggleCutout(enabled) {
+    if (!image || cutoutBusy) return;
+    setCutoutBusy(true);
+    setCutoutError("");
+    try {
+      await onSetImageCutoutEnabled(image.id, enabled);
+    } catch (error) {
+      setCutoutError(error.message || String(error));
+    } finally {
+      setCutoutBusy(false);
+    }
+  }
+
+  async function removeCutout() {
+    if (!image || cutoutBusy || !window.confirm(t("deleteCutout"))) return;
+    setCutoutBusy(true);
+    setCutoutError("");
+    try {
+      await onDeleteImageCutout(image.id);
+    } catch (error) {
+      setCutoutError(error.message || String(error));
+    } finally {
+      setCutoutBusy(false);
+    }
   }
 
   return (
@@ -4350,6 +4613,75 @@ function DetailView({ detail, countries, types, onBack, onAddImages, onStartPhon
                 </div>
               </details>
             </div>
+          )}
+          {image && (
+            <section className="image-cutout-panel" aria-label={t("nonDestructiveCutout")}>
+              <div className="image-cutout-heading">
+                <strong>{t("nonDestructiveCutout")}</strong>
+                {image.cutoutAvailable && (
+                  <div className="segmented image-cutout-toggle" aria-label={t("nonDestructiveCutout")}>
+                    <button
+                      type="button"
+                      className={!image.cutoutEnabled ? "active" : ""}
+                      disabled={cutoutBusy}
+                      onClick={() => toggleCutout(false)}
+                    >
+                      {t("originalImage")}
+                    </button>
+                    <button
+                      type="button"
+                      className={image.cutoutEnabled ? "active" : ""}
+                      disabled={cutoutBusy}
+                      onClick={() => toggleCutout(true)}
+                    >
+                      {t("cutoutImage")}
+                    </button>
+                  </div>
+                )}
+              </div>
+              <p>{t("cutoutHelp")}</p>
+              <label className="image-cutout-method">
+                <span>{t("cutoutMethod")}</span>
+                <select
+                  value={cutoutMethod}
+                  disabled={cutoutBusy}
+                  onChange={(event) => setCutoutMethod(event.target.value)}
+                >
+                  <option value="flat">{t("flatItemCutout")}</option>
+                  <option value="object">{t("objectCutout")}</option>
+                </select>
+              </label>
+              <p>{t(cutoutMethod === "object" ? "objectCutoutHelp" : "flatItemCutoutHelp")}</p>
+              <label className="image-cutout-sensitivity">
+                <span>{t("cutoutSensitivity")}</span>
+                <output>{Math.round(cutoutSensitivity)}</output>
+                <input
+                  type="range"
+                  min="20"
+                  max="90"
+                  step="1"
+                  value={cutoutSensitivity}
+                  disabled={cutoutBusy}
+                  onChange={(event) => setCutoutSensitivity(Number(event.target.value))}
+                />
+              </label>
+              <div className="image-cutout-actions">
+                <button type="button" className="primary" disabled={cutoutBusy} onClick={generateCutout}>
+                  {cutoutBusy ? t("cutoutProcessing") : t(image.cutoutAvailable ? "regenerateCutout" : "automaticCutout")}
+                </button>
+                {image.cutoutAvailable && (
+                  <button
+                    type="button"
+                    className="ghost danger-text"
+                    disabled={cutoutBusy}
+                    onClick={removeCutout}
+                  >
+                    {t("deleteCutout")}
+                  </button>
+                )}
+              </div>
+              {cutoutError && <p className="inline-error" role="alert">{cutoutError}</p>}
+            </section>
           )}
           {image && (
             <div className="image-actions">
@@ -5543,10 +5875,11 @@ const EXHIBITION_DEFAULT_STYLE = {
   wallColor: "#d8d0c2",
   wallTexture: "plain",
   trimStyle: "dark-walnut",
-  wainscoting: "carved-mahogany",
+  wainscoting: "walnut-square",
   wainscotHeight: "medium",
-  ceilingStyle: "victorian-plaster",
-  lightingStyle: "sconces",
+  ceilingStyle: "simple-crown",
+  upperTrimHeight: 7.5,
+  lightingStyle: "ambient",
   lightWarmth: 58,
   lightBrightness: 86,
   plaqueEnabled: false,
@@ -5569,25 +5902,41 @@ const EXHIBITION_DEFAULT_STYLE = {
 };
 
 const EXHIBITION_WALL_TEXTURES = [["plain", "plainPaintedWall"], ["plaster", "smoothPlaster"], ["linen", "linenWall"], ["wallpaper", "classicWallpaper"], ["custom", "customWallBackground"]];
-const EXHIBITION_SEGMENT_TEMPLATE_OPTIONS = [["horizontal", "horizontalWall"], ["vertical", "verticalWall"], ["square", "squareWall"], ["monumental", "monumentalWideWall"], ["arch", "archWall"]];
-const EXHIBITION_TRIMS = [["none", "noTrim"], ["simple-white", "simpleWhiteRail"], ["dark-walnut", "darkWalnutRail"], ["carved-mahogany", "carvedMahoganyRail"], ["black-gold", "blackGoldMuseumRail"], ["brass", "brassPictureRail"], ["art-nouveau", "artNouveauRail"]];
-const EXHIBITION_WAINSCOTING = [["none", "noWainscoting"], ["low-wood", "lowWoodPanels"], ["tall-wood", "tallWoodPanels"], ["walnut-square", "walnutSquarePanels"], ["carved-mahogany", "carvedMahoganyPanels"], ["green-fabric", "greenFabricPanels"], ["burgundy-fabric", "burgundyFabricPanels"], ["white-classical", "whiteClassicalPanels"], ["black-museum", "blackMuseumPanels"]];
+const EXHIBITION_SEGMENT_TEMPLATE_OPTIONS = [["horizontal", "horizontalWall"], ["vertical", "verticalWall"], ["square", "squareWall"], ["monumental", "monumentalWideWall"]];
+const EXHIBITION_TRIMS = [["none", "noTrim"], ["simple-white", "simpleWhiteRail"], ["dark-walnut", "darkWalnutRail"], ["carved-mahogany", "carvedMahoganyRail"], ["brass", "brassPictureRail"]];
+const EXHIBITION_WAINSCOTING = [["none", "noWainscoting"], ["low-wood", "lowWoodPanels"], ["walnut-square", "walnutSquarePanels"], ["carved-mahogany", "carvedMahoganyPanels"], ["green-fabric", "greenFabricPanels"], ["burgundy-fabric", "burgundyFabricPanels"], ["white-classical", "whiteClassicalPanels"], ["black-museum", "blackMuseumPanels"]];
 const EXHIBITION_WAINSCOT_HEIGHTS = [["low", "low"], ["medium", "medium"], ["high", "high"]];
-const EXHIBITION_CEILINGS = [["none", "noCornice"], ["simple-crown", "simpleCrownMolding"], ["victorian-plaster", "victorianPlasterCornice"], ["dentil", "dentilCornice"], ["gilded-classical", "gildedClassicalCornice"], ["dark-wood", "carvedDarkWoodCornice"], ["art-nouveau", "artNouveauFrieze"], ["east-asian-beam", "eastAsianTimberBeam"], ["modern-recess", "modernShadowRecess"]];
-const EXHIBITION_LIGHTING = [["none", "noLighting"], ["sconces", "wallSconces"], ["gallery", "galleryLights"]];
-const EXHIBITION_FRAMES = [["black-gallery", "blackGalleryFrame"], ["dark-wood", "darkWoodFrame"], ["white-mat", "whiteMatFrame"], ["ornate-gold", "ornateGoldFrame"]];
+const EXHIBITION_CEILINGS = [["none", "noCornice"], ["simple-crown", "simpleCrownMolding"], ["gilded-classical", "gildedClassicalCornice"], ["dark-wood", "carvedDarkWoodCornice"], ["classical-tuscan", "tuscanEntablature"], ["classical-doric", "doricEntablature"], ["classical-ionic", "ionicEntablature"], ["classical-corinthian", "corinthianEntablature"], ["classical-composite", "compositeEntablature"]];
+const EXHIBITION_FRAMES = [["none", "noFrame"], ["black-gallery", "blackGalleryFrame"], ["dark-wood", "darkWoodFrame"], ["white-mat", "whiteMatFrame"], ["ornate-gold", "ornateGoldFrame"]];
+const EXHIBITION_DISPLAY_SUPPORTS = [["none", "noDisplayFurniture"], ["walnut-wall-shelf", "walnutWallShelf"], ["limestone-pedestal", "limestonePedestal"]];
 const EXHIBITION_FRAME_THICKNESS_PRESETS = { small: 4.5, medium: 7, large: 10.5 };
-const EXHIBITION_PLAQUE_POSITIONS = [["upper-left", "upperLeft"], ["upper-center", "upperCenter"], ["upper-right", "upperRight"]];
-const EXHIBITION_PLAQUE_STYLES = [["museum-text", "museumText"], ["brass", "brassPlaque"], ["dark-wood", "darkWoodPlaque"], ["hanging", "hangingSign"]];
-const EXHIBITION_CAPTION_POSITIONS = [["below", "belowExhibit"], ["beside", "besideExhibit"]];
+const EXHIBITION_SUPPORT_SCALE_PRESETS = { small: 0.8, medium: 1, large: 1.22 };
 const EXHIBITION_CAPTION_STYLES = [["white-museum", "whiteMuseumLabel"], ["brass", "brassNameplate"], ["dark-wood", "darkWoodLabel"], ["hanging-ticket", "hangingTicket"]];
-const EXHIBITION_SUSPENSIONS = [["none", "noSuspension"], ["dark-wire", "thinDarkWire"], ["brass-rod", "brassRod"], ["double-cord", "doubleCord"], ["classical-rail", "classicalPictureRail"]];
-const EXHIBITION_DECOR_DENSITIES = [["minimal", "minimal"], ["curated", "curated"], ["rich", "rich"]];
-const EXHIBITION_DECOR_LABELS = { "small-plant": "smallPlant", "tall-palm": "tallPalm", "plant-stand": "classicalPlantStand", "wooden-bench": "woodenBench", "leather-bench": "darkLeatherBench", "velvet-bench": "redVelvetBench", "rope-barrier": "ropeBarrier", "sculpture-pedestal": "smallSculpturePedestal" };
-const EXHIBITION_DECOR_TYPES = [["none", "none"], ...Object.entries(EXHIBITION_DECOR_ASSETS).filter(([, value]) => value.status === "production" && value.asset && value.contactShadow).map(([value]) => [value, EXHIBITION_DECOR_LABELS[value]])];
-const EXHIBITION_DECOR_SIZES = [["small", "small"], ["medium", "medium"], ["large", "large"]];
-const EXHIBITION_DECOR_POSITIONS = [["left", "left"], ["center", "center"], ["right", "right"]];
-const EXHIBITION_THEMES = [["victorian-cabinet", "victorianCabinetHall"], ["william-morris", "williamMorrisDrawingRoom"], ["dark-walnut", "darkWalnutNumismaticRoom"], ["white-museum", "whiteMuseumGallery"], ["gilded-age", "gildedAgeSalon"], ["east-asian", "eastAsianExhibitionHall"]];
+const EXHIBITION_UPPER_TRIM_DEFAULT_HEIGHTS = Object.freeze({
+  none: 0,
+  "simple-crown": 7.5,
+  "gilded-classical": 8.2,
+  "dark-wood": 7.8,
+  "classical-tuscan": 13.5,
+  "classical-doric": 17.5,
+  "classical-ionic": 14.6,
+  "classical-corinthian": 18,
+  "classical-composite": 18
+});
+
+function exhibitionUpperTrimHeight(style) {
+  const configured = Number(style?.upperTrimHeight);
+  const fallback = EXHIBITION_UPPER_TRIM_DEFAULT_HEIGHTS[style?.ceilingStyle] ?? 7.5;
+  if (style?.ceilingStyle === "none") return 0;
+  return Math.max(3, Math.min(22, Number.isFinite(configured) ? configured : fallback));
+}
+
+function exhibitionAmbientLightRgb(warmth) {
+  const ratio = Math.max(0, Math.min(1, Number(warmth || 0) / 100));
+  const cool = [220, 232, 255];
+  const warm = [255, 214, 162];
+  return cool.map((value, index) => Math.round(value + (warm[index] - value) * ratio)).join(" ");
+}
 
 function userAssetValue(assetId) {
   return `user:${assetId}`;
@@ -5661,6 +6010,7 @@ function frameBorderForThickness(thicknessPercent) {
 
 function exhibitionFrameWithPlacementThickness(value, assets, placementThickness) {
   const frame = exhibitionFrameForValue(value, assets);
+  if (frame.none) return frame;
   const explicit = Number(placementThickness);
   if (!Number.isFinite(explicit) || explicit <= 0) return frame;
   const thicknessPercent = Math.max(2.5, Math.min(14, explicit));
@@ -5670,8 +6020,10 @@ function exhibitionFrameWithPlacementThickness(value, assets, placementThickness
 function ExhibitionFrameLayers({ frame, children }) {
   return (
     <span
-      className="exhibition-art-mat"
-      data-frame-opening={frame?.userFrame ? "transparent" : "built-in"}
+      className={`exhibition-art-mat ${frame?.none ? "frame-none" : ""}`}
+      data-frame-opening={frame?.none ? "none" : frame?.userFrame ? "transparent" : "built-in"}
+      data-frame-kind={frame?.none ? "none" : frame?.userFrame ? "user" : "built-in"}
+      data-frame-generation={frame?.generation || (frame?.userFrame ? "user" : "none")}
       data-frame-guides-valid={frame?.valid === false ? "false" : "true"}
       data-frame-thickness={frame?.thicknessPercent || ""}
       style={{
@@ -5690,6 +6042,22 @@ function ExhibitionFrameLayers({ frame, children }) {
         </span>
       </span>
       <span className="exhibition-frame-glass" aria-hidden="true" />
+    </span>
+  );
+}
+
+function ExhibitionDisplaySupport({ style, scale = 1 }) {
+  const asset = VICTORIAN_CABINET_HALL.furniture?.[style];
+  if (!asset || style === "none") return null;
+  return (
+    <span
+      className={`exhibition-display-support support-${style}`}
+      data-display-support={style}
+      data-support-scale={scale}
+      style={{ "--support-scale": Math.max(0.65, Math.min(1.4, Number(scale || 1))) }}
+      aria-hidden="true"
+    >
+      <img src={asset} alt="" />
     </span>
   );
 }
@@ -5787,72 +6155,56 @@ function UserAssetStrip({ asset, availableWidth = 1920, renderHeight = 80 }) {
   );
 }
 
-const EXHIBITION_THEME_STYLES = {
-  "victorian-cabinet": { wallColor: "#d8c7aa", wallTexture: "plaster", trimStyle: "dark-walnut", wainscoting: "carved-mahogany", wainscotHeight: "medium", ceilingStyle: "simple-crown", lightingStyle: "sconces", lightWarmth: 62, lightBrightness: 90, captionStyle: "white-museum", suspensionStyle: "dark-wire", decorationDensity: "curated", decorations: EMPTY_EXHIBITION_DECOR },
-  "william-morris": { wallColor: "#64705a", wallTexture: "wallpaper", trimStyle: "dark-walnut", wainscoting: "green-fabric", wainscotHeight: "low", ceilingStyle: "simple-crown", lightingStyle: "gallery", lightWarmth: 62, lightBrightness: 88, captionStyle: "white-museum", suspensionStyle: "dark-wire", decorationDensity: "minimal", decorations: EMPTY_EXHIBITION_DECOR },
-  "dark-walnut": { wallColor: "#817366", wallTexture: "plain", trimStyle: "dark-walnut", wainscoting: "walnut-square", wainscotHeight: "medium", ceilingStyle: "dark-wood", lightingStyle: "gallery", lightWarmth: 52, lightBrightness: 84, captionStyle: "brass", suspensionStyle: "brass-rod", decorationDensity: "minimal", decorations: EMPTY_EXHIBITION_DECOR },
-  "white-museum": { wallColor: "#eeeae1", wallTexture: "plain", trimStyle: "simple-white", wainscoting: "white-classical", wainscotHeight: "low", ceilingStyle: "modern-recess", lightingStyle: "gallery", lightWarmth: 35, lightBrightness: 104, captionStyle: "white-museum", suspensionStyle: "none", decorationDensity: "minimal", decorations: EMPTY_EXHIBITION_DECOR },
-  "gilded-age": { wallColor: "#8d5c50", wallTexture: "plaster", trimStyle: "black-gold", wainscoting: "burgundy-fabric", wainscotHeight: "medium", ceilingStyle: "gilded-classical", lightingStyle: "sconces", lightWarmth: 72, lightBrightness: 88, captionStyle: "brass", suspensionStyle: "double-cord", decorationDensity: "curated", decorations: EMPTY_EXHIBITION_DECOR },
-  "east-asian": { wallColor: "#c9b89d", wallTexture: "linen", trimStyle: "dark-walnut", wainscoting: "black-museum", wainscotHeight: "low", ceilingStyle: "east-asian-beam", lightingStyle: "gallery", lightWarmth: 55, lightBrightness: 94, captionStyle: "dark-wood", suspensionStyle: "none", decorationDensity: "minimal", decorations: EMPTY_EXHIBITION_DECOR }
-};
-
 function normalizedExhibitionStyle(style) {
   const source = style || {};
-  const trimAliases = { "dark-wood": "dark-walnut", white: "simple-white" };
-  const wainscotAliases = { panel: "low-wood", wood: "walnut-square" };
-  const ceilingAliases = { plain: "none", crown: "simple-crown", coffered: "victorian-plaster" };
-  const decorations = Array.isArray(source.decorations) ? source.decorations.slice(0, 2) : EXHIBITION_DEFAULT_STYLE.decorations;
+  const trimAliases = { "dark-wood": "dark-walnut", white: "simple-white", "black-gold": "brass", "art-nouveau": "dark-walnut" };
+  const wainscotAliases = { panel: "low-wood", wood: "walnut-square", "tall-wood": "low-wood" };
+  const ceilingAliases = {
+    plain: "none",
+    crown: "simple-crown",
+    coffered: "simple-crown",
+    "victorian-plaster": "simple-crown",
+    dentil: "classical-doric",
+    "art-nouveau": "simple-crown",
+    "east-asian-beam": "dark-wood",
+    "modern-recess": "simple-crown"
+  };
+  const ceilingStyle = ceilingAliases[source.ceilingStyle] || source.ceilingStyle || EXHIBITION_DEFAULT_STYLE.ceilingStyle;
+  const configuredUpperTrimHeight = Number(source.upperTrimHeight);
   return {
     ...EXHIBITION_DEFAULT_STYLE,
     ...source,
     segmentTemplate: EXHIBITION_SEGMENT_TEMPLATES[source.segmentTemplate] ? source.segmentTemplate : "horizontal",
     trimStyle: trimAliases[source.trimStyle] || source.trimStyle || EXHIBITION_DEFAULT_STYLE.trimStyle,
     wainscoting: wainscotAliases[source.wainscoting] || source.wainscoting || EXHIBITION_DEFAULT_STYLE.wainscoting,
-    ceilingStyle: ceilingAliases[source.ceilingStyle] || source.ceilingStyle || EXHIBITION_DEFAULT_STYLE.ceilingStyle,
-    decorations: [0, 1].map((index) => {
-      const decor = { ...EXHIBITION_DEFAULT_STYLE.decorations[index], ...(decorations[index] || {}) };
-      const presentation = exhibitionDecorPresentation(decor.type);
-      return presentation?.status === "production" && presentation.asset && presentation.contactShadow
-        ? decor
-        : { ...EXHIBITION_DEFAULT_STYLE.decorations[index] };
-    })
+    ceilingStyle,
+    captionPosition: "below",
+    captionStyle: ["white-museum", "brass", "dark-wood"].includes(source.captionStyle) ? source.captionStyle : EXHIBITION_DEFAULT_STYLE.captionStyle,
+    upperTrimHeight: ceilingStyle === "none"
+      ? 0
+      : Math.max(3, Math.min(22, Number.isFinite(configuredUpperTrimHeight)
+        ? configuredUpperTrimHeight
+        : EXHIBITION_UPPER_TRIM_DEFAULT_HEIGHTS[ceilingStyle] ?? EXHIBITION_DEFAULT_STYLE.upperTrimHeight))
   };
 }
 
 function restrainedExhibitionStyle(style, patch = {}) {
-  const next = normalizedExhibitionStyle({ ...style, ...patch });
-  if (!["wallpaper", "custom", "user-asset"].includes(next.wallTexture)) return next;
-  return normalizedExhibitionStyle({
-    ...next,
-    trimStyle: "dark-walnut",
-    ceilingStyle: "simple-crown",
-    decorationDensity: "minimal",
-    decorations: EMPTY_EXHIBITION_DECOR
-  });
+  return normalizedExhibitionStyle({ ...style, ...patch });
 }
 
-function exhibitionThemeStyle(style, themeId) {
-  const current = normalizedExhibitionStyle(style);
-  const preset = EXHIBITION_THEME_STYLES[themeId] || EXHIBITION_THEME_STYLES["victorian-cabinet"];
-  return restrainedExhibitionStyle(current, {
-    ...current,
-    ...preset,
-    themeId,
-    plaqueTitle: current.plaqueTitle,
-    plaqueSubtitle: current.plaqueSubtitle,
-    plaqueIntro: current.plaqueIntro,
-    backgroundItemId: null,
-    backgroundImageId: null
-  });
-}
-
-function ExhibitionDecorPiece({ decor, index }) {
-  const presentation = exhibitionDecorPresentation(decor?.type);
-  if (!decor?.visible || presentation?.status !== "production" || !presentation.asset || !presentation.contactShadow) return null;
+function ClassicalEntablature({ order, asset }) {
+  if (!order || !asset) return null;
   return (
-    <span className={`exhibition-decor-piece decor-${decor.type} decor-size-${decor.size} decor-position-${decor.position} decor-slot-${index + 1}`} data-decor-type={decor.type} aria-hidden="true">
-      <img src={presentation.asset} alt="" />
-    </span>
+    <span
+      className={`classical-entablature order-${order}`}
+      data-classical-entablature={order}
+      data-entablature-renderer="architectural-texture"
+      data-architecture-continuity="seamless-modules"
+      data-asset-generation="continuous-v3"
+      data-entablature-parts="cornice frieze architrave"
+      style={{ "--classical-entablature-asset": cssAssetUrl(asset) }}
+      aria-hidden="true"
+    />
   );
 }
 
@@ -5870,44 +6222,45 @@ function ExhibitionHallScene({ segment, mode, selectedPlacementId, placementDraf
   const userWallpaperActive = style.wallTexture === "user-asset" && userWallpaper;
   const userRail = userAssetForRole(style.trimStyle, userAssets, "rail");
   const userWainscot = userAssetForRole(style.wainscoting, userAssets, "wainscoting");
-  const userCornice = userAssetForRole(style.ceilingStyle, userAssets, "cornice");
+  const userUpperTrim = userAssetForRole(style.ceilingStyle, userAssets, "cornice");
+  const classicalEntablatureOrder = String(style.ceilingStyle || "").startsWith("classical-") ? style.ceilingStyle.slice("classical-".length) : "";
+  const classicalEntablatureAsset = assetPack.architecture.classicalEntablatures[classicalEntablatureOrder] || "";
+  const upperTrimAsset = userUpperTrim?.image?.url || assetPack.architecture.upperStrips?.[style.ceilingStyle] || assetPack.architecture.crownMolding;
+  const wainscotAsset = userWainscot?.image?.url || assetPack.architecture.wainscotings?.[style.wainscoting] || assetPack.architecture.wainscoting;
+  const chairRailAsset = userRail?.image?.url || assetPack.architecture.chairRails?.[style.trimStyle] || assetPack.architecture.chairRail;
   const backgroundMode = ["tile", "cover", "contain", "stretch"].includes(style.backgroundMode) ? style.backgroundMode : "tile";
   const wainscotHeight = ({ low: 22, medium: 31, high: 41 })[style.wainscotHeight] || 31;
-  const enabledDecorations = style.decorations.filter((decor) => {
-    const presentation = exhibitionDecorPresentation(decor.type);
-    return decor.visible && presentation?.status === "production" && presentation.asset && presentation.contactShadow;
-  });
-  const visibleDecorations = style.decorationDensity === "minimal" ? [] : enabledDecorations.slice(0, style.decorationDensity === "curated" ? 1 : 2);
+  const upperTrimHeight = exhibitionUpperTrimHeight(style);
+  const lightBrightness = Math.max(45, Math.min(120, Number(style.lightBrightness || 100)));
   const sceneAssetPreloads = [...new Set([
     wallAsset,
-    assetPack.architecture.crownMolding,
-    assetPack.architecture.wainscoting,
-    assetPack.architecture.chairRail,
-    assetPack.lighting.lightWash,
-    style.segmentTemplate === "arch" ? assetPack.architecture.vaultedArch : null,
-    ...visibleDecorations.map((decor) => exhibitionDecorPresentation(decor.type)?.asset),
+    upperTrimAsset,
+    wainscotAsset,
+    chairRailAsset,
     userWallpaperActive?.image?.url,
     userRail?.image?.url,
     userWainscot?.image?.url,
-    userCornice?.image?.url,
-    ...placements.map((placement) => exhibitionFrameForValue((placementDrafts[placement.id] || placement).frame_style, userAssets).asset)
+    userUpperTrim?.image?.url,
+    classicalEntablatureAsset,
+    ...placements.map((placement) => exhibitionFrameForValue((placementDrafts[placement.id] || placement).frame_style, userAssets).asset),
+    ...placements.map((placement) => VICTORIAN_CABINET_HALL.furniture?.[(placementDrafts[placement.id] || placement).support_style])
   ].filter(Boolean))];
   return (
     <div
       ref={sceneRef}
-      className={`exhibition-hall-scene template-${template.id} wall-${style.wallTexture} trim-${style.trimStyle} wainscot-${style.wainscoting} wainscot-height-${style.wainscotHeight} ceiling-${style.ceilingStyle} lights-${style.lightingStyle} density-${style.decorationDensity} ${mode === "edit" ? "is-editing" : "is-viewing"}`}
+      className={`exhibition-hall-scene template-${template.id} wall-${style.wallTexture} trim-${style.trimStyle} wainscot-${style.wainscoting} wainscot-height-${style.wainscotHeight} ceiling-${style.ceilingStyle} ${mode === "edit" ? "is-editing" : "is-viewing"}`}
       style={{
         width: `${template.width}px`,
         height: `${template.height}px`,
         "--hall-wall": style.wallColor,
-        "--hall-warmth": `${Number(style.lightWarmth || 0)}%`,
-        "--hall-light-opacity": Math.max(0.08, Math.min(0.72, Number(style.lightWarmth || 0) / 145)),
-        "--hall-brightness": `${Number(style.lightBrightness || 100)}%`,
+        "--hall-light-rgb": exhibitionAmbientLightRgb(style.lightWarmth),
+        "--hall-light-opacity": Math.max(0.08, Math.min(0.54, 0.08 + ((lightBrightness - 45) / 75) * 0.46)),
+        "--hall-brightness": `${lightBrightness}%`,
         "--asset-wall-texture": cssAssetUrl(wallAsset),
-        "--asset-crown-molding": cssAssetUrl(userCornice?.image?.url || assetPack.architecture.crownMolding),
-        "--asset-wainscoting": cssAssetUrl(userWainscot?.image?.url || assetPack.architecture.wainscoting),
-        "--asset-chair-rail": cssAssetUrl(userRail?.image?.url || assetPack.architecture.chairRail),
-        "--asset-light-wash": cssAssetUrl(assetPack.lighting.lightWash),
+        "--asset-crown-molding": cssAssetUrl(upperTrimAsset),
+        "--asset-wainscoting": cssAssetUrl(wainscotAsset),
+        "--asset-chair-rail": cssAssetUrl(chairRailAsset),
+        "--upper-trim-height": `${upperTrimHeight}%`,
         "--wainscot-height": `${wainscotHeight}%`,
         "--wallpaper-scale": `${Math.max(5, Math.min(200, Number(style.backgroundScale || 30)))}%`,
         "--wallpaper-x": `${Math.max(-100, Math.min(100, Number(style.backgroundOffsetX || 0)))}%`,
@@ -5915,12 +6268,7 @@ function ExhibitionHallScene({ segment, mode, selectedPlacementId, placementDraf
         "--placement-top": `${template.safe.top}%`,
         "--placement-right": `${template.safe.right}%`,
         "--placement-bottom": `${template.safe.bottom}%`,
-        "--placement-left": `${template.safe.left}%`,
-        "--plaque-top": `${template.plaqueTop}%`,
-        "--plaque-side": `${template.plaqueSide}%`,
-        "--sconce-top": `${template.lightsTop}%`,
-        "--sconce-side": `${template.lightsSide}%`,
-        "--asset-vaulted-arch": cssAssetUrl(assetPack.architecture.vaultedArch)
+        "--placement-left": `${template.safe.left}%`
       }}
       data-exhibition-segment={segment?.id || ""}
       data-exhibition-asset-pack={assetPack.manifest.id}
@@ -5928,60 +6276,54 @@ function ExhibitionHallScene({ segment, mode, selectedPlacementId, placementDraf
       data-scene-width={template.width}
       data-scene-height={template.height}
     >
-      <div className="exhibition-asset-wall" aria-hidden="true" />
-      {userWallpaperActive && !userWallpaper.missing && <UserAssetWallpaper asset={userWallpaper} />}
+      <div className="exhibition-wall-assembly" data-wall-assembly="integrated-v1" aria-hidden="true">
+        <div className="exhibition-asset-wall" />
+        {userWallpaperActive && !userWallpaper.missing && <UserAssetWallpaper asset={userWallpaper} />}
+        {customBackgroundActive && !customBackground.missing && customImageUrl && (
+          <div className={`exhibition-custom-wallpaper wallpaper-${backgroundMode}`}>
+            {backgroundMode === "tile" ? (
+              <><img className="exhibition-wallpaper-preload" src={customImageUrl} alt="" /><span style={{ backgroundImage: `url("${customImageUrl}")` }} /></>
+            ) : (
+              <img src={customImageUrl} alt="" />
+            )}
+          </div>
+        )}
+        <div className="exhibition-asset-crown" data-architecture-continuity={userUpperTrim ? "user-modules" : "seamless-modules"} style={{ height: `${upperTrimHeight}%` }}>{userUpperTrim ? <UserAssetStrip asset={userUpperTrim} availableWidth={template.width} renderHeight={template.height * upperTrimHeight / 100} /> : <ClassicalEntablature order={classicalEntablatureOrder} asset={classicalEntablatureAsset} />}</div>
+        <div className="exhibition-asset-wainscot" data-architecture-continuity={userWainscot ? "user-modules" : "complete-panels"} data-user-wainscot-height={userWainscot ? userStripHeight(userWainscot, "wainscoting", style.wainscotHeight) : undefined} style={userWainscot ? { height: `${userStripHeight(userWainscot, "wainscoting", style.wainscotHeight)}%` } : undefined}>{userWainscot && <UserAssetStrip asset={userWainscot} availableWidth={template.width} renderHeight={template.height * userStripHeight(userWainscot, "wainscoting", style.wainscotHeight) / 100} />}</div>
+        <div className="exhibition-asset-chair-rail" data-architecture-continuity={userRail ? "user-modules" : "seamless-modules"} style={userRail ? { height: `${userStripHeight(userRail, "rail")}%` } : undefined}>{userRail && <UserAssetStrip asset={userRail} availableWidth={template.width} renderHeight={template.height * userStripHeight(userRail, "rail") / 100} />}</div>
+        <div className="exhibition-wall-cohesion" data-wall-lighting="shared" />
+      </div>
       {style.wallTexture === "user-asset" && (!userWallpaper || userWallpaper.missing) && <div className="exhibition-missing-wallpaper" role="status">{t("missingUserAssetSource")}</div>}
-      {customBackgroundActive && !customBackground.missing && customImageUrl && (
-        <div className={`exhibition-custom-wallpaper wallpaper-${backgroundMode}`} aria-hidden="true">
-          {backgroundMode === "tile" ? (
-            <><img className="exhibition-wallpaper-preload" src={customImageUrl} alt="" /><span style={{ backgroundImage: `url("${customImageUrl}")` }} /></>
-          ) : (
-            <img src={customImageUrl} alt="" />
-          )}
-        </div>
-      )}
       {customBackgroundActive?.missing && <div className="exhibition-missing-wallpaper" role="status">{t("missingExhibitionBackground")}</div>}
       <div className="exhibition-export-asset-preloads" aria-hidden="true">
         {sceneAssetPreloads.map((src, index) => <img src={src} alt="" key={index} />)}
       </div>
-      <div className="exhibition-asset-crown" style={userCornice ? { height: `${userStripHeight(userCornice, "cornice")}%` } : undefined} aria-hidden="true">{userCornice && <UserAssetStrip asset={userCornice} availableWidth={template.width} renderHeight={template.height * userStripHeight(userCornice, "cornice") / 100} />}</div>
-      <div className="exhibition-asset-wainscot" data-user-wainscot-height={userWainscot ? userStripHeight(userWainscot, "wainscoting", style.wainscotHeight) : undefined} style={userWainscot ? { height: `${userStripHeight(userWainscot, "wainscoting", style.wainscotHeight)}%` } : undefined} aria-hidden="true">{userWainscot && <UserAssetStrip asset={userWainscot} availableWidth={template.width} renderHeight={template.height * userStripHeight(userWainscot, "wainscoting", style.wainscotHeight) / 100} />}</div>
-      <div className="exhibition-asset-chair-rail" style={userRail ? { height: `${userStripHeight(userRail, "rail")}%` } : undefined} aria-hidden="true">{userRail && <UserAssetStrip asset={userRail} availableWidth={template.width} renderHeight={template.height * userStripHeight(userRail, "rail") / 100} />}</div>
       <div className="exhibition-hall-depth exhibition-hall-depth-left" aria-hidden="true" />
       <div className="exhibition-hall-depth exhibition-hall-depth-right" aria-hidden="true" />
       <div className="exhibition-asset-light-wash" aria-hidden="true" />
-      <div className="exhibition-asset-sconces" aria-hidden="true">
-        <img src={assetPack.lighting.brassSconce} alt="" />
-        <img src={assetPack.lighting.brassSconce} alt="" />
-        <img src={assetPack.lighting.brassSconce} alt="" />
-      </div>
-      <div className="exhibition-template-architecture" aria-hidden="true" />
-      {style.plaqueEnabled && (style.plaqueTitle || style.plaqueSubtitle || style.plaqueIntro) && (
-        <section className={`exhibition-section-plaque plaque-${style.plaqueStyle} plaque-${style.plaquePosition}`} aria-label={style.plaqueTitle || t("exhibitionPlaque")}>
-          {style.plaqueTitle && <strong>{style.plaqueTitle}</strong>}
-          {style.plaqueSubtitle && <span>{style.plaqueSubtitle}</span>}
-          {style.plaqueIntro && <p>{style.plaqueIntro}</p>}
-        </section>
-      )}
-      <div className="exhibition-decor-layer" aria-hidden="true">
-        {visibleDecorations.map((decor, index) => <ExhibitionDecorPiece decor={decor} index={index} key={`${index}-${decor.type}-${decor.position}`} />)}
-      </div>
       <div className="exhibition-placements">
         {placements.map((placement) => {
           const display = { ...placement, ...(placementDrafts[placement.id] || {}) };
           const selected = selectedPlacementId === placement.id;
           const frame = exhibitionFrameWithPlacementThickness(display.frame_style, userAssets, display.frame_thickness);
           const userFrame = String(display.frame_style || "").startsWith("user:");
+          const supportStyle = EXHIBITION_DISPLAY_SUPPORTS.some(([value]) => value === display.support_style) ? display.support_style : "none";
+          const supportScale = Math.max(0.65, Math.min(1.4, Number(display.support_scale || 1)));
+          const exhibitOffsetX = Math.max(-40, Math.min(40, Number(display.exhibit_offset_x || 0)));
+          const exhibitOffsetY = Math.max(-40, Math.min(40, Number(display.exhibit_offset_y || 0)));
           return (
             <button
               type="button"
-              className={`exhibition-placement ${userFrame ? "exhibition-frame-user" : `exhibition-frame-${display.frame_style}`} ${selected ? "selected" : ""}`}
+              className={`exhibition-placement ${userFrame ? "exhibition-frame-user" : `exhibition-frame-${display.frame_style}`} ${supportStyle !== "none" ? `has-display-support support-${supportStyle}` : ""} ${selected ? "selected" : ""}`}
               key={placement.id}
               data-exhibition-placement={placement.id}
               data-frame-style={display.frame_style}
+              data-support-style={supportStyle}
               style={{
                 left: `${display.x}%`, top: `${display.y}%`, width: `${display.width}%`, height: `${display.height}%`, zIndex: display.z_index,
-                "--suspension-drop": `${Math.max(2.5, Number(display.y || 0) * 0.34)}cqw`
+                "--support-scale": supportScale,
+                "--exhibit-offset-x": `${exhibitOffsetX}%`,
+                "--exhibit-offset-y": `${exhibitOffsetY}%`
               }}
               onPointerDown={mode === "edit" ? (event) => onBeginTransform(event, placement, "move") : undefined}
               onClick={(event) => {
@@ -5992,11 +6334,13 @@ function ExhibitionHallScene({ segment, mode, selectedPlacementId, placementDraf
               onDoubleClick={mode === "edit" ? () => onInspect(placement) : undefined}
               aria-label={display.label_text || display.item_title}
             >
-              {style.suspensionStyle !== "none" && <span className={`exhibition-picture-suspension suspension-${style.suspensionStyle}`} aria-hidden="true" />}
-              <ExhibitionFrameLayers frame={frame}>
-                <MediaImage src={display.image?.url || display.image?.thumbnailUrl} alt={display.item_title} context={`Exhibition: ${display.item_title}`} />
-              </ExhibitionFrameLayers>
-              {display.show_label && <span className={`exhibition-wall-label caption-${style.captionStyle} caption-position-${style.captionPosition} caption-size-${["small", "medium", "large"].includes(display.caption_size) ? display.caption_size : "medium"}`}>{display.label_text || display.item_title}</span>}
+              <ExhibitionDisplaySupport style={supportStyle} scale={supportScale} />
+              <span className="exhibition-object-layer" data-exhibit-offset={`${exhibitOffsetX},${exhibitOffsetY}`}>
+                <ExhibitionFrameLayers frame={frame}>
+                  <MediaImage src={display.image?.url || display.image?.thumbnailUrl} alt={display.item_title} context={`Exhibition: ${display.item_title}`} />
+                </ExhibitionFrameLayers>
+                {display.show_label && <span className={`exhibition-wall-label caption-${style.captionStyle} caption-position-below caption-size-${["small", "medium", "large"].includes(display.caption_size) ? display.caption_size : "medium"}`}>{display.label_text || display.item_title}</span>}
+              </span>
               {mode === "edit" && selected && <span className="exhibition-resize-handle" onPointerDown={(event) => onBeginTransform(event, placement, "resize")} aria-hidden="true" />}
             </button>
           );
@@ -6004,54 +6348,6 @@ function ExhibitionHallScene({ segment, mode, selectedPlacementId, placementDraf
       </div>
       {placements.length === 0 && <div className="exhibition-empty-wall">+</div>}
     </div>
-  );
-}
-
-function ExhibitionArtDirectionControls({ style, onChange, onApplyTheme, section = "all" }) {
-  const { t } = useI18n();
-
-  function updateDecoration(index, patch) {
-    const decorations = style.decorations.map((decor, decorIndex) => decorIndex === index ? { ...decor, ...patch } : decor);
-    onChange({ decorations: decorations.slice(0, 2) });
-  }
-
-  return (
-    <section className={`exhibition-curation-settings section-${section}`}>
-      {(section === "all" || section === "theme") && <ExhibitionInspectorAccordion title={t("curatedTheme")} className="exhibition-control-section">
-        <label>{t("themeBundle")}<select value={style.themeId} onChange={(event) => onApplyTheme(event.target.value)}>{EXHIBITION_THEMES.map(([value, key]) => <option value={value} key={value}>{t(key)}</option>)}</select></label>
-        <p className="hint">{t("themeOverrideHint")}</p>
-      </ExhibitionInspectorAccordion>}
-      {(section === "all" || section === "architecture") && <ExhibitionInspectorAccordion title={t("architecture")} className="exhibition-control-section">
-        <label>{t("wainscotingHeight")}<select value={style.wainscotHeight} onChange={(event) => onChange({ wainscotHeight: event.target.value })}>{EXHIBITION_WAINSCOT_HEIGHTS.map(([value, key]) => <option value={value} key={value}>{t(key)}</option>)}</select></label>
-      </ExhibitionInspectorAccordion>}
-      {(section === "all" || section === "plaque") && <ExhibitionInspectorAccordion title={t("plaqueAndCaptions")} className="exhibition-control-section">
-        <label className="check"><input type="checkbox" checked={Boolean(style.plaqueEnabled)} onChange={(event) => onChange({ plaqueEnabled: event.target.checked })} />{t("showPlaque")}</label>
-        {style.plaqueEnabled && <>
-          <label>{t("title")}<input value={style.plaqueTitle} onChange={(event) => onChange({ plaqueTitle: event.target.value })} /></label>
-          <label>{t("subtitle")}<input value={style.plaqueSubtitle} onChange={(event) => onChange({ plaqueSubtitle: event.target.value })} /></label>
-          <label>{t("shortIntroduction")}<textarea rows="3" value={style.plaqueIntro} onChange={(event) => onChange({ plaqueIntro: event.target.value })} /></label>
-          <label>{t("plaquePosition")}<select value={style.plaquePosition} onChange={(event) => onChange({ plaquePosition: event.target.value })}>{EXHIBITION_PLAQUE_POSITIONS.map(([value, key]) => <option value={value} key={value}>{t(key)}</option>)}</select></label>
-          <label>{t("plaqueStyle")}<select value={style.plaqueStyle} onChange={(event) => onChange({ plaqueStyle: event.target.value })}>{EXHIBITION_PLAQUE_STYLES.map(([value, key]) => <option value={value} key={value}>{t(key)}</option>)}</select></label>
-        </>}
-      </ExhibitionInspectorAccordion>}
-      {(section === "all" || section === "plaque") && <ExhibitionInspectorAccordion title={t("captionPresentation")} className="exhibition-control-section">
-        <label>{t("captionPosition")}<select value={style.captionPosition} onChange={(event) => onChange({ captionPosition: event.target.value })}>{EXHIBITION_CAPTION_POSITIONS.map(([value, key]) => <option value={value} key={value}>{t(key)}</option>)}</select></label>
-        <label>{t("captionStyle")}<select value={style.captionStyle} onChange={(event) => onChange({ captionStyle: event.target.value })}>{EXHIBITION_CAPTION_STYLES.map(([value, key]) => <option value={value} key={value}>{t(key)}</option>)}</select></label>
-        <label>{t("pictureRailSuspension")}<select value={style.suspensionStyle} onChange={(event) => onChange({ suspensionStyle: event.target.value })}>{EXHIBITION_SUSPENSIONS.map(([value, key]) => <option value={value} key={value}>{t(key)}</option>)}</select></label>
-      </ExhibitionInspectorAccordion>}
-      {(section === "all" || section === "decor") && <ExhibitionInspectorAccordion title={t("environmentalDecor")} className="exhibition-control-section">
-        <label>{t("decorationDensity")}<select value={style.decorationDensity} onChange={(event) => onChange({ decorationDensity: event.target.value })}>{EXHIBITION_DECOR_DENSITIES.map(([value, key]) => <option value={value} key={value}>{t(key)}</option>)}</select></label>
-        <p className="hint">{t("decorLimitHint")}</p>
-        {EXHIBITION_DECOR_TYPES.length === 1 ? <p className="exhibition-decor-unavailable">{t("noFinishedDecor")}</p> : <div className="exhibition-decor-controls">
-          {style.decorations.map((decor, index) => <fieldset key={index}>
-            <legend>{t("decorSlot", "", { number: index + 1 })}</legend>
-            <label className="check"><input type="checkbox" checked={Boolean(decor.visible)} onChange={(event) => updateDecoration(index, { visible: event.target.checked })} />{t("showDecor")}</label>
-            <label>{t("decorType")}<select value={decor.type} onChange={(event) => updateDecoration(index, { type: event.target.value, visible: event.target.value !== "none" })}>{EXHIBITION_DECOR_TYPES.map(([value, key]) => <option value={value} key={value}>{t(key)}</option>)}</select></label>
-            <div className="exhibition-size-grid"><label>{t("size")}<select value={decor.size} onChange={(event) => updateDecoration(index, { size: event.target.value })}>{EXHIBITION_DECOR_SIZES.map(([value, key]) => <option value={value} key={value}>{t(key)}</option>)}</select></label><label>{t("position")}<select value={decor.position} onChange={(event) => updateDecoration(index, { position: event.target.value })}>{EXHIBITION_DECOR_POSITIONS.map(([value, key]) => <option value={value} key={value}>{t(key)}</option>)}</select></label></div>
-          </fieldset>)}
-        </div>}
-      </ExhibitionInspectorAccordion>}
-    </section>
   );
 }
 
@@ -6394,10 +6690,15 @@ function AssetWorkshopView({ assets = [], onChanged, onMessage }) {
     onMessage(t("assetDeleted"));
   }
 
+  function startNewAsset() {
+    setDraft(emptyUserAssetDraft());
+    setPickerOpen(true);
+  }
+
   return (
     <div className="asset-workshop" data-asset-workshop>
       <aside className="asset-workshop-list">
-        <header><div><h1>{t("assetWorkshop")}</h1><p>{t("assetWorkshopIntro")}</p></div><button type="button" className="primary compact" onClick={() => setDraft(emptyUserAssetDraft())}>{t("newUserAsset")}</button></header>
+        <header><div><h1>{t("assetWorkshop")}</h1><p>{t("assetWorkshopIntro")}</p></div><button type="button" className="primary compact" onClick={startNewAsset}>{t("newUserAsset")}</button></header>
         <div>{assets.length ? assets.map((asset) => <button type="button" className={draft.id === asset.id ? "active" : ""} key={asset.id} onClick={() => editAsset(asset)}><strong>{asset.name}</strong><span>{t(asset.asset_type === "wallpaper" ? "wallpaperAsset" : asset.asset_type === "frame" ? "frameAsset" : "stripAsset")}</span>{asset.missing && <small>{t("missingUserAssetSource")}</small>}</button>) : <EmptyState title={t("noUserAssets")} />}</div>
       </aside>
       <section className="asset-workshop-editor">
@@ -6472,51 +6773,231 @@ function ExhibitionItemPicker({ onAdd, onClose, purpose = "exhibit" }) {
   );
 }
 
-function ExhibitionBackgroundControls({ segment, draft, onChange, onClear, userAssets = [], section = "all" }) {
+function ExhibitionBackgroundControls({ segment, draft, onChange, onClear, onChooseCollectionBackground, onManageAssets, userAssets = [] }) {
   const { t } = useI18n();
   const style = draft.style;
   const background = segment?.background || null;
   const hasReference = Boolean(style.backgroundItemId || style.backgroundImageId);
   const wallpaperAssets = userAssets.filter((asset) => asset.asset_type === "wallpaper");
+  const upperTrimAssets = userAssets.filter((asset) => asset.asset_type === "strip" && userAssetRole(asset) === "cornice");
+  const wainscotAssets = userAssets.filter((asset) => asset.asset_type === "strip" && userAssetRole(asset) === "wainscoting");
+  const mouldingAssets = userAssets.filter((asset) => asset.asset_type === "strip" && userAssetRole(asset) === "rail");
   const mode = ["tile", "cover", "contain", "stretch"].includes(style.backgroundMode) ? style.backgroundMode : "tile";
+  const wallSourceValue = style.wallTexture === "custom"
+    ? "collection"
+    : style.wallTexture === "user-asset"
+      ? userAssetValue(style.userWallpaperAssetId)
+      : style.wallTexture;
+
+  function chooseWallSource(value) {
+    if (value === "collection") {
+      onChooseCollectionBackground();
+      return;
+    }
+    if (value.startsWith("user:")) {
+      onChange({
+        wallTexture: "user-asset",
+        userWallpaperAssetId: value.slice(5),
+        backgroundItemId: null,
+        backgroundImageId: null
+      });
+      return;
+    }
+    onChange({
+      wallTexture: value,
+      userWallpaperAssetId: null,
+      backgroundItemId: null,
+      backgroundImageId: null
+    });
+  }
+
+  function chooseUpperTrim(value) {
+    const previousHeight = exhibitionUpperTrimHeight(style);
+    onChange({
+      ceilingStyle: value,
+      upperTrimHeight: value === "none"
+        ? 0
+        : EXHIBITION_UPPER_TRIM_DEFAULT_HEIGHTS[value] ?? Math.max(3, previousHeight || 7.5)
+    });
+  }
+
   return (
-    <>
-    {(section === "all" || section === "template") && <ExhibitionInspectorAccordion title={t("themeAndTemplate")} open className="exhibition-template-controls">
-      <label>{t("segmentTemplate")}<select className="exhibition-template-select" value={style.segmentTemplate} onChange={(event) => onChange({ segmentTemplate: event.target.value })}>{EXHIBITION_SEGMENT_TEMPLATE_OPTIONS.map(([value, key]) => <option value={value} key={value}>{t(key)}</option>)}</select></label>
-    </ExhibitionInspectorAccordion>}
-    {(section === "all" || section === "wall") && <ExhibitionInspectorAccordion title={t("wallAndWallpaper")} className="exhibition-background-controls">
-      <label>{t("workshopWallpaper")}
-        <select value={style.wallTexture === "user-asset" ? style.userWallpaperAssetId || "" : ""} onChange={(event) => onChange(event.target.value ? { wallTexture: "user-asset", userWallpaperAssetId: event.target.value, backgroundItemId: null, backgroundImageId: null } : { wallTexture: "plain", userWallpaperAssetId: null })}>
-          <option value="">{t("none")}</option>
-          {wallpaperAssets.map((asset) => <option value={asset.id} key={asset.id}>{asset.name}{asset.missing ? ` - ${t("missing")}` : ""}</option>)}
-        </select>
-      </label>
-      {style.wallTexture === "user-asset" && !wallpaperAssets.some((asset) => asset.id === style.userWallpaperAssetId && !asset.missing) && <p className="exhibition-background-status missing">{t("missingUserAssetSource")}</p>}
-      {hasReference && (
-        <p className={background?.missing ? "exhibition-background-status missing" : "exhibition-background-status"}>
-          {background?.missing ? t("missingExhibitionBackground") : (background?.item_title || t("chooseBackgroundImage"))}
-        </p>
-      )}
-      <div className="exhibition-inspector-actions">
+    <section className="exhibition-wall-system" data-wall-system>
+      <header className="exhibition-wall-system-header">
+        <div><h2>{t("wallSystem")}</h2><p className="hint">{t("wallSystemHint")}</p></div>
+        <button type="button" className="secondary compact" data-manage-assets onClick={onManageAssets}>{t("manageAssets")}</button>
+      </header>
+
+      <ExhibitionInspectorAccordion title={t("segmentTemplate")} className="exhibition-template-controls">
+        <label>{t("segmentTemplate")}<select className="exhibition-template-select" value={style.segmentTemplate} onChange={(event) => onChange({ segmentTemplate: event.target.value })}>{EXHIBITION_SEGMENT_TEMPLATE_OPTIONS.map(([value, key]) => <option value={value} key={value}>{t(key)}</option>)}</select></label>
+      </ExhibitionInspectorAccordion>
+
+      <ExhibitionInspectorAccordion title={t("ceilingStyle")} className="exhibition-upper-strip-controls">
+        <label>{t("ceilingStyle")}<select data-upper-strip-style value={style.ceilingStyle} onChange={(event) => chooseUpperTrim(event.target.value)}>
+          <optgroup label={t("builtIn")}>{EXHIBITION_CEILINGS.map(([value, key]) => <option value={value} key={value}>{t(key)}</option>)}</optgroup>
+          {upperTrimAssets.length > 0 && <optgroup label={t("assetWorkshop")}>{upperTrimAssets.map((asset) => <option value={userAssetValue(asset.id)} key={asset.id}>{asset.name}{asset.missing ? ` - ${t("missing")}` : ""}</option>)}</optgroup>}
+        </select></label>
+        {style.ceilingStyle !== "none" && <label className="exhibition-range-label">{t("upperTrimThickness")} <span>{exhibitionUpperTrimHeight(style)}%</span><input type="range" min="3" max="22" step="0.5" value={exhibitionUpperTrimHeight(style)} onChange={(event) => onChange({ upperTrimHeight: Number(event.target.value) })} /></label>}
+      </ExhibitionInspectorAccordion>
+
+      <ExhibitionInspectorAccordion title={t("wallSurface")} open className="exhibition-background-controls">
+        <label>{t("wallColor")}<input type="color" value={style.wallColor} onChange={(event) => onChange({ wallColor: event.target.value })} /></label>
+        <label>{t("wallTexture")}<select data-wall-source value={wallSourceValue} onChange={(event) => chooseWallSource(event.target.value)}>
+          <optgroup label={t("builtIn")}>{EXHIBITION_WALL_TEXTURES.filter(([value]) => !["custom", "user-asset"].includes(value)).map(([value, key]) => <option value={value} key={value}>{t(key)}</option>)}</optgroup>
+          <optgroup label={t("collection")}><option value="collection">{hasReference && !background?.missing ? background.item_title : t("chooseExhibitionBackground")}</option></optgroup>
+          {wallpaperAssets.length > 0 && <optgroup label={t("assetWorkshop")}>{wallpaperAssets.map((asset) => <option value={userAssetValue(asset.id)} key={asset.id}>{asset.name}{asset.missing ? ` - ${t("missing")}` : ""}</option>)}</optgroup>}
+        </select></label>
+        {style.wallTexture === "user-asset" && !wallpaperAssets.some((asset) => asset.id === style.userWallpaperAssetId && !asset.missing) && <p className="exhibition-background-status missing">{t("missingUserAssetSource")}</p>}
+        {hasReference && <p className={background?.missing ? "exhibition-background-status missing" : "exhibition-background-status"}>{background?.missing ? t("missingExhibitionBackground") : (background?.item_title || t("chooseBackgroundImage"))}</p>}
         {hasReference && <button type="button" className="ghost" onClick={onClear}>{t("usePaintedWall")}</button>}
-      </div>
-      {hasReference && !background?.missing && (
-        <>
-          <label>{t("wallpaperMode")}
-            <select className="exhibition-background-mode" value={mode} onChange={(event) => onChange({ backgroundMode: event.target.value })}>
-              <option value="tile">{t("tileWallpaper")}</option><option value="cover">{t("fillWallpaper")}</option>
-              <option value="contain">{t("fitWallpaper")}</option><option value="stretch">{t("stretchWallpaper")}</option>
-            </select>
-          </label>
+        {hasReference && !background?.missing && <>
+          <label>{t("wallpaperMode")}<select className="exhibition-background-mode" value={mode} onChange={(event) => onChange({ backgroundMode: event.target.value })}><option value="tile">{t("tileWallpaper")}</option><option value="cover">{t("fillWallpaper")}</option><option value="contain">{t("fitWallpaper")}</option><option value="stretch">{t("stretchWallpaper")}</option></select></label>
           {mode === "tile" && <div className="exhibition-tile-controls">
             <label>{t("patternScale")} <span>{Number(style.backgroundScale || 30)}%</span><input type="range" min="5" max="200" value={Number(style.backgroundScale || 30)} onChange={(event) => onChange({ backgroundScale: Number(event.target.value) })} /></label>
             <label>{t("horizontalOffset")} <span>{Number(style.backgroundOffsetX || 0)}%</span><input type="range" min="-100" max="100" value={Number(style.backgroundOffsetX || 0)} onChange={(event) => onChange({ backgroundOffsetX: Number(event.target.value) })} /></label>
             <label>{t("verticalOffset")} <span>{Number(style.backgroundOffsetY || 0)}%</span><input type="range" min="-100" max="100" value={Number(style.backgroundOffsetY || 0)} onChange={(event) => onChange({ backgroundOffsetY: Number(event.target.value) })} /></label>
           </div>}
-        </>
-      )}
-    </ExhibitionInspectorAccordion>}
-    </>
+        </>}
+      </ExhibitionInspectorAccordion>
+
+      <ExhibitionInspectorAccordion title={t("lowerWall")} className="exhibition-lower-wall-controls">
+        <label>{t("wainscoting")}<select data-wainscoting-style value={style.wainscoting} onChange={(event) => onChange({ wainscoting: event.target.value })}>
+          <optgroup label={t("builtIn")}>{EXHIBITION_WAINSCOTING.map(([value, key]) => <option value={value} key={value}>{t(key)}</option>)}</optgroup>
+          {wainscotAssets.length > 0 && <optgroup label={t("assetWorkshop")}>{wainscotAssets.map((asset) => <option value={userAssetValue(asset.id)} key={asset.id}>{asset.name}{asset.missing ? ` - ${t("missing")}` : ""}</option>)}</optgroup>}
+        </select></label>
+        {style.wainscoting !== "none" && <label>{t("wainscotingHeight")}<select value={style.wainscotHeight} onChange={(event) => onChange({ wainscotHeight: event.target.value })}>{EXHIBITION_WAINSCOT_HEIGHTS.map(([value, key]) => <option value={value} key={value}>{t(key)}</option>)}</select></label>}
+        <label>{t("wallMoulding")}<select data-wall-moulding-style value={style.trimStyle} onChange={(event) => onChange({ trimStyle: event.target.value })}>
+          <optgroup label={t("builtIn")}>{EXHIBITION_TRIMS.map(([value, key]) => <option value={value} key={value}>{t(key)}</option>)}</optgroup>
+          {mouldingAssets.length > 0 && <optgroup label={t("assetWorkshop")}>{mouldingAssets.map((asset) => <option value={userAssetValue(asset.id)} key={asset.id}>{asset.name}{asset.missing ? ` - ${t("missing")}` : ""}</option>)}</optgroup>}
+        </select></label>
+      </ExhibitionInspectorAccordion>
+
+      <ExhibitionInspectorAccordion title={t("ambientLighting")} className="exhibition-ambient-light-controls">
+        <label className="exhibition-range-label">{t("lightWarmth")} <span>{Number(style.lightWarmth || 0)}%</span><input type="range" min="0" max="100" value={Number(style.lightWarmth || 0)} onChange={(event) => onChange({ lightWarmth: Number(event.target.value) })} /></label>
+        <label className="exhibition-range-label exhibition-brightness-control">{t("lightBrightness")} <span>{Number(style.lightBrightness || 100)}%</span><input type="range" min="45" max="120" value={Number(style.lightBrightness || 100)} onChange={(event) => onChange({ lightBrightness: Number(event.target.value) })} /></label>
+      </ExhibitionInspectorAccordion>
+    </section>
+  );
+}
+
+function exhibitionPlacementUpdate(display, patch = {}) {
+  const next = { ...display, ...patch };
+  return {
+    ...next,
+    id: next.id,
+    imageId: next.image_id,
+    frameStyle: next.frame_style,
+    frameThickness: next.frame_thickness,
+    labelText: next.label_text,
+    showLabel: next.show_label,
+    captionSize: next.caption_size,
+    supportStyle: next.support_style,
+    supportScale: next.support_scale,
+    exhibitOffsetX: next.exhibit_offset_x,
+    exhibitOffsetY: next.exhibit_offset_y,
+    zIndex: next.z_index
+  };
+}
+
+function ExhibitionSelectedExhibitControls({
+  display,
+  frameOptions,
+  frameThicknessPreset,
+  segmentStyle,
+  onChangeSegmentStyle,
+  onDraft,
+  onUpdate,
+  onInspect,
+  onManageAssets,
+  onDuplicate,
+  onDelete
+}) {
+  const { t } = useI18n();
+  const displayRef = useRef(display);
+  const commitQueueRef = useRef(Promise.resolve());
+  const commit = (patch = {}) => {
+    const nextDisplay = { ...displayRef.current, ...patch };
+    displayRef.current = nextDisplay;
+    if (Object.keys(patch).length) onDraft(patch);
+    const payload = exhibitionPlacementUpdate(nextDisplay);
+    commitQueueRef.current = commitQueueRef.current
+      .catch(() => undefined)
+      .then(() => onUpdate(payload))
+      .catch((error) => console.error("[exhibition] placement update failed", error));
+    return commitQueueRef.current;
+  };
+  const exhibitOffsetRef = useRef({ x: Number(display.exhibit_offset_x || 0), y: Number(display.exhibit_offset_y || 0) });
+
+  useEffect(() => {
+    displayRef.current = display;
+    exhibitOffsetRef.current = { x: Number(display.exhibit_offset_x || 0), y: Number(display.exhibit_offset_y || 0) };
+  }, [display]);
+
+  function nudgeExhibit(deltaX, deltaY) {
+    const next = {
+      x: Math.max(-40, Math.min(40, exhibitOffsetRef.current.x + deltaX)),
+      y: Math.max(-40, Math.min(40, exhibitOffsetRef.current.y + deltaY))
+    };
+    exhibitOffsetRef.current = next;
+    commit({ exhibit_offset_x: next.x, exhibit_offset_y: next.y });
+  }
+
+  return (
+    <section className="exhibition-selected-object" data-exhibit-controls>
+      <header className="exhibition-selected-object-header">
+        <div><h2>{display.item_title}</h2><p className="quiet">{[display.country_name, display.type_name, display.year].filter(Boolean).join(" · ")}</p></div>
+        <button type="button" className="ghost compact" onClick={() => onInspect(display)}>{t("inspectExhibit")}</button>
+      </header>
+
+      <ExhibitionInspectorAccordion title={t("artwork")} open>
+        <label>{t("chooseExhibitionImage")}<select value={display.image_id || ""} onChange={(event) => commit({ image_id: event.target.value })}>{display.images.map((image, index) => <option value={image.id} key={image.id}>{image.original_filename || `${t("image")} ${index + 1}`}</option>)}</select></label>
+      </ExhibitionInspectorAccordion>
+
+      <ExhibitionInspectorAccordion title={t("frameAndMount")} className="exhibition-frame-controls">
+        <label>{t("frameStyle")}<select data-frame-style value={display.frame_style} onChange={(event) => commit({ frame_style: event.target.value })}>{frameOptions.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select></label>
+        {display.frame_style !== "none" && <label>{t("frameThickness")}<select data-placement-frame-thickness value={frameThicknessPreset} onChange={(event) => commit({ frame_thickness: EXHIBITION_FRAME_THICKNESS_PRESETS[event.target.value] })}><option value="small">{t("small")}</option><option value="medium">{t("medium")}</option><option value="large">{t("large")}</option></select></label>}
+        <button type="button" className="secondary compact" data-manage-assets onClick={onManageAssets}>{t("manageAssets")}</button>
+      </ExhibitionInspectorAccordion>
+
+      <ExhibitionInspectorAccordion title={t("displayFurniture")} className="exhibition-furniture-controls">
+        <label>{t("displayFurniture")}<select data-display-support-control value={display.support_style || "none"} onChange={(event) => commit({ support_style: event.target.value })}>{EXHIBITION_DISPLAY_SUPPORTS.map(([value, key]) => <option value={value} key={value}>{t(key)}</option>)}</select></label>
+        {(display.support_style || "none") !== "none" && <label>{t("furnitureSize")}<select data-support-scale-control value={Number(display.support_scale || 1) <= 0.9 ? "small" : Number(display.support_scale || 1) >= 1.12 ? "large" : "medium"} onChange={(event) => commit({ support_scale: EXHIBITION_SUPPORT_SCALE_PRESETS[event.target.value] })}><option value="small">{t("small")}</option><option value="medium">{t("medium")}</option><option value="large">{t("large")}</option></select></label>}
+        <p className="hint">{t("furnitureHelp")}</p>
+        {(display.support_style || "none") !== "none" && <div className="exhibition-nudge-controls">
+          <span>{t("exhibitAdjustment")}</span>
+          <div className="exhibition-nudge-pad" role="group" aria-label={t("exhibitAdjustment")}>
+            <button type="button" className="ghost compact nudge-up" title={t("moveExhibitUp")} aria-label={t("moveExhibitUp")} onClick={() => nudgeExhibit(0, -2)}>↑</button>
+            <button type="button" className="ghost compact nudge-left" title={t("moveExhibitLeft")} aria-label={t("moveExhibitLeft")} onClick={() => nudgeExhibit(-2, 0)}>←</button>
+            <button type="button" className="ghost compact nudge-reset" title={t("resetExhibitPosition")} aria-label={t("resetExhibitPosition")} onClick={() => { exhibitOffsetRef.current = { x: 0, y: 0 }; commit({ exhibit_offset_x: 0, exhibit_offset_y: 0 }); }}>•</button>
+            <button type="button" className="ghost compact nudge-right" title={t("moveExhibitRight")} aria-label={t("moveExhibitRight")} onClick={() => nudgeExhibit(2, 0)}>→</button>
+            <button type="button" className="ghost compact nudge-down" title={t("moveExhibitDown")} aria-label={t("moveExhibitDown")} onClick={() => nudgeExhibit(0, 2)}>↓</button>
+          </div>
+          <p className="hint">{t("exhibitAdjustmentHelp")}</p>
+        </div>}
+      </ExhibitionInspectorAccordion>
+
+      <ExhibitionInspectorAccordion title={t("sizeAndLayer")}>
+        <div className="exhibition-size-grid">
+          <label>{t("frameWidth")}<input type="number" min="8" max="70" value={Math.round(display.width * 10) / 10} onChange={(event) => onDraft({ width: Number(event.target.value) })} onBlur={() => commit()} /></label>
+          <label>{t("frameHeight")}<input type="number" min="14" max="100" value={Math.round(display.height * 10) / 10} onChange={(event) => onDraft({ height: Number(event.target.value) })} onBlur={() => commit()} /></label>
+        </div>
+        <label>{t("layer")}<input type="number" value={display.z_index} onChange={(event) => commit({ z_index: Number(event.target.value) })} /></label>
+      </ExhibitionInspectorAccordion>
+
+      <ExhibitionInspectorAccordion title={t("exhibitCaption")} className="exhibition-caption-controls">
+        <label className="check"><input type="checkbox" checked={display.show_label} onChange={(event) => commit({ show_label: event.target.checked })} />{t("showExhibitLabel")}</label>
+        {display.show_label && <>
+          <label>{t("exhibitLabel")}<input value={display.label_text || ""} onChange={(event) => onDraft({ label_text: event.target.value })} onBlur={() => commit()} /></label>
+          <label>{t("captionStyle")}<select value={segmentStyle.captionStyle} onChange={(event) => onChangeSegmentStyle({ captionStyle: event.target.value })}>{EXHIBITION_CAPTION_STYLES.filter(([value]) => value !== "hanging-ticket").map(([value, key]) => <option value={value} key={value}>{t(key)}</option>)}</select></label>
+          <label>{t("captionSize")}<select data-caption-size value={["small", "medium", "large"].includes(display.caption_size) ? display.caption_size : "medium"} onChange={(event) => commit({ caption_size: event.target.value })}><option value="small">{t("small")}</option><option value="medium">{t("medium")}</option><option value="large">{t("large")}</option></select></label>
+        </>}
+      </ExhibitionInspectorAccordion>
+
+      <div className="exhibition-inspector-actions exhibition-object-actions">
+        <button type="button" className="secondary" onClick={async () => onDuplicate(display.id)}>{t("duplicateExhibit")}</button>
+        <button type="button" className="danger ghost" onClick={onDelete}>{t("deleteExhibit")}</button>
+      </div>
+    </section>
   );
 }
 
@@ -6536,6 +7017,7 @@ function ExhibitionsView({ exhibitions, selectedExhibitionId, setSelectedExhibit
   const [exportScale, setExportScale] = useState(2);
   const [hallZoom, setHallZoom] = useState(1);
   const [hallZoomMode, setHallZoomMode] = useState("fit");
+  const [hallLayoutReady, setHallLayoutReady] = useState(false);
   const [isPanningHall, setIsPanningHall] = useState(false);
   const [listExpanded, setListExpanded] = useState(() => sessionStorage.getItem("archive.exhibitionListExpanded") === "1");
   const [inspectorCollapsed, setInspectorCollapsed] = useState(() => sessionStorage.getItem("archive.exhibitionInspectorCollapsed") === "1");
@@ -6551,7 +7033,9 @@ function ExhibitionsView({ exhibitions, selectedExhibitionId, setSelectedExhibit
   const fitFrameRef = useRef(0);
   const hallWheelHandlerRef = useRef(null);
   const viewportWheelListenerRef = useRef(null);
+  const modeRef = useRef(mode);
   const previousWallTextureRef = useRef(null);
+  modeRef.current = mode;
   hallWheelHandlerRef.current = handleHallWheel;
 
   useEffect(() => {
@@ -6606,8 +7090,7 @@ function ExhibitionsView({ exhibitions, selectedExhibitionId, setSelectedExhibit
   const selectedDisplay = selectedPlacement ? { ...selectedPlacement, ...(placementDrafts[selectedPlacement.id] || {}) } : null;
   const segmentIndex = exhibition?.segments?.findIndex((entry) => entry.id === segment?.id) ?? -1;
   const frameOptions = [...EXHIBITION_FRAMES.map(([value, key]) => ({ value, label: t(key) })), ...userAssets.filter((asset) => asset.asset_type === "frame").map((asset) => ({ value: userAssetValue(asset.id), label: `${asset.name}${asset.missing ? ` - ${t("missing")}` : ""}` }))];
-  const stripOptions = (target) => userAssets.filter((asset) => asset.asset_type === "strip" && userAssetRole(asset) === target).map((asset) => ({ value: userAssetValue(asset.id), label: `${asset.name}${asset.missing ? ` - ${t("missing")}` : ""}` }));
-  const selectedFrameDefault = selectedDisplay ? exhibitionFrameForValue(selectedDisplay.frame_style, userAssets).thicknessPercent || 7 : 7;
+  const selectedFrameDefault = selectedDisplay ? exhibitionFrameForValue(selectedDisplay.frame_style, userAssets).thicknessPercent ?? 7 : 7;
   const selectedFrameThickness = Number(selectedDisplay?.frame_thickness || selectedFrameDefault);
   const selectedFrameThicknessPreset = selectedFrameThickness <= 5.25 ? "small" : selectedFrameThickness <= 8.25 ? "medium" : "large";
 
@@ -6631,11 +7114,17 @@ function ExhibitionsView({ exhibitions, selectedExhibitionId, setSelectedExhibit
 
   useLayoutEffect(() => {
     if (!segment) return undefined;
+    setHallLayoutReady(false);
     if (fitFrameRef.current) window.cancelAnimationFrame(fitFrameRef.current);
-    fitFrameRef.current = window.requestAnimationFrame(() => {
+    if (fitHallCanvas()) return undefined;
+    let attempts = 0;
+    const fitWhenReady = () => {
       fitFrameRef.current = 0;
-      fitHallCanvas();
-    });
+      if (fitHallCanvas()) return;
+      attempts += 1;
+      if (attempts < 8) fitFrameRef.current = window.requestAnimationFrame(fitWhenReady);
+    };
+    fitFrameRef.current = window.requestAnimationFrame(fitWhenReady);
     return () => {
       if (fitFrameRef.current) window.cancelAnimationFrame(fitFrameRef.current);
       fitFrameRef.current = 0;
@@ -6713,22 +7202,26 @@ function ExhibitionsView({ exhibitions, selectedExhibitionId, setSelectedExhibit
 
   function fitHallCanvas() {
     const viewport = sceneViewportRef.current;
-    if (!viewport) return;
-    const availableWidth = Math.max(120, viewport.clientWidth - 48);
-    const availableHeight = Math.max(120, viewport.clientHeight - 48);
+    if (!viewport || viewport.clientWidth <= 48 || viewport.clientHeight <= 48) return false;
+    const availableWidth = viewport.clientWidth - 48;
+    const availableHeight = viewport.clientHeight - 48;
     const fit = Math.min(availableWidth / activeTemplate.width, availableHeight / activeTemplate.height, 1);
+    if (!Number.isFinite(fit) || fit <= 0) return false;
     hallZoomRef.current = fit;
     setHallZoom(fit);
     setHallZoomMode("fit");
+    setHallLayoutReady(true);
     window.requestAnimationFrame(() => {
       viewport.scrollLeft = Math.max(0, (activeTemplate.width * fit - viewport.clientWidth) / 2);
       viewport.scrollTop = Math.max(0, (activeTemplate.height * fit - viewport.clientHeight) / 2);
     });
+    return true;
   }
 
   function beginHallPan(event) {
-    if (mode !== "edit" || !sceneViewportRef.current) return;
+    if (!["edit", "view"].includes(mode) || !sceneViewportRef.current) return;
     const overPlacement = Boolean(event.target.closest?.(".exhibition-placement"));
+    if (mode === "view" && overPlacement) return;
     const panIntent = event.button === 1 || (event.button === 0 && (!overPlacement || spacePanRef.current));
     if (!panIntent) return;
     event.preventDefault();
@@ -6755,7 +7248,7 @@ function ExhibitionsView({ exhibitions, selectedExhibitionId, setSelectedExhibit
   }
 
   function handleHallWheel(event) {
-    if (mode !== "edit" || (!event.ctrlKey && !event.metaKey)) return;
+    if (!["edit", "view"].includes(modeRef.current) || (!event.ctrlKey && !event.metaKey)) return;
     const nativeEvent = event.nativeEvent || event;
     if (nativeEvent.__archiveHallWheelHandled) return;
     nativeEvent.__archiveHallWheelHandled = true;
@@ -6892,7 +7385,21 @@ function ExhibitionsView({ exhibitions, selectedExhibitionId, setSelectedExhibit
     const finish = async () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", finish);
-      await onUpdatePlacement({ ...latest, id: placement.id, imageId: latest.image_id, frameStyle: latest.frame_style, labelText: latest.label_text, showLabel: latest.show_label, zIndex: latest.z_index });
+      await onUpdatePlacement({
+        ...latest,
+        id: placement.id,
+        imageId: latest.image_id,
+        frameStyle: latest.frame_style,
+        frameThickness: latest.frame_thickness,
+        labelText: latest.label_text,
+        showLabel: latest.show_label,
+        captionSize: latest.caption_size,
+        supportStyle: latest.support_style,
+        supportScale: latest.support_scale,
+        exhibitOffsetX: latest.exhibit_offset_x,
+        exhibitOffsetY: latest.exhibit_offset_y,
+        zIndex: latest.z_index
+      });
       setPlacementDrafts((current) => { const next = { ...current }; delete next[placement.id]; return next; });
     };
     window.addEventListener("pointermove", move);
@@ -6942,22 +7449,29 @@ function ExhibitionsView({ exhibitions, selectedExhibitionId, setSelectedExhibit
         <div className="exhibition-toolbar">
           <div className="exhibition-segment-nav"><button type="button" className="ghost compact" disabled={switchingSegment || segmentIndex <= 0} onClick={() => switchSegment(exhibition.segments[segmentIndex - 1].id)} aria-label={t("previousSegment")}>‹</button><select value={segment?.id || ""} disabled={switchingSegment} onChange={(event) => switchSegment(event.target.value)} aria-label={t("hallSegment")}>{exhibition.segments.map((entry) => <option value={entry.id} key={entry.id}>{entry.segment_number}. {entry.title}</option>)}</select><button type="button" className="ghost compact" disabled={switchingSegment || segmentIndex >= exhibition.segments.length - 1} onClick={() => switchSegment(exhibition.segments[segmentIndex + 1].id)} aria-label={t("nextSegment")}>›</button><span>{t("segmentOf", "", { current: segmentIndex + 1, total: exhibition.segments.length })}</span></div>
           {mode === "edit" && <div className="exhibition-canvas-controls" aria-label={t("hallCanvasZoom")}><button type="button" className="ghost compact" data-canvas-action="zoom-out" title={t("zoomOut")} aria-label={t("zoomOut")} onClick={() => applyHallZoom(hallZoomRef.current / 1.15)}>−</button><button type="button" className="ghost compact" data-canvas-action="zoom-in" title={t("zoomIn")} aria-label={t("zoomIn")} onClick={() => applyHallZoom(hallZoomRef.current * 1.15)}>+</button><button type="button" className="ghost compact" data-canvas-action="fit" onClick={fitHallCanvas}>{t("fitPage")}</button><button type="button" className="ghost compact" data-canvas-action="actual" onClick={() => applyHallZoom(1, "actual")}>{t("actualSize")}</button><span>{Math.round(hallZoom * 100)}%</span></div>}
-          <div className="exhibition-toolbar-actions">{mode === "edit" && <button type="button" className="primary" onClick={() => setPickerOpen("exhibit")}>{t("addExhibit")}</button>}<div className="segmented-control"><button type="button" className={mode === "edit" ? "active" : ""} onClick={() => setMode("edit")}>{t("editHall")}</button><button type="button" className={mode === "view" ? "active" : ""} onClick={enterVisitMode}>{t("viewHall")}</button></div><button type="button" className="primary" onClick={saveExhibitionWorkspace}>{t("saveWorkspace")}</button><details className="toolbar-menu exhibition-more-menu"><summary>{t("more")}</summary><div className="toolbar-menu-content"><label>{t("exhibitionName")}<input value={metaDraft.title} onChange={(event) => setMetaDraft((current) => ({ ...current, title: event.target.value }))} /></label><label>{t("exhibitionDescription")}<input value={metaDraft.description} onChange={(event) => setMetaDraft((current) => ({ ...current, description: event.target.value }))} /></label><button type="button" className="danger ghost" onClick={() => onDelete(exhibition.id)}>{t("deleteExhibition")}</button></div></details>{mode === "edit" && <button type="button" className="ghost compact inspector-toggle" title={inspectorCollapsed ? t("openInspector") : t("collapseInspector")} aria-label={inspectorCollapsed ? t("openInspector") : t("collapseInspector")} onClick={() => setInspectorCollapsed((value) => !value)}>{inspectorCollapsed ? "\u25e7" : "\u25e8"}</button>}</div>
+          <div className="exhibition-toolbar-actions">{mode === "edit" && <button type="button" className="primary" onClick={() => setPickerOpen("exhibit")}>{t("addExhibit")}</button>}<button type="button" className="primary" onClick={saveExhibitionWorkspace}>{t("saveWorkspace")}</button><details className="toolbar-menu exhibition-more-menu"><summary>{t("more")}</summary><div className="toolbar-menu-content"><label>{t("exhibitionName")}<input value={metaDraft.title} onChange={(event) => setMetaDraft((current) => ({ ...current, title: event.target.value }))} /></label><label>{t("exhibitionDescription")}<input value={metaDraft.description} onChange={(event) => setMetaDraft((current) => ({ ...current, description: event.target.value }))} /></label><button type="button" className="danger ghost" onClick={() => onDelete(exhibition.id)}>{t("deleteExhibition")}</button></div></details>{mode === "edit" && <button type="button" className="ghost compact inspector-toggle" title={inspectorCollapsed ? t("openInspector") : t("collapseInspector")} aria-label={inspectorCollapsed ? t("openInspector") : t("collapseInspector")} onClick={() => setInspectorCollapsed((value) => !value)}>{inspectorCollapsed ? "\u25e7" : "\u25e8"}</button>}<div className="segmented mode-toggle exhibition-mode-toggle"><button type="button" className={mode === "edit" ? "active" : ""} onClick={() => setMode("edit")}>{t("editHall")}</button><button type="button" className={mode === "view" ? "active" : ""} onClick={enterVisitMode}>{t("viewHall")}</button></div></div>
         </div>
         <div className={`exhibition-editor-grid ${mode === "view" ? "view-mode" : ""} ${inspectorCollapsed ? "inspector-collapsed" : ""}`}>
-          <main ref={bindSceneViewport} className={`exhibition-scene-wrap ${isPanningHall ? "is-panning" : ""}`} data-zoom-mode={hallZoomMode} data-zoom={hallZoom} onWheel={handleHallWheel} onPointerDown={beginHallPan} onClick={() => setSelectedPlacementId(null)}><div className="exhibition-canvas-stage" style={{ width: `${activeTemplate.width * hallZoom}px`, height: `${activeTemplate.height * hallZoom}px` }}><div className="exhibition-canvas-scale" style={{ width: `${activeTemplate.width}px`, height: `${activeTemplate.height}px`, transform: `scale(${hallZoom})` }}><ExhibitionHallScene segment={displaySegment} mode={mode} selectedPlacementId={selectedPlacementId} placementDrafts={placementDrafts} sceneRef={sceneRef} onSelect={setSelectedPlacementId} onBeginTransform={beginTransform} onInspect={setInspectPlacement} userAssets={userAssets} /></div></div></main>
+          <main ref={bindSceneViewport} className={`exhibition-scene-wrap ${isPanningHall ? "is-panning" : ""} ${hallLayoutReady ? "is-layout-ready" : "is-layout-pending"}`} data-layout-ready={hallLayoutReady ? "true" : "false"} data-zoom-mode={hallZoomMode} data-zoom={hallZoom} onWheel={handleHallWheel} onPointerDown={beginHallPan} onClick={() => setSelectedPlacementId(null)}><div className="exhibition-canvas-stage" style={{ width: `${activeTemplate.width * hallZoom}px`, height: `${activeTemplate.height * hallZoom}px` }}><div className="exhibition-canvas-scale" style={{ width: `${activeTemplate.width}px`, height: `${activeTemplate.height}px`, transform: `scale(${hallZoom})` }}><ExhibitionHallScene segment={displaySegment} mode={mode} selectedPlacementId={selectedPlacementId} placementDrafts={placementDrafts} sceneRef={sceneRef} onSelect={setSelectedPlacementId} onBeginTransform={beginTransform} onInspect={setInspectPlacement} userAssets={userAssets} /></div></div></main>
           {!inspectorCollapsed && <aside className="exhibition-inspector">
             <header className="exhibition-inspector-header">
               <div className="exhibition-inspector-tabs" role="tablist">{[["hall", "hallTab"], ["exhibit", "exhibitTab"], ["segments", "segmentsTab"], ["export", "exportTab"]].map(([value, key]) => <button type="button" role="tab" aria-selected={inspectorTab === value} className={inspectorTab === value ? "active" : ""} disabled={(mode === "view" && value !== "export") || (value === "exhibit" && !selectedDisplay)} key={value} onClick={() => { if (value === "hall") setSelectedPlacementId(null); setInspectorTab(value); }}>{t(key)}</button>)}</div>
             </header>
             <div className="exhibition-inspector-scroll"><div hidden={inspectorTab !== (selectedDisplay ? "exhibit" : "hall")}>
-            {!selectedDisplay && <ExhibitionBackgroundControls segment={segment} draft={activeSegmentDraft} onChange={changeSegmentStyle} onClear={() => applySegmentBackground(null, null)} userAssets={userAssets} />}
-            {selectedDisplay && <section className="exhibition-presentation-controls"><h2>{t("frameThickness")}</h2><div className="exhibition-size-grid"><label>{t("frameThickness")}<select data-placement-frame-thickness value={selectedFrameThicknessPreset} onChange={(event) => onUpdatePlacement({ ...selectedDisplay, id: selectedDisplay.id, imageId: selectedDisplay.image_id, frameStyle: selectedDisplay.frame_style, frameThickness: EXHIBITION_FRAME_THICKNESS_PRESETS[event.target.value], labelText: selectedDisplay.label_text, showLabel: selectedDisplay.show_label, captionSize: selectedDisplay.caption_size, zIndex: selectedDisplay.z_index })}><option value="small">{t("small")}</option><option value="medium">{t("medium")}</option><option value="large">{t("large")}</option></select></label><label>{t("captionSize")}<select data-caption-size value={["small", "medium", "large"].includes(selectedDisplay.caption_size) ? selectedDisplay.caption_size : "medium"} onChange={(event) => onUpdatePlacement({ ...selectedDisplay, id: selectedDisplay.id, imageId: selectedDisplay.image_id, frameStyle: selectedDisplay.frame_style, frameThickness: selectedDisplay.frame_thickness, labelText: selectedDisplay.label_text, showLabel: selectedDisplay.show_label, captionSize: event.target.value, zIndex: selectedDisplay.z_index })}><option value="small">{t("small")}</option><option value="medium">{t("medium")}</option><option value="large">{t("large")}</option></select></label></div></section>}
-            {selectedDisplay ? <section><h2>{t("exhibitSettings")}</h2><p className="quiet">{selectedDisplay.item_title}</p><label>{t("chooseExhibitionImage")}<select value={selectedDisplay.image_id || ""} onChange={(event) => onUpdatePlacement({ ...selectedDisplay, id: selectedDisplay.id, imageId: event.target.value, frameStyle: selectedDisplay.frame_style, labelText: selectedDisplay.label_text, showLabel: selectedDisplay.show_label, zIndex: selectedDisplay.z_index })}>{selectedDisplay.images.map((image, index) => <option value={image.id} key={image.id}>{image.original_filename || `${t("image")} ${index + 1}`}</option>)}</select></label><label>{t("frameStyle")}<select value={selectedDisplay.frame_style} onChange={(event) => onUpdatePlacement({ ...selectedDisplay, id: selectedDisplay.id, imageId: selectedDisplay.image_id, frameStyle: event.target.value, labelText: selectedDisplay.label_text, showLabel: selectedDisplay.show_label, zIndex: selectedDisplay.z_index })}>{EXHIBITION_FRAMES.map(([value, key]) => <option value={value} key={value}>{t(key)}</option>)}</select></label><div className="exhibition-size-grid"><label>{t("frameWidth")}<input type="number" min="8" max="70" value={Math.round(selectedDisplay.width * 10) / 10} onChange={(event) => setPlacementDrafts((current) => ({ ...current, [selectedDisplay.id]: { ...selectedDisplay, width: Number(event.target.value) } }))} onBlur={() => onUpdatePlacement({ ...selectedDisplay, ...(placementDrafts[selectedDisplay.id] || {}), id: selectedDisplay.id, imageId: selectedDisplay.image_id, frameStyle: selectedDisplay.frame_style, labelText: selectedDisplay.label_text, showLabel: selectedDisplay.show_label, zIndex: selectedDisplay.z_index })} /></label><label>{t("frameHeight")}<input type="number" min="14" max="100" value={Math.round(selectedDisplay.height * 10) / 10} onChange={(event) => setPlacementDrafts((current) => ({ ...current, [selectedDisplay.id]: { ...selectedDisplay, height: Number(event.target.value) } }))} onBlur={() => onUpdatePlacement({ ...selectedDisplay, ...(placementDrafts[selectedDisplay.id] || {}), id: selectedDisplay.id, imageId: selectedDisplay.image_id, frameStyle: selectedDisplay.frame_style, labelText: selectedDisplay.label_text, showLabel: selectedDisplay.show_label, zIndex: selectedDisplay.z_index })} /></label></div><label>{t("layer")}<input type="number" value={selectedDisplay.z_index} onChange={(event) => onUpdatePlacement({ ...selectedDisplay, id: selectedDisplay.id, imageId: selectedDisplay.image_id, frameStyle: selectedDisplay.frame_style, labelText: selectedDisplay.label_text, showLabel: selectedDisplay.show_label, zIndex: Number(event.target.value) })} /></label><label>{t("exhibitLabel")}<input value={selectedDisplay.label_text || ""} onChange={(event) => setPlacementDrafts((current) => ({ ...current, [selectedDisplay.id]: { ...selectedDisplay, label_text: event.target.value } }))} onBlur={() => onUpdatePlacement({ ...selectedDisplay, ...(placementDrafts[selectedDisplay.id] || {}), id: selectedDisplay.id, imageId: selectedDisplay.image_id, frameStyle: selectedDisplay.frame_style, labelText: (placementDrafts[selectedDisplay.id] || selectedDisplay).label_text, showLabel: selectedDisplay.show_label, zIndex: selectedDisplay.z_index })} /></label><label className="check"><input type="checkbox" checked={selectedDisplay.show_label} onChange={(event) => onUpdatePlacement({ ...selectedDisplay, id: selectedDisplay.id, imageId: selectedDisplay.image_id, frameStyle: selectedDisplay.frame_style, labelText: selectedDisplay.label_text, showLabel: event.target.checked, zIndex: selectedDisplay.z_index })} />{t("showExhibitLabel")}</label><div className="exhibition-inspector-actions"><button type="button" className="secondary" onClick={() => setInspectPlacement(selectedDisplay)}>{t("inspectExhibit")}</button><button type="button" className="secondary" onClick={async () => { const result = await onDuplicatePlacement(selectedDisplay.id); if (result?.placementId) setSelectedPlacementId(result.placementId); }}>{t("duplicateExhibit")}</button><button type="button" className="danger ghost" onClick={async () => { if (!window.confirm(t("deleteExhibit"))) return; await onDeletePlacement(selectedDisplay.id); setSelectedPlacementId(null); }}>{t("deleteExhibit")}</button></div></section> : <section><h2>{t("hallAppearance")}</h2><label>{t("hallSegment")}<input value={activeSegmentDraft.title} onChange={(event) => setSegmentDraft((current) => ({ ...current, segmentId: segment.id, title: event.target.value }))} /></label><label>{t("wallColor")}<input type="color" value={activeSegmentDraft.style.wallColor} onChange={(event) => setSegmentDraft((current) => ({ ...current, segmentId: segment.id, style: { ...activeSegmentDraft.style, wallColor: event.target.value } }))} /></label><label>{t("wallTexture")}<select value={activeSegmentDraft.style.wallTexture} onChange={(event) => setSegmentDraft((current) => ({ ...current, segmentId: segment.id, style: restrainedExhibitionStyle(activeSegmentDraft.style, { wallTexture: event.target.value }) }))}>{EXHIBITION_WALL_TEXTURES.map(([value, key]) => <option value={value} key={value}>{t(key)}</option>)}</select></label><label>{t("trimStyle")}<select value={activeSegmentDraft.style.trimStyle} onChange={(event) => setSegmentDraft((current) => ({ ...current, segmentId: segment.id, style: { ...activeSegmentDraft.style, trimStyle: event.target.value } }))}>{EXHIBITION_TRIMS.map(([value, key]) => <option value={value} key={value}>{t(key)}</option>)}</select></label><label>{t("wainscoting")}<select value={activeSegmentDraft.style.wainscoting} onChange={(event) => setSegmentDraft((current) => ({ ...current, segmentId: segment.id, style: { ...activeSegmentDraft.style, wainscoting: event.target.value } }))}>{EXHIBITION_WAINSCOTING.map(([value, key]) => <option value={value} key={value}>{t(key)}</option>)}</select></label><label>{t("ceilingStyle")}<select value={activeSegmentDraft.style.ceilingStyle} onChange={(event) => setSegmentDraft((current) => ({ ...current, segmentId: segment.id, style: { ...activeSegmentDraft.style, ceilingStyle: event.target.value } }))}>{EXHIBITION_CEILINGS.map(([value, key]) => <option value={value} key={value}>{t(key)}</option>)}</select></label><label>{t("lightingStyle")}<select value={activeSegmentDraft.style.lightingStyle} onChange={(event) => setSegmentDraft((current) => ({ ...current, segmentId: segment.id, style: { ...activeSegmentDraft.style, lightingStyle: event.target.value } }))}>{EXHIBITION_LIGHTING.map(([value, key]) => <option value={value} key={value}>{t(key)}</option>)}</select></label><label>{t("lightWarmth")}<input type="range" min="0" max="100" value={activeSegmentDraft.style.lightWarmth} onChange={(event) => setSegmentDraft((current) => ({ ...current, segmentId: segment.id, style: { ...activeSegmentDraft.style, lightWarmth: Number(event.target.value) } }))} /></label><label className="exhibition-brightness-control">{t("lightBrightness")}<input type="range" min="45" max="120" value={activeSegmentDraft.style.lightBrightness} onChange={(event) => setSegmentDraft((current) => ({ ...current, segmentId: segment.id, style: { ...activeSegmentDraft.style, lightBrightness: Number(event.target.value) } }))} /></label><div className="exhibition-inspector-actions"><button type="button" className="primary" onClick={() => saveCurrentSegmentDraft()}>{t("saveHall")}</button><button type="button" className="danger ghost" disabled={exhibition.segments.length <= 1} onClick={async () => { const updated = await onDeleteSegment(segment.id); if (updated) { const target = updated.segments[0] || null; if (target) setSegmentDraft({ segmentId: target.id, title: target.title || "", style: normalizedExhibitionStyle({ ...target.style }) }); setSegmentId(target?.id || null); } }}>{t("deleteSegment")}</button></div></section>}
-            {selectedDisplay && userAssets.some((asset) => asset.asset_type === "frame") && <section className="exhibition-user-asset-selectors"><h2>{t("workshopFrame")}</h2><label>{t("userFrameAsset")}<select value={String(selectedDisplay.frame_style || "").startsWith("user:") ? selectedDisplay.frame_style : ""} onChange={(event) => event.target.value && onUpdatePlacement({ ...selectedDisplay, id: selectedDisplay.id, imageId: selectedDisplay.image_id, frameStyle: event.target.value, labelText: selectedDisplay.label_text, showLabel: selectedDisplay.show_label, zIndex: selectedDisplay.z_index })}><option value="">{t("chooseUserAsset")}</option>{frameOptions.filter((option) => String(option.value).startsWith("user:")).map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select></label></section>}
-            {!selectedDisplay && userAssets.some((asset) => asset.asset_type === "strip") && <section className="exhibition-user-asset-selectors"><h2>{t("workshopArchitecture")}</h2>{[["rail", "trimStyle", "trimStyle"], ["wainscoting", "wainscoting", "wainscoting"], ["cornice", "ceilingStyle", "ceilingStyle"]].map(([target, field, label]) => <label key={target}>{t(label)}<select value={String(activeSegmentDraft.style[field] || "").startsWith("user:") ? activeSegmentDraft.style[field] : ""} onChange={(event) => event.target.value && changeSegmentStyle({ [field]: event.target.value })}><option value="">{t("chooseUserAsset")}</option>{stripOptions(target).map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select></label>)}</section>}
-            {!selectedDisplay && <ExhibitionArtDirectionControls style={activeSegmentDraft.style} onChange={changeSegmentStyle} onApplyTheme={(themeId) => setSegmentDraft((current) => ({ ...current, segmentId: segment.id, style: exhibitionThemeStyle(activeSegmentDraft.style, themeId) }))} />}
-            <ExhibitionInspectorAccordion title={t("assetWorkshop")}><button type="button" className="primary" data-manage-assets onClick={() => setAssetWorkshopOpen(true)}>{t("manageAssets")}</button></ExhibitionInspectorAccordion>
+            {!selectedDisplay && <ExhibitionBackgroundControls segment={segment} draft={activeSegmentDraft} onChange={changeSegmentStyle} onClear={() => applySegmentBackground(null, null)} onChooseCollectionBackground={() => setPickerOpen("background")} onManageAssets={() => setAssetWorkshopOpen(true)} userAssets={userAssets} />}
+            {selectedDisplay && <ExhibitionSelectedExhibitControls
+              display={selectedDisplay}
+              frameOptions={frameOptions}
+              frameThicknessPreset={selectedFrameThicknessPreset}
+              segmentStyle={activeSegmentDraft.style}
+              onChangeSegmentStyle={changeSegmentStyle}
+              onDraft={(patch) => setPlacementDrafts((current) => ({ ...current, [selectedDisplay.id]: { ...selectedPlacement, ...(current[selectedDisplay.id] || {}), ...patch } }))}
+              onUpdate={onUpdatePlacement}
+              onInspect={setInspectPlacement}
+              onManageAssets={() => setAssetWorkshopOpen(true)}
+              onDuplicate={async (placementId) => { const result = await onDuplicatePlacement(placementId); if (result?.placementId) setSelectedPlacementId(result.placementId); }}
+              onDelete={async () => { if (!window.confirm(t("deleteExhibit"))) return; await onDeletePlacement(selectedDisplay.id); setSelectedPlacementId(null); }}
+            />}
             </div><div hidden={inspectorTab !== "segments"} className="exhibition-inspector-panel" data-inspector-panel="segments"><section><h2>{t("segmentsTab")}</h2><label>{t("hallSegment")}<input value={activeSegmentDraft.title} onChange={(event) => setSegmentDraft((current) => ({ ...current, segmentId: segment.id, title: event.target.value }))} /></label><div className="exhibition-inspector-actions"><button type="button" className="primary" disabled={switchingSegment} onClick={addExhibitionSegment}>{t("addSegment")}</button><button type="button" className="danger ghost" disabled={exhibition.segments.length <= 1} onClick={async () => { const updated = await onDeleteSegment(segment.id); if (updated) { const target = updated.segments[0] || null; if (target) setSegmentDraft({ segmentId: target.id, title: target.title || "", style: normalizedExhibitionStyle({ ...target.style }) }); setSegmentId(target?.id || null); } }}>{t("deleteSegment")}</button></div></section></div><div hidden={inspectorTab !== "export"} className="exhibition-inspector-panel" data-inspector-panel="export"><section className="exhibition-export-controls"><h2>{t("exportTab")}</h2><label>{t("exportScale")}<select value={exportScale} onChange={(event) => setExportScale(Number(event.target.value))}><option value="1">1x</option><option value="2">2x</option><option value="4">4x</option></select></label><span>{t("exportDimensions", "", { width: activeTemplate.width * exportScale, height: activeTemplate.height * exportScale })}</span><button type="button" className="primary" disabled={exportingSegment} onClick={exportSegment}>{exportingSegment ? t("exporting") : t("exportSegment")}</button></section></div></div></aside>}
         </div>
       </section>
@@ -6995,13 +7509,8 @@ function AlbumsView({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [copyTargetAlbumId, setCopyTargetAlbumId] = useState("");
   const [mode, setMode] = useState("preview");
-  const [previewStyle, setPreviewStyle] = useState(() => {
-    const saved = sessionStorage.getItem("albumPreviewStyle");
-    return saved === "image-only" ? "clean" : saved || "clean";
-  });
   const [albumTitle, setAlbumTitle] = useState("");
   const [albumDescription, setAlbumDescription] = useState("");
-  const [pdfQuality, setPdfQuality] = useState(() => sessionStorage.getItem("albumPdfQuality") || "medium");
   const [listExpanded, setListExpanded] = useState(() => sessionStorage.getItem("archive.albumListExpanded") === "1");
 
   useEffect(() => {
@@ -7012,14 +7521,6 @@ function AlbumsView({
     setAlbumTitle(album?.title || "");
     setAlbumDescription(album?.description || "");
   }, [album?.id, album?.title, album?.description]);
-
-  useEffect(() => {
-    sessionStorage.setItem("albumPreviewStyle", previewStyle);
-  }, [previewStyle]);
-
-  useEffect(() => {
-    sessionStorage.setItem("albumPdfQuality", pdfQuality);
-  }, [pdfQuality]);
 
   useEffect(() => {
     sessionStorage.setItem("archive.albumListExpanded", listExpanded ? "1" : "0");
@@ -7047,7 +7548,7 @@ function AlbumsView({
     }
   }
 
-  async function exportAlbumPdf() {
+  async function exportAlbumPdf(quality = "medium") {
     if (!albumPages.length) return;
     try {
       const pageSizes = albumPages.map(logicalPageSize);
@@ -7057,11 +7558,11 @@ function AlbumsView({
         html: buildAlbumExportHtml(albumPages, album.title, { pdf: true }),
         width: pdfWidth,
         height: pdfHeight,
-        quality: pdfQuality,
+        quality,
         defaultFilename: `${safeExportFilename(album.title || "album")}.pdf`
       });
       if (!result?.canceled) {
-        const label = PDF_QUALITY_OPTIONS.find((entry) => entry.value === pdfQuality)?.label || "Medium";
+        const label = PDF_QUALITY_OPTIONS.find((entry) => entry.value === quality)?.label || "Medium";
         onMessage?.(t("albumPdfExported", "", { quality: label }));
       }
     } catch (error) {
@@ -7135,31 +7636,64 @@ function AlbumsView({
     </div>
   ) : null;
   const pageActionsMenu = activePage ? (
-    <details className="toolbar-menu page-actions-menu">
-      <summary>{t("pageActions")}</summary>
-      <div className="toolbar-menu-content">
-        {pageCopyControls}
-      </div>
-    </details>
+    <FloatingToolbarMenu label={t("pageActions")} title={t("pageActions")} className="page-actions-menu">
+      {pageCopyControls}
+    </FloatingToolbarMenu>
   ) : null;
+  const pdfQualityMenu = (
+    <FloatingToolbarMenu label={t("exportPdf")} title={t("exportPdf")} className="pdf-quality-menu">
+      {({ close }) => (
+        <div className="pdf-quality-menu-content">
+          <strong>{t("pdfQuality")}</strong>
+          {PDF_QUALITY_OPTIONS.map((option) => (
+            <button type="button" className="secondary" key={option.value} onClick={() => { close(); exportAlbumPdf(option.value); }}>
+              {t(`${option.value}Quality`) || option.label}
+            </button>
+          ))}
+          <button type="button" className="ghost" onClick={close}>{t("cancel")}</button>
+        </div>
+      )}
+    </FloatingToolbarMenu>
+  );
   const modeToggle = (
     <div className="segmented mode-toggle">
       <button className={mode === "preview" ? "active" : ""} type="button" onClick={() => setMode("preview")}>{t("preview")}</button>
       <button className={mode === "edit" ? "active" : ""} type="button" onClick={() => setMode("edit")}>{t("edit")}</button>
     </div>
   );
+  const pageSelectorControl = albumPages.length > 0 ? (
+    <select className="album-page-select" value={activePageId} aria-label={t("pageSelector")} onChange={(event) => setSelectedPage(event.target.value)}>
+      {albumPages.map((page) => (
+        <option value={page.id} key={page.id}>{page.title}</option>
+      ))}
+    </select>
+  ) : null;
+  const activePageIndex = albumPages.findIndex((page) => page.id === activePageId);
+  const canGoPreviousPreviewPage = activePageIndex > 0;
+  const canGoNextPreviewPage = activePageIndex >= 0 && activePageIndex < albumPages.length - 1;
+  function movePreviewPage(direction) {
+    const nextPage = albumPages[activePageIndex + direction];
+    if (nextPage) setSelectedPage(nextPage.id);
+  }
+  const previewPageStepper = mode === "preview" && albumPages.length > 1 ? (
+    <div className="album-preview-page-stepper" aria-label={t("pageSelector")}>
+      <button type="button" className="ghost compact" aria-label={t("previousPage")} title={t("previousPage")} disabled={!canGoPreviousPreviewPage} onClick={() => movePreviewPage(-1)}>↑</button>
+      <span>{activePageIndex + 1}/{albumPages.length}</span>
+      <button type="button" className="ghost compact" aria-label={t("nextPage")} title={t("nextPage")} disabled={!canGoNextPreviewPage} onClick={() => movePreviewPage(1)}>↓</button>
+    </div>
+  ) : null;
 
   return (
     <section className={`albums-view ${mode === "edit" ? "edit-layout" : "preview-layout"} ${album && !listExpanded ? "secondary-rail-collapsed" : "secondary-rail-expanded"}`}>
       <aside className="album-list workspace-secondary-rail">
         {album && <div className="workspace-rail-actions"><button type="button" className="ghost compact back-to-list" onClick={onBackToList} title={t("backToList")}><span aria-hidden="true">←</span><span className="rail-label">{t("backToList")}</span></button><button type="button" className="ghost compact rail-toggle" onClick={() => setListExpanded((value) => !value)} title={listExpanded ? t("collapseList") : t("expandList")} aria-label={listExpanded ? t("collapseList") : t("expandList")}>{listExpanded ? "«" : "»"}</button></div>}
-        <div className="album-list-header">
+        <header className="album-list-header">
           <h1>{t("albumsTitle")}</h1>
-          <button type="button" className="secondary-new-action" data-compact-symbol="+" title={t("newAlbum")} aria-label={t("newAlbum")} onClick={onNewAlbum}>
+          <button type="button" className="primary compact secondary-new-action" data-compact-symbol="+" title={t("newAlbum")} aria-label={t("newAlbum")} onClick={onNewAlbum}>
             <span className="album-new-full">{t("newAlbum")}</span>
             <span className="album-new-short">{t("newShort")}</span>
           </button>
-        </div>
+        </header>
         {library.albums.map((entry) => (
           <button title={entry.title} className={entry.id === selectedAlbumId ? "active" : ""} key={entry.id} onClick={() => setSelectedAlbumId(entry.id)}>
             <span className="rail-monogram" aria-hidden="true">{String(entry.title || "A").slice(0, 2).toUpperCase()}</span><strong>{entry.title}</strong>
@@ -7175,33 +7709,17 @@ function AlbumsView({
           <>
             <header className="album-toolbar">
               {mode === "edit" ? (
-                <>
-                  <div className="album-header-row album-header-main">
-                    <input value={albumTitle} onChange={(event) => setAlbumTitle(event.target.value)} placeholder={t("albumName")} />
-                    <input value={albumDescription} onChange={(event) => setAlbumDescription(event.target.value)} placeholder={t("description")} />
-                    <button type="button" className="primary compact" onClick={() => onUpdateAlbum({ id: album.id, title: albumTitle, description: albumDescription })}>{t("saveAlbum")}</button>
-                    <button type="button" className="danger" onClick={() => onDeleteAlbum(album.id)}>{t("deleteAlbum")}</button>
-                    {modeToggle}
-                  </div>
-                  <form
-                    className="album-header-row album-page-row"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      onCreatePage({ album_id: album.id });
-                    }}
-                  >
-                    {album.pages.length > 0 && (
-                      <select className="album-page-select" value={activePageId} aria-label={t("pageSelector")} onChange={(event) => setSelectedPage(event.target.value)}>
-                        {album.pages.map((page) => (
-                          <option value={page.id} key={page.id}>{page.title}</option>
-                        ))}
-                      </select>
-                    )}
-                    {pageOrderControls}
-                    <button className="primary compact">{t("addPage")}</button>
-                    {pageActionsMenu}
-                  </form>
-                </>
+                <div className="album-compact-toolbar album-edit-toolbar">
+                  <input value={albumTitle} onChange={(event) => setAlbumTitle(event.target.value)} placeholder={t("albumName")} />
+                  <input value={albumDescription} onChange={(event) => setAlbumDescription(event.target.value)} placeholder={t("description")} />
+                  <button type="button" className="primary compact" onClick={() => onUpdateAlbum({ id: album.id, title: albumTitle, description: albumDescription })}>{t("saveAlbum")}</button>
+                  <button type="button" className="danger compact" onClick={() => onDeleteAlbum(album.id)}>{t("deleteAlbum")}</button>
+                  {pageSelectorControl}
+                  {pageOrderControls}
+                  <button type="button" className="secondary compact" onClick={() => onCreatePage({ album_id: album.id })}>{t("addPage")}</button>
+                  {pageActionsMenu}
+                  {modeToggle}
+                </div>
               ) : (
                 <>
                   <div className="album-title-block">
@@ -7209,40 +7727,22 @@ function AlbumsView({
                     <p>{album.description || t("digitalAlbum")}</p>
                   </div>
                   <div className="album-toolbar-actions">
+                    {pageSelectorControl}
+                    <button type="button" className="secondary" disabled={!activePage} onClick={() => exportPageImage()}>{t("exportPage")}</button>
+                    {pdfQualityMenu}
                     {modeToggle}
-                    <div className="segmented preview-style-toggle">
-                      <button className={previewStyle === "standard" ? "active" : ""} type="button" onClick={() => setPreviewStyle("standard")}>{t("designedPage")}</button>
-                      <button className={previewStyle === "clean" ? "active" : ""} type="button" onClick={() => setPreviewStyle("clean")}>{t("cleanPreview")}</button>
-                    </div>
-                    <div className="album-pdf-export-actions">
-                      <PdfQualitySelect value={pdfQuality} onChange={setPdfQuality} />
-                      <button type="button" className="secondary" onClick={exportAlbumPdf}>{t("exportPdf")}</button>
-                    </div>
                   </div>
                 </>
               )}
             </header>
 
-            {mode === "preview" && album.pages.length > 0 && (
-              <div className="album-controls album-page-selector">
-                <select className="album-page-select" value={activePageId} aria-label={t("pageSelector")} onChange={(event) => setSelectedPage(event.target.value)}>
-                  {album.pages.map((page) => (
-                    <option value={page.id} key={page.id}>{page.title}</option>
-                  ))}
-                </select>
-                {pageOrderControls}
-                {pageActionsMenu}
-                <button type="button" className="secondary" onClick={() => exportPageImage()}>{t("exportPage")}</button>
-              </div>
-            )}
-
             <div className="album-pages">
+              {previewPageStepper}
               {visiblePages.map((page) => (
                 <AlbumPage
                   page={page}
-                  key={page.id}
+                  key="active-album-page"
                   mode={mode}
-                  previewStyle={previewStyle}
                   onRemoveItemFromPage={onRemoveItemFromPage}
                   onUpdatePage={onUpdatePage}
                   onDeletePage={onDeletePage}
@@ -8170,7 +8670,7 @@ function AlbumItemPicker({ countries, entityGroups = [], types, pageId, title = 
   );
 }
 
-function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePage, onDeletePage, onUpdatePageItem, onAddItemToPage, onAddTextToPage, onOpenItemPicker, onPickBackground }) {
+function AlbumPage({ page, mode, onRemoveItemFromPage, onUpdatePage, onDeletePage, onUpdatePageItem, onAddItemToPage, onAddTextToPage, onOpenItemPicker, onPickBackground }) {
   const [viewerIndex, setViewerIndex] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
   const [draftItems, setDraftItems] = useState(page.items || []);
@@ -8188,11 +8688,13 @@ function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePag
   const interactionCleanupRef = useRef(null);
   const textEditRefs = useRef(new Map());
   const textCommitTimersRef = useRef(new Map());
+  const previewScaleRef = useRef(1);
+  const previewWheelRef = useRef({ delta: 0, clientX: 0, clientY: 0 });
+  const previewWheelFrameRef = useRef(0);
   const { language, t } = useI18n();
   const [previewScale, setPreviewScale] = useState(1);
   const { width: pageWidth, height: pageHeight } = logicalPageSize(page);
   const scale = mode === "edit" ? editorZoom : previewScale;
-  const cleanPreview = mode === "preview" && previewStyle === "clean";
   const sortedItems = [...draftItems].sort((a, b) => Number(a.z_index || 0) - Number(b.z_index || 0));
   const selectedEntries = draftItems.filter((entry) => selectedIds.includes(entry.id));
   const selectedEntry = selectedEntries.length === 1 ? selectedEntries[0] : null;
@@ -8232,10 +8734,15 @@ function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePag
   }, [selectedIds]);
 
   useEffect(() => {
+    previewScaleRef.current = previewScale;
+  }, [previewScale]);
+
+  useLayoutEffect(() => {
     setDraftItems(page.items || []);
     setSelectedIds([]);
     setSelectionRect(null);
     setEditingTextId("");
+    setViewerIndex(null);
     cleanupInteraction();
   }, [page.id]);
 
@@ -8346,9 +8853,10 @@ function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePag
   function calculateFitScale(node) {
     const measurement = measureCanvasViewport(node);
     if (!measurement) return editorZoom;
-    const { availableWidth } = measurement;
+    const { availableWidth, availableHeight } = measurement;
     const fitWidth = (availableWidth - 8) / pageWidth;
-    return clamp(fitWidth, MIN_EDITOR_ZOOM, MAX_EDITOR_ZOOM);
+    const fitHeight = (availableHeight - 8) / pageHeight;
+    return clamp(Math.min(fitWidth, fitHeight), MIN_EDITOR_ZOOM, MAX_EDITOR_ZOOM);
   }
 
   function fitPage(reason = "manual") {
@@ -8404,16 +8912,86 @@ function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePag
   }, [mode, editorZoom, pageWidth, pageHeight]);
 
   useLayoutEffect(() => {
+    if (mode !== "edit") return undefined;
+    fitPage("auto");
+    return undefined;
+  }, [mode, page.id, pageWidth, pageHeight]);
+
+  function applyPreviewZoom(nextValue, anchor = null) {
+    const node = canvasViewportRef.current;
+    const previousScale = previewScaleRef.current;
+    const nextScale = clamp(Number(nextValue || 1), 0.2, 4);
+    if (!node || Math.abs(nextScale - previousScale) < 0.001) return;
+    const canvas = node.querySelector(".album-canvas");
+    const canvasRect = canvas?.getBoundingClientRect();
+    const anchorPoint = anchor && canvasRect ? {
+      clientX: anchor.clientX,
+      clientY: anchor.clientY,
+      logicalX: (anchor.clientX - canvasRect.left) / previousScale,
+      logicalY: (anchor.clientY - canvasRect.top) / previousScale
+    } : null;
+    const centerX = (node.scrollLeft + node.clientWidth / 2) / Math.max(1, pageWidth * previousScale);
+    const centerY = (node.scrollTop + node.clientHeight / 2) / Math.max(1, pageHeight * previousScale);
+    previewScaleRef.current = nextScale;
+    setPreviewScale(nextScale);
+    window.requestAnimationFrame(() => {
+      if (!node.isConnected) return;
+      if (anchorPoint && canvas) {
+        const nextRect = canvas.getBoundingClientRect();
+        node.scrollLeft += nextRect.left + anchorPoint.logicalX * nextScale - anchorPoint.clientX;
+        node.scrollTop += nextRect.top + anchorPoint.logicalY * nextScale - anchorPoint.clientY;
+      } else {
+        node.scrollLeft = Math.max(0, centerX * pageWidth * nextScale - node.clientWidth / 2);
+        node.scrollTop = Math.max(0, centerY * pageHeight * nextScale - node.clientHeight / 2);
+      }
+    });
+  }
+
+  function handlePreviewWheel(event) {
+    if (mode !== "preview" || (!event.ctrlKey && !event.metaKey)) return;
+    event.preventDefault();
+    const nativeEvent = event.nativeEvent || event;
+    nativeEvent.__archiveAlbumPreviewWheelHandled = true;
+    previewWheelRef.current.delta += event.deltaY;
+    previewWheelRef.current.clientX = event.clientX;
+    previewWheelRef.current.clientY = event.clientY;
+    if (previewWheelFrameRef.current) return;
+    previewWheelFrameRef.current = window.requestAnimationFrame(() => {
+      previewWheelFrameRef.current = 0;
+      const payload = previewWheelRef.current;
+      const delta = payload.delta;
+      previewWheelRef.current = { delta: 0, clientX: payload.clientX, clientY: payload.clientY };
+      applyPreviewZoom(previewScaleRef.current * Math.exp(-delta * 0.0015), payload);
+    });
+  }
+
+  useEffect(() => {
+    if (mode !== "preview") return undefined;
+    const node = canvasViewportRef.current;
+    if (!node) return undefined;
+    node.addEventListener("wheel", handlePreviewWheel, { passive: false });
+    return () => {
+      node.removeEventListener("wheel", handlePreviewWheel);
+      if (previewWheelFrameRef.current) window.cancelAnimationFrame(previewWheelFrameRef.current);
+      previewWheelFrameRef.current = 0;
+      previewWheelRef.current.delta = 0;
+    };
+  }, [mode, pageWidth, pageHeight]);
+
+  useLayoutEffect(() => {
     if (mode !== "preview") return undefined;
     const node = canvasViewportRef.current;
     if (!node) return undefined;
     const measurement = measureCanvasViewport(node);
     if (measurement) {
-      const nextScale = clamp(measurement.availableWidth / pageWidth, 0.2, 1);
+      const fitWidth = (measurement.availableWidth - 8) / pageWidth;
+      const fitHeight = (measurement.availableHeight - 8) / pageHeight;
+      const nextScale = clamp(Math.min(fitWidth, fitHeight), 0.2, 1);
+      previewScaleRef.current = nextScale;
       setPreviewScale((current) => (Math.abs(current - nextScale) < 0.01 ? current : nextScale));
     }
     return undefined;
-  }, [mode, page.id, pageWidth]);
+  }, [mode, page.id, pageWidth, pageHeight]);
 
   function pushHistory(items = draftItems) {
     setHistory((current) => [...current.slice(-24), snapshotItems(items)]);
@@ -8784,7 +9362,7 @@ function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePag
     const image = resolveAlbumPlacementImage(entry);
     if (localStorage.getItem("archiveDebugMedia") === "1") {
       console.log("[media] album preview placement click", {
-        previewStyle: cleanPreview ? "Clean" : "Designed",
+        previewMode: "Preview",
         placementId: entry.id,
         itemId: entry.item_id,
         imageId: entry.image_id || entry.imageId || entry.selected_image_id || image?.id,
@@ -8915,11 +9493,7 @@ function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePag
   }
 
   return (
-    <article className={`album-page canvas-page album-page-${mode} ${cleanPreview ? "clean-preview image-only-preview" : ""}`}>
-      <header>
-        <span>Page {page.page_number}</span>
-        <h2>{page.title}</h2>
-      </header>
+    <article className={`album-page canvas-page album-page-${mode}`}>
       {mode === "edit" && (
         <div className="album-editor-tools">
           <PageActionBar
@@ -9061,7 +9635,7 @@ function AlbumPage({ page, mode, previewStyle, onRemoveItemFromPage, onUpdatePag
                       <button className="placement-image-button" type="button" onClick={() => openViewer(entry)}>
                         <PlacementImage entry={entry} src={entry.cover?.thumbnailUrl || entry.cover?.url} alt={entry.title} context={`Album placement: ${entry.title}`} />
                       </button>
-                      {!cleanPreview && (entry.show_title || entry.show_caption || entry.show_metadata) && (
+                      {(entry.show_title || entry.show_caption || entry.show_metadata) && (
                         <div className="placement-text">
                           {entry.show_title && <strong>{entry.title}</strong>}
                           {entry.show_caption && entry.caption && <span>{entry.caption}</span>}
@@ -9478,26 +10052,6 @@ function MultiPlacementInspector({ entries, saveStatus, onUpdateMany, onLayer, o
       </div>
       <button type="button" className="danger" onClick={onRemove}>Delete selected placements</button>
     </div>
-  );
-}
-
-function PdfQualitySelect({ value, onChange }) {
-  const { t } = useI18n();
-  const labels = {
-    original: t("originalQuality"),
-    high: t("highQuality"),
-    medium: t("mediumQuality"),
-    low: t("lowQuality")
-  };
-  return (
-    <label className="pdf-quality-select">
-      <span>{t("pdfQuality")}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)}>
-        {PDF_QUALITY_OPTIONS.map((option) => (
-          <option value={option.value} key={option.value}>{labels[option.value] || option.label}</option>
-        ))}
-      </select>
-    </label>
   );
 }
 

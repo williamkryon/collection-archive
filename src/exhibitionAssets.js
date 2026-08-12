@@ -1,18 +1,33 @@
 import manifest from "./assets/exhibition/victorian-cabinet-hall/manifest.json";
 import subtlePlaster from "./assets/exhibition/victorian-cabinet-hall/walls/subtle-plaster-overlay.svg?raw";
-import warmPlaster from "./assets/exhibition/victorian-cabinet-hall/walls/warm-plaster.svg?raw";
-import linenCloth from "./assets/exhibition/victorian-cabinet-hall/walls/linen-cloth.svg?raw";
-import victorianDamask from "./assets/exhibition/victorian-cabinet-hall/walls/victorian-damask.svg?raw";
-import crownMolding from "./assets/exhibition/victorian-cabinet-hall/architecture/crown-molding.svg?raw";
-import carvedWainscoting from "./assets/exhibition/victorian-cabinet-hall/architecture/carved-wainscoting.svg?raw";
-import chairRail from "./assets/exhibition/victorian-cabinet-hall/architecture/chair-rail.svg?raw";
-import vaultedArch from "./assets/exhibition/victorian-cabinet-hall/architecture/vaulted-arch.svg?raw";
-import brassSconce from "./assets/exhibition/victorian-cabinet-hall/lighting/brass-sconce.svg?raw";
-import warmLightWash from "./assets/exhibition/victorian-cabinet-hall/lighting/warm-light-wash.svg?raw";
-import ornateGoldFrame from "./assets/exhibition/victorian-cabinet-hall/frames/ornate-gold-9slice.svg?raw";
-import carvedWoodFrame from "./assets/exhibition/victorian-cabinet-hall/frames/carved-dark-wood-9slice.svg?raw";
-import blackGalleryFrame from "./assets/exhibition/victorian-cabinet-hall/frames/black-gallery-9slice.svg?raw";
-import warmWhiteMatFrame from "./assets/exhibition/victorian-cabinet-hall/frames/warm-white-mat-9slice.svg?raw";
+import ornateGoldFrame from "./assets/exhibition/victorian-cabinet-hall/frames/realistic/ornate-gold-9slice.webp";
+import carvedWoodFrame from "./assets/exhibition/victorian-cabinet-hall/frames/realistic/carved-dark-wood-9slice.webp";
+import blackGalleryFrame from "./assets/exhibition/victorian-cabinet-hall/frames/realistic/black-gallery-9slice.webp";
+import warmWhiteMatFrame from "./assets/exhibition/victorian-cabinet-hall/frames/realistic/warm-white-mat-9slice.webp";
+import walnutWallShelf from "./assets/exhibition/victorian-cabinet-hall/furniture/walnut-wall-shelf.webp";
+import limestonePedestal from "./assets/exhibition/victorian-cabinet-hall/furniture/limestone-pedestal.webp";
+import realisticPlaster from "./assets/exhibition/victorian-cabinet-hall/walls/realistic/warm-plaster.webp";
+import realisticLinen from "./assets/exhibition/victorian-cabinet-hall/walls/realistic/linen-wallcovering.webp";
+import realisticWallpaper from "./assets/exhibition/victorian-cabinet-hall/walls/realistic/victorian-botanical.webp";
+import lowOakWainscot from "./assets/exhibition/victorian-cabinet-hall/architecture/realistic/continuous/low-oak-wainscot.webp";
+import walnutSquareWainscot from "./assets/exhibition/victorian-cabinet-hall/architecture/realistic/continuous/walnut-square-wainscot.webp";
+import carvedMahoganyWainscot from "./assets/exhibition/victorian-cabinet-hall/architecture/realistic/continuous/carved-mahogany-wainscot.webp";
+import greenFabricWainscot from "./assets/exhibition/victorian-cabinet-hall/architecture/realistic/continuous/green-fabric-wainscot.webp";
+import burgundyFabricWainscot from "./assets/exhibition/victorian-cabinet-hall/architecture/realistic/continuous/burgundy-fabric-wainscot.webp";
+import whiteClassicalWainscot from "./assets/exhibition/victorian-cabinet-hall/architecture/realistic/continuous/white-classical-wainscot.webp";
+import blackMuseumWainscot from "./assets/exhibition/victorian-cabinet-hall/architecture/realistic/continuous/black-museum-wainscot.webp";
+import simpleWhiteUpperStrip from "./assets/exhibition/victorian-cabinet-hall/architecture/realistic/continuous/simple-white-upper-strip.webp";
+import gildedUpperStrip from "./assets/exhibition/victorian-cabinet-hall/architecture/realistic/continuous/gilded-upper-strip.webp";
+import darkWalnutUpperStrip from "./assets/exhibition/victorian-cabinet-hall/architecture/realistic/continuous/dark-walnut-upper-strip.webp";
+import simpleWhiteRail from "./assets/exhibition/victorian-cabinet-hall/architecture/realistic/continuous/simple-white-rail.webp";
+import darkWalnutRail from "./assets/exhibition/victorian-cabinet-hall/architecture/realistic/continuous/dark-walnut-rail.webp";
+import carvedMahoganyRail from "./assets/exhibition/victorian-cabinet-hall/architecture/realistic/continuous/carved-mahogany-rail.webp";
+import antiqueBrassRail from "./assets/exhibition/victorian-cabinet-hall/architecture/realistic/continuous/antique-brass-rail.webp";
+import realisticTuscanEntablature from "./assets/exhibition/victorian-cabinet-hall/architecture/realistic/continuous/tuscan-entablature.webp";
+import realisticDoricEntablature from "./assets/exhibition/victorian-cabinet-hall/architecture/realistic/continuous/doric-entablature.webp";
+import realisticIonicEntablature from "./assets/exhibition/victorian-cabinet-hall/architecture/realistic/continuous/ionic-entablature.webp";
+import realisticCorinthianEntablature from "./assets/exhibition/victorian-cabinet-hall/architecture/realistic/continuous/corinthian-entablature.webp";
+import realisticCompositeEntablature from "./assets/exhibition/victorian-cabinet-hall/architecture/realistic/continuous/composite-entablature.webp";
 
 function svgDataUrl(source) {
   const bytes = new TextEncoder().encode(source);
@@ -32,25 +47,51 @@ export const VICTORIAN_CABINET_HALL = Object.freeze({
   scene: Object.freeze({ ...manifest.scene }),
   walls: Object.freeze({
     plain: svgDataUrl(subtlePlaster),
-    plaster: svgDataUrl(warmPlaster),
-    linen: svgDataUrl(linenCloth),
-    wallpaper: svgDataUrl(victorianDamask)
+    plaster: realisticPlaster,
+    linen: realisticLinen,
+    wallpaper: realisticWallpaper
   }),
   architecture: Object.freeze({
-    crownMolding: svgDataUrl(crownMolding),
-    wainscoting: svgDataUrl(carvedWainscoting),
-    chairRail: svgDataUrl(chairRail),
-    vaultedArch: svgDataUrl(vaultedArch)
-  }),
-  lighting: Object.freeze({
-    brassSconce: svgDataUrl(brassSconce),
-    lightWash: svgDataUrl(warmLightWash)
+    crownMolding: simpleWhiteUpperStrip,
+    upperStrips: Object.freeze({
+      "simple-crown": simpleWhiteUpperStrip,
+      "gilded-classical": gildedUpperStrip,
+      "dark-wood": darkWalnutUpperStrip
+    }),
+    classicalEntablatures: Object.freeze({
+      tuscan: realisticTuscanEntablature,
+      doric: realisticDoricEntablature,
+      ionic: realisticIonicEntablature,
+      corinthian: realisticCorinthianEntablature,
+      composite: realisticCompositeEntablature
+    }),
+    wainscoting: walnutSquareWainscot,
+    wainscotings: Object.freeze({
+      "low-wood": lowOakWainscot,
+      "walnut-square": walnutSquareWainscot,
+      "carved-mahogany": carvedMahoganyWainscot,
+      "green-fabric": greenFabricWainscot,
+      "burgundy-fabric": burgundyFabricWainscot,
+      "white-classical": whiteClassicalWainscot,
+      "black-museum": blackMuseumWainscot
+    }),
+    chairRail: darkWalnutRail,
+    chairRails: Object.freeze({
+      "simple-white": simpleWhiteRail,
+      "dark-walnut": darkWalnutRail,
+      "carved-mahogany": carvedMahoganyRail,
+      brass: antiqueBrassRail
+    })
   }),
   frames: Object.freeze({
-    "ornate-gold": svgDataUrl(ornateGoldFrame),
-    "dark-wood": svgDataUrl(carvedWoodFrame),
-    "black-gallery": svgDataUrl(blackGalleryFrame),
-    "white-mat": svgDataUrl(warmWhiteMatFrame)
+    "ornate-gold": ornateGoldFrame,
+    "dark-wood": carvedWoodFrame,
+    "black-gallery": blackGalleryFrame,
+    "white-mat": warmWhiteMatFrame
+  }),
+  furniture: Object.freeze({
+    "walnut-wall-shelf": walnutWallShelf,
+    "limestone-pedestal": limestonePedestal
   })
 });
 
@@ -98,17 +139,6 @@ export const EXHIBITION_SEGMENT_TEMPLATES = Object.freeze({
     lightsTop: 8,
     lightsSide: 4.5,
     defaultPlacement: Object.freeze({ x: 7, y: 10, width: 16, height: 42 })
-  }),
-  arch: Object.freeze({
-    id: "arch",
-    width: 1600,
-    height: 1400,
-    safe: Object.freeze({ top: 21, right: 7, bottom: 8, left: 7 }),
-    plaqueTop: 20,
-    plaqueSide: 8,
-    lightsTop: 20,
-    lightsSide: 7,
-    defaultPlacement: Object.freeze({ x: 11, y: 15, width: 23, height: 36 })
   })
 });
 
@@ -120,6 +150,7 @@ function builtInFrame(asset, slice, thicknessPercent, insetPercent, matInsetPerc
   return Object.freeze({
     asset,
     slice,
+    generation: "realistic-v2",
     thicknessPercent,
     border: `clamp(calc(5px * var(--scene-export-scale, 1)), ${thicknessPercent}cqmin, calc(72px * var(--scene-export-scale, 1)))`,
     inset: `clamp(calc(3px * var(--scene-export-scale, 1)), ${insetPercent}cqmin, calc(58px * var(--scene-export-scale, 1)))`,
@@ -128,27 +159,21 @@ function builtInFrame(asset, slice, thicknessPercent, insetPercent, matInsetPerc
 }
 
 const FRAME_PRESENTATIONS = Object.freeze({
-  "black-gallery": builtInFrame(VICTORIAN_CABINET_HALL.frames["black-gallery"], 72, 5.5, 4.6, 0.8),
-  "dark-wood": builtInFrame(VICTORIAN_CABINET_HALL.frames["dark-wood"], 92, 7, 5.8, 0.8),
-  "white-mat": builtInFrame(VICTORIAN_CABINET_HALL.frames["white-mat"], 72, 4.5, 3.7, 4.2),
-  "ornate-gold": builtInFrame(VICTORIAN_CABINET_HALL.frames["ornate-gold"], 92, 8.5, 7, 0.9)
+  none: Object.freeze({
+    none: true,
+    asset: "",
+    slice: 0,
+    thicknessPercent: 0,
+    border: "0px",
+    inset: "0px",
+    matInset: "0px"
+  }),
+  "black-gallery": builtInFrame(VICTORIAN_CABINET_HALL.frames["black-gallery"], 190, 5.5, 4.6, 0.8),
+  "dark-wood": builtInFrame(VICTORIAN_CABINET_HALL.frames["dark-wood"], 270, 7, 5.8, 0.8),
+  "white-mat": builtInFrame(VICTORIAN_CABINET_HALL.frames["white-mat"], 245, 4.5, 3.7, 4.2),
+  "ornate-gold": builtInFrame(VICTORIAN_CABINET_HALL.frames["ornate-gold"], 265, 8.5, 7, 0.9)
 });
 
 export function exhibitionFramePresentation(value) {
   return FRAME_PRESENTATIONS[value] || FRAME_PRESENTATIONS["black-gallery"];
-}
-
-export const EXHIBITION_DECOR_ASSETS = Object.freeze({
-  "small-plant": Object.freeze({ status: "placeholder", asset: null, perspective: "front", lightDirection: "upper-left", contactShadow: false }),
-  "tall-palm": Object.freeze({ status: "placeholder", asset: null, perspective: "front", lightDirection: "upper-left", contactShadow: false }),
-  "plant-stand": Object.freeze({ status: "placeholder", asset: null, perspective: "front", lightDirection: "upper-left", contactShadow: false }),
-  "wooden-bench": Object.freeze({ status: "placeholder", asset: null, perspective: "front", lightDirection: "upper-left", contactShadow: false }),
-  "leather-bench": Object.freeze({ status: "placeholder", asset: null, perspective: "front", lightDirection: "upper-left", contactShadow: false }),
-  "velvet-bench": Object.freeze({ status: "placeholder", asset: null, perspective: "front", lightDirection: "upper-left", contactShadow: false }),
-  "rope-barrier": Object.freeze({ status: "placeholder", asset: null, perspective: "front", lightDirection: "upper-left", contactShadow: false }),
-  "sculpture-pedestal": Object.freeze({ status: "placeholder", asset: null, perspective: "front", lightDirection: "upper-left", contactShadow: false })
-});
-
-export function exhibitionDecorPresentation(value) {
-  return EXHIBITION_DECOR_ASSETS[value] || null;
 }

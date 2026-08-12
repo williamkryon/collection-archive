@@ -37,6 +37,23 @@ try {
   assert.notStrictEqual(existingThumb.thumbnailUrl, existingThumb.url, "Existing thumbnail should be preferred over original image");
   assert.strictEqual(existingThumb.thumbnailMissing, false, "Existing thumbnail should not be marked missing");
 
+  const requestCache = new Map();
+  const originalStatSync = fs.statSync;
+  let statCalls = 0;
+  fs.statSync = (...args) => {
+    statCalls += 1;
+    return originalStatSync(...args);
+  };
+  try {
+    imageDisplayUrls({ image_path: imagePath, thumbnail_path: thumbPath }, paths, requestCache);
+    const firstPassCalls = statCalls;
+    imageDisplayUrls({ image_path: imagePath, thumbnail_path: thumbPath }, paths, requestCache);
+    assert.strictEqual(firstPassCalls, 2, "First cached lookup should stat the image and thumbnail once each");
+    assert.strictEqual(statCalls, firstPassCalls, "Repeated paths in one query should reuse cached file state");
+  } finally {
+    fs.statSync = originalStatSync;
+  }
+
   fs.rmSync(imagePath);
   const missingImage = imageDisplayUrls({
     image_path: imagePath,

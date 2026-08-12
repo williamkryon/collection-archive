@@ -15,6 +15,7 @@
     "test:backup-restore": "C:\\Progra~1\\nodejs\\node.exe scripts/test-backup-restore.cjs",
     "test:health": "C:\\Progra~1\\nodejs\\node.exe scripts/test-archive-health.cjs",
     "test:thumbnail-fallback": "C:\\Progra~1\\nodejs\\node.exe scripts/test-thumbnail-fallback.cjs",
+    "test:cutout": "C:\\Progra~1\\nodejs\\node.exe scripts/test-image-cutout.cjs",
     "smoke:album": "C:\\Progra~1\\nodejs\\node.exe scripts/smoke-album-layout.cjs",
     "smoke:exhibition": "C:\\Progra~1\\nodejs\\node.exe scripts/smoke-exhibition.cjs",
     "smoke:label-cards": "C:\\Progra~1\\nodejs\\node.exe scripts/smoke-label-cards.cjs",
@@ -23,6 +24,7 @@
   },
   "dependencies": {
     "heic-convert": "^2.1.0",
+    "onnxruntime-node": "^1.20.1",
     "pdfjs-dist": "4.10.38",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
@@ -57,13 +59,18 @@
       "!**/*.sqlite-wal",
       "!**/release/**/*",
       "!**/out/**/*",
-      "!**/docs/screenshots/**/*"
+      "!**/docs/screenshots/**/*",
+      "!node_modules/onnxruntime-node/bin/napi-v3/darwin/**/*",
+      "!node_modules/onnxruntime-node/bin/napi-v3/linux/**/*",
+      "!node_modules/onnxruntime-node/bin/napi-v3/win32/arm64/**/*"
     ],
     "asar": true,
     "asarUnpack": [
       "node_modules/sharp/**/*",
       "node_modules/@img/**/*",
-      "node_modules/sql.js/dist/**/*"
+      "node_modules/sql.js/dist/**/*",
+      "node_modules/onnxruntime-node/**/*",
+      "electron/models/*.onnx"
     ],
     "win": {
       "target": [

@@ -1,7 +1,7 @@
 {
   "id": "victorian-cabinet-hall",
   "name": "Victorian Cabinet Hall",
-  "version": 1,
+  "version": 5,
   "scene": {
     "width": 1920,
     "height": 1080
@@ -9,38 +9,69 @@
   "layers": {
     "walls": {
       "plain": "walls/subtle-plaster-overlay.svg",
-      "plaster": "walls/warm-plaster.svg",
-      "linen": "walls/linen-cloth.svg",
-      "wallpaper": "walls/victorian-damask.svg"
+      "plaster": "walls/realistic/warm-plaster.webp",
+      "linen": "walls/realistic/linen-wallcovering.webp",
+      "wallpaper": "walls/realistic/victorian-botanical.webp"
     },
-    "crownMolding": "architecture/crown-molding.svg",
-    "wainscoting": "architecture/carved-wainscoting.svg",
-    "chairRail": "architecture/chair-rail.svg",
-    "vaultedArch": "architecture/vaulted-arch.svg",
-    "brassSconce": "lighting/brass-sconce.svg",
-    "lightWash": "lighting/warm-light-wash.svg"
+    "upperStrips": {
+      "simple-crown": "architecture/realistic/continuous/simple-white-upper-strip.webp",
+      "gilded-classical": "architecture/realistic/continuous/gilded-upper-strip.webp",
+      "dark-wood": "architecture/realistic/continuous/dark-walnut-upper-strip.webp"
+    },
+    "classicalEntablatures": {
+      "tuscan": "architecture/realistic/continuous/tuscan-entablature.webp",
+      "doric": "architecture/realistic/continuous/doric-entablature.webp",
+      "ionic": "architecture/realistic/continuous/ionic-entablature.webp",
+      "corinthian": "architecture/realistic/continuous/corinthian-entablature.webp",
+      "composite": "architecture/realistic/continuous/composite-entablature.webp"
+    },
+    "wainscoting": {
+      "low-wood": "architecture/realistic/continuous/low-oak-wainscot.webp",
+      "walnut-square": "architecture/realistic/continuous/walnut-square-wainscot.webp",
+      "carved-mahogany": "architecture/realistic/continuous/carved-mahogany-wainscot.webp",
+      "green-fabric": "architecture/realistic/continuous/green-fabric-wainscot.webp",
+      "burgundy-fabric": "architecture/realistic/continuous/burgundy-fabric-wainscot.webp",
+      "white-classical": "architecture/realistic/continuous/white-classical-wainscot.webp",
+      "black-museum": "architecture/realistic/continuous/black-museum-wainscot.webp"
+    },
+    "chairRails": {
+      "simple-white": "architecture/realistic/continuous/simple-white-rail.webp",
+      "dark-walnut": "architecture/realistic/continuous/dark-walnut-rail.webp",
+      "carved-mahogany": "architecture/realistic/continuous/carved-mahogany-rail.webp",
+      "brass": "architecture/realistic/continuous/antique-brass-rail.webp"
+    }
   },
   "frames": {
     "ornate-gold": {
-      "source": "frames/ornate-gold-9slice.svg",
-      "slice": 92,
-      "status": "placeholder-art"
+      "source": "frames/realistic/ornate-gold-9slice.webp",
+      "slice": 265,
+      "status": "production-realistic"
     },
     "dark-wood": {
-      "source": "frames/carved-dark-wood-9slice.svg",
-      "slice": 92,
-      "status": "placeholder-art"
+      "source": "frames/realistic/carved-dark-wood-9slice.webp",
+      "slice": 270,
+      "status": "production-realistic"
     },
     "black-gallery": {
-      "source": "frames/black-gallery-9slice.svg",
-      "slice": 72,
-      "status": "production"
+      "source": "frames/realistic/black-gallery-9slice.webp",
+      "slice": 190,
+      "status": "production-realistic"
     },
     "white-mat": {
-      "source": "frames/warm-white-mat-9slice.svg",
-      "slice": 72,
+      "source": "frames/realistic/warm-white-mat-9slice.webp",
+      "slice": 245,
+      "status": "production-realistic"
+    }
+  },
+  "furniture": {
+    "walnut-wall-shelf": {
+      "source": "furniture/walnut-wall-shelf.webp",
+      "status": "production"
+    },
+    "limestone-pedestal": {
+      "source": "furniture/limestone-pedestal.webp",
       "status": "production"
     }
   },
-  "notes": "The asset pipeline and 9-slice behavior are production-ready. Ornate gold and carved wood artwork are explicitly replaceable local placeholders."
+  "notes": "Wall surfaces, upper strips, mouldings, and wainscoting render as one integrated wall assembly with shared ambient light and architectural transition shadows. Built-in architectural assets use normalized seamless modules; their original full-width source renders remain as source history. Display furniture and frames use production local raster assets."
 }

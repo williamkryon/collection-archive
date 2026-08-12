@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="330" viewBox="0 0 1200 330" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <linearGradient id="stone" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#fffef9"/>
+      <stop offset=".3" stop-color="#ece8df"/>
+      <stop offset=".66" stop-color="#c7c1b6"/>
+      <stop offset=".84" stop-color="#f6f3ec"/>
+      <stop offset="1" stop-color="#a7a096"/>
+    </linearGradient>
+    <linearGradient id="curve" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#fff"/>
+      <stop offset=".2" stop-color="#f8f6f0"/>
+      <stop offset=".56" stop-color="#c7c1b6"/>
+      <stop offset=".76" stop-color="#888279"/>
+      <stop offset="1" stop-color="#eeeae2"/>
+    </linearGradient>
+    <linearGradient id="soffit" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#68645e"/>
+      <stop offset=".42" stop-color="#918c84"/>
+      <stop offset="1" stop-color="#d8d4cc"/>
+    </linearGradient>
+    <linearGradient id="frieze" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#b9b3a8"/>
+      <stop offset=".08" stop-color="#e9e5dd"/>
+      <stop offset=".5" stop-color="#f8f5ef"/>
+      <stop offset=".92" stop-color="#d0cabf"/>
+      <stop offset="1" stop-color="#8f8980"/>
+    </linearGradient>
+    <filter id="cast" x="-10%" y="-10%" width="120%" height="145%">
+      <feDropShadow dx="0" dy="7" stdDeviation="6" flood-color="#38342f" flood-opacity=".48"/>
+    </filter>
+  </defs>
+  <g>
+    <!-- Cornice -->
+    <rect width="1200" height="10" fill="#fcfbf6"/>
+    <rect y="10" width="1200" height="9" fill="#b9b3aa"/>
+    <path d="M0 19h1200v31c-16 0-25 8-29 21H29C25 58 16 50 0 50z" fill="url(#curve)"/>
+    <rect x="-1" y="50" width="1202" height="8" fill="#faf8f2" stroke="#817b72"/>
+    <rect x="-1" y="58" width="1202" height="37" fill="url(#stone)" stroke="#817b72"/>
+    <rect y="95" width="1200" height="20" fill="url(#soffit)"/>
+    <rect x="-1" y="115" width="1202" height="8" fill="#f6f3ec" stroke="#817b72"/>
+    <path d="M0 123h1200v20c-18 0-27 6-31 17H31c-4-11-13-17-31-17z" fill="url(#curve)"/>
+    <rect x="-1" y="160" width="1202" height="8" fill="#ede9e1" stroke="#817b72"/>
+
+    <!-- Plain frieze -->
+    <rect x="-1" y="168" width="1202" height="80" fill="url(#frieze)" stroke="#8b857c"/>
+    <path d="M0 176h1200M0 239h1200" stroke="#fff" stroke-opacity=".58"/>
+
+    <!-- Single-fascia architrave -->
+    <rect x="-1" y="248" width="1202" height="11" fill="#f7f4ed" stroke="#817b72"/>
+    <rect x="-1" y="259" width="1202" height="49" fill="url(#stone)" stroke="#8b857c"/>
+    <path d="M0 259h1200v8H0z" fill="#fff" fill-opacity=".46"/>
+    <path d="M0 308h1200v12c-18 0-26 3-30 10H30c-4-7-12-10-30-10z" fill="url(#curve)"/>
+  </g>
+</svg>

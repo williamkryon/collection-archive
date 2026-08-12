@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="440" viewBox="0 0 1200 440" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <linearGradient id="stone" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#fffefa"/><stop offset=".3" stop-color="#eae6dd"/><stop offset=".68" stop-color="#aaa49a"/><stop offset="1" stop-color="#f5f2eb"/>
+    </linearGradient>
+    <linearGradient id="curve" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#fff"/><stop offset=".2" stop-color="#f5f2eb"/><stop offset=".55" stop-color="#b9b3a8"/><stop offset=".74" stop-color="#716d66"/><stop offset="1" stop-color="#e8e4dc"/>
+    </linearGradient>
+    <linearGradient id="soffit" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#55524e"/><stop offset=".42" stop-color="#7d7972"/><stop offset="1" stop-color="#c8c4bd"/>
+    </linearGradient>
+    <linearGradient id="frieze" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#a8a298"/><stop offset=".09" stop-color="#e5e1d9"/><stop offset=".52" stop-color="#f8f5ef"/><stop offset=".92" stop-color="#c7c1b7"/><stop offset="1" stop-color="#858078"/>
+    </linearGradient>
+    <linearGradient id="bracket" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#fffefa"/><stop offset=".28" stop-color="#ddd9d0"/><stop offset=".58" stop-color="#a39d93"/><stop offset=".78" stop-color="#706b64"/><stop offset="1" stop-color="#ece9e2"/>
+    </linearGradient>
+    <linearGradient id="dentil" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#faf9f4"/><stop offset=".5" stop-color="#c9c4bb"/><stop offset="1" stop-color="#77726b"/>
+    </linearGradient>
+    <filter id="cast" x="-10%" y="-10%" width="120%" height="150%">
+      <feDropShadow dx="0" dy="9" stdDeviation="7" flood-color="#302e2a" flood-opacity=".54"/>
+    </filter>
+    <g id="modillion">
+      <path d="M4 0h132v13H0z" fill="#f8f6ef" stroke="#716d66"/>
+      <path d="M18 13h104v15H16z" fill="#c3beb5" stroke="#716d66"/>
+      <path d="M28 28h78c-18 5-21 17-24 31-5 22-18 37-43 48H18V91c20-8 31-21 34-39 3-16 8-22 22-24z" fill="url(#bracket)" stroke="#68645e" stroke-width="1.5"/>
+      <path d="M81 35c-16 5-17 18-22 31-4 11-11 19-22 27" fill="none" stroke="#817b72" stroke-width="3"/>
+      <path d="M31 84c18-8 28-20 31-35" fill="none" stroke="#fff" stroke-width="3" stroke-opacity=".7"/>
+      <path d="M20 107h30v8H14z" fill="#8d8880"/>
+    </g>
+    <g id="dentilUnit">
+      <rect width="38" height="27" fill="url(#dentil)" stroke="#77726b"/>
+      <path d="M38 0l8 6v21h-8z" fill="#716c65"/>
+    </g>
+    <g id="palmette">
+      <path d="M0 48c22-8 35-25 42-48 8 23 21 40 43 48-20-1-32-7-43-19C31 41 19 47 0 48z" fill="#8c867d"/>
+      <path d="M42 4v55M19 37c13-6 20-16 23-29m23 29C52 31 45 21 42 8" fill="none" stroke="#f7f4ed" stroke-width="3" stroke-opacity=".62"/>
+    </g>
+  </defs>
+  <g>
+    <!-- Projecting cornice, modillions, and dentils -->
+    <rect width="1200" height="9" fill="#fcfbf6"/>
+    <rect y="9" width="1200" height="9" fill="#b7b2a8"/>
+    <path d="M0 18h1200v31c-15 0-24 8-27 21H27C24 57 15 49 0 49z" fill="url(#curve)"/>
+    <rect x="-1" y="49" width="1202" height="8" fill="#faf8f2" stroke="#77726b"/>
+    <rect x="-1" y="57" width="1202" height="37" fill="url(#stone)" stroke="#79746d"/>
+    <rect y="94" width="1200" height="34" fill="url(#soffit)"/>
+    <use href="#modillion" x="82" y="96"/><use href="#modillion" x="482" y="96"/><use href="#modillion" x="882" y="96"/>
+    <rect x="-1" y="171" width="1202" height="8" fill="#f2efe8" stroke="#79746d"/>
+    <use href="#dentilUnit" x="62" y="179"/><use href="#dentilUnit" x="212" y="179"/><use href="#dentilUnit" x="362" y="179"/><use href="#dentilUnit" x="512" y="179"/>
+    <use href="#dentilUnit" x="662" y="179"/><use href="#dentilUnit" x="812" y="179"/><use href="#dentilUnit" x="962" y="179"/><use href="#dentilUnit" x="1112" y="179"/>
+    <rect x="-1" y="206" width="1202" height="10" fill="#f6f3ec" stroke="#79746d"/>
+
+    <!-- Acanthus-derived relief frieze -->
+    <rect x="-1" y="216" width="1202" height="104" fill="url(#frieze)" stroke="#827c74"/>
+    <use href="#palmette" x="155" y="239" opacity=".42"/><use href="#palmette" x="555" y="239" opacity=".42"/><use href="#palmette" x="955" y="239" opacity=".42"/>
+    <path d="M0 225h1200M0 311h1200" stroke="#fff" stroke-opacity=".5"/>
+
+    <!-- Three-band Corinthian architrave -->
+    <rect x="-1" y="320" width="1202" height="12" fill="#f7f4ed" stroke="#79746d"/>
+    <rect x="-1" y="332" width="1202" height="29" fill="url(#stone)" stroke="#89837a"/>
+    <rect x="-1" y="361" width="1202" height="29" fill="url(#stone)" stroke="#7e7971"/>
+    <rect x="-1" y="390" width="1202" height="31" fill="url(#stone)" stroke="#716c65"/>
+    <path d="M0 335h1200M0 364h1200M0 393h1200" stroke="#fff" stroke-opacity=".56"/>
+    <path d="M0 421h1200v11c-17 0-25 3-29 8H29c-4-5-12-8-29-8z" fill="url(#curve)"/>
+  </g>
+</svg>

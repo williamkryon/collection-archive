@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <linearGradient id="stone" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#fffefa"/><stop offset=".32" stop-color="#e8e4dc"/><stop offset=".7" stop-color="#b2aca2"/><stop offset="1" stop-color="#f2efe8"/>
+    </linearGradient>
+    <linearGradient id="curve" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#fff"/><stop offset=".22" stop-color="#f5f2eb"/><stop offset=".58" stop-color="#b4aea4"/><stop offset=".77" stop-color="#77726b"/><stop offset="1" stop-color="#e9e5de"/>
+    </linearGradient>
+    <linearGradient id="soffit" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#595650"/><stop offset=".5" stop-color="#8e8981"/><stop offset="1" stop-color="#d6d2ca"/>
+    </linearGradient>
+    <linearGradient id="triglyph" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#faf8f2"/><stop offset=".42" stop-color="#d9d5cd"/><stop offset=".75" stop-color="#979188"/><stop offset="1" stop-color="#ece8e1"/>
+    </linearGradient>
+    <linearGradient id="metope" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#a8a299"/><stop offset=".08" stop-color="#e7e3dc"/><stop offset=".55" stop-color="#f8f5ef"/><stop offset="1" stop-color="#beb8ae"/>
+    </linearGradient>
+    <filter id="cast" x="-10%" y="-10%" width="120%" height="145%">
+      <feDropShadow dx="0" dy="8" stdDeviation="6" flood-color="#302e2a" flood-opacity=".52"/>
+    </filter>
+    <g id="mutule">
+      <path d="M8 0h132v11H0z" fill="#f8f6ef" stroke="#716c65"/>
+      <path d="M16 11h116l-9 30H25z" fill="url(#stone)" stroke="#716c65"/>
+      <path d="M31 41l7 12 7-12m17 0 7 12 7-12m17 0 7 12 7-12m17 0 7 12 7-12" fill="#c4bfb6" stroke="#5f5b55" stroke-width="1.2"/>
+    </g>
+    <g id="triglyphUnit">
+      <rect width="128" height="145" fill="url(#triglyph)" stroke="#6f6a63" stroke-width="1.5"/>
+      <rect x="8" y="8" width="24" height="126" fill="#d4d0c8" stroke="#817c74"/>
+      <rect x="52" y="8" width="24" height="126" fill="#d4d0c8" stroke="#817c74"/>
+      <rect x="96" y="8" width="24" height="126" fill="#d4d0c8" stroke="#817c74"/>
+      <path d="M8 8l8 9 8-9m28 0 8 9 8-9m28 0 8 9 8-9M8 134l8-9 8 9m28 0 8-9 8 9m28 0 8-9 8 9" fill="none" stroke="#fff" stroke-opacity=".76"/>
+    </g>
+    <g id="regula">
+      <rect width="108" height="12" fill="#dad5cc" stroke="#77716a"/>
+      <path d="M11 12l7 14 7-14m12 0 7 14 7-14m12 0 7 14 7-14m12 0 7 14 7-14" fill="#c3beb5" stroke="#68635d" stroke-width="1"/>
+    </g>
+  </defs>
+  <g>
+    <!-- Cornice and mutules -->
+    <rect width="1200" height="10" fill="#fcfbf6"/>
+    <rect y="10" width="1200" height="9" fill="#b6b0a7"/>
+    <path d="M0 19h1200v30c-15 0-24 8-27 20H27C24 57 15 49 0 49z" fill="url(#curve)"/>
+    <rect x="-1" y="49" width="1202" height="9" fill="#faf8f2" stroke="#77716a"/>
+    <rect x="-1" y="58" width="1202" height="35" fill="url(#stone)" stroke="#7c766f"/>
+    <rect y="93" width="1200" height="27" fill="url(#soffit)"/>
+    <use href="#mutule" x="34" y="96"/><use href="#mutule" x="434" y="96"/><use href="#mutule" x="834" y="96"/>
+    <rect x="-1" y="143" width="1202" height="9" fill="#f4f1ea" stroke="#77716a"/>
+
+    <!-- Triglyph and metope frieze -->
+    <rect y="152" width="1200" height="145" fill="#aaa49b"/>
+    <rect x="162" y="160" width="264" height="129" fill="url(#metope)" stroke="#8a847b"/>
+    <rect x="562" y="160" width="264" height="129" fill="url(#metope)" stroke="#8a847b"/>
+    <rect x="962" y="160" width="238" height="129" fill="url(#metope)" stroke="#8a847b"/>
+    <use href="#triglyphUnit" x="34" y="152"/><use href="#triglyphUnit" x="434" y="152"/><use href="#triglyphUnit" x="834" y="152"/>
+
+    <!-- Taenia, regulae, and architrave -->
+    <rect x="-1" y="297" width="1202" height="18" fill="#f7f4ed" stroke="#77716a"/>
+    <use href="#regula" x="44" y="315"/><use href="#regula" x="444" y="315"/><use href="#regula" x="844" y="315"/>
+    <rect x="-1" y="341" width="1202" height="57" fill="url(#stone)" stroke="#817b73"/>
+    <path d="M0 341h1200v9H0z" fill="#fff" fill-opacity=".5"/>
+    <rect x="-1" y="398" width="1202" height="12" fill="#f6f3ec" stroke="#77716a"/>
+    <rect y="410" width="1200" height="10" fill="#c3bdb3"/>
+  </g>
+</svg>

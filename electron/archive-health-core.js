@@ -112,7 +112,7 @@ function inspectDatabase(SQL, dbPath) {
 
 function getImageRows(db) {
   if (!tableExists(db, "images")) return [];
-  return rows(db, "SELECT id, item_id, original_filename, stored_filename, image_path, thumbnail_path, deleted_at FROM images");
+  return rows(db, "SELECT * FROM images");
 }
 
 function getAttachmentRows(db) {
@@ -194,13 +194,26 @@ function scanArchiveHealth({ SQL, paths }) {
   imageRows.forEach((image) => {
     const imagePath = resolveMediaPath(image.image_path, paths.images);
     const thumbPath = resolveMediaPath(image.thumbnail_path, paths.thumbs);
+    const cutoutPath = resolveMediaPath(image.cutout_image_path, paths.images);
+    const cutoutMaskPath = resolveMediaPath(image.cutout_mask_path, paths.images);
+    const cutoutThumbPath = resolveMediaPath(image.cutout_thumbnail_path, paths.thumbs);
     if (imagePath) referenced.images.add(keyPath(imagePath));
+    if (cutoutPath) referenced.images.add(keyPath(cutoutPath));
+    if (cutoutMaskPath) referenced.images.add(keyPath(cutoutMaskPath));
     if (thumbPath) referenced.thumbnails = referenced.thumbnails || new Set();
     if (thumbPath) referenced.thumbnails.add(keyPath(thumbPath));
+    if (cutoutThumbPath) referenced.thumbnails = referenced.thumbnails || new Set();
+    if (cutoutThumbPath) referenced.thumbnails.add(keyPath(cutoutThumbPath));
     if (!imagePath) {
       addMissingFile(missingFiles, { kind: "image", id: image.id, itemId: image.item_id, label: image.original_filename || image.stored_filename, expectedPath: image.image_path, reason: "invalid image path" });
     } else if (!safeStat(imagePath)?.isFile()) {
       addMissingFile(missingFiles, { kind: "image", id: image.id, itemId: image.item_id, label: image.original_filename || image.stored_filename, expectedPath: imagePath });
+    }
+    if (image.cutout_image_path && (!cutoutPath || !safeStat(cutoutPath)?.isFile())) {
+      addMissingFile(missingFiles, { kind: "image_cutout", id: image.id, itemId: image.item_id, label: image.original_filename || image.stored_filename, expectedPath: cutoutPath || image.cutout_image_path, reason: "cutout derivative missing" });
+    }
+    if (image.cutout_mask_path && (!cutoutMaskPath || !safeStat(cutoutMaskPath)?.isFile())) {
+      addMissingFile(missingFiles, { kind: "image_cutout_mask", id: image.id, itemId: image.item_id, label: image.original_filename || image.stored_filename, expectedPath: cutoutMaskPath || image.cutout_mask_path, reason: "cutout mask missing" });
     }
   });
 
